@@ -22,17 +22,17 @@ def bereken_Su(q_net: pd.Series, Nkt: float) -> pd.Series:
 
 def render():
     st.markdown("""
-    <div class="hero-container">
-        <h1>📊 Stap 4 — Su Berekening</h1>
-        <p>Ongedraineerde schuifsterkte uit CPT — Su = q_net / Nkt</p>
+    <div class="hero-section">
+        <span class="step-label">Stap 4 van 6</span>
+        <h1>📊 Su Berekening</h1>
+        <p class="subtitle">Ongedraineerde schuifsterkte uit CPT — Su = q_net / Nkt</p>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%); 
-         padding: 1.2rem; border-radius: 12px; margin-bottom: 1rem; border-left: 4px solid #1976d2;">
-        <h4 style="margin-top:0; color: #1565c0;">Waarom deze stap?</h4>
-        <p style="margin-bottom:0;">
+    <div class="why-card">
+        <h4>💡 Waarom deze stap?</h4>
+        <p>
             De <b>ongedraineerde schuifsterkte</b> ($S_u$) is de sterkteparameter die bepaalt of de dijk 
             stabiel is bij snel optreden van belasting. We berekenen $S_u$ per meetpunt op basis 
             van de <b>netto conusweerstand</b> en de <b>Nkt-factor per grondlaag</b> (Tabel 71). 
@@ -47,9 +47,9 @@ def render():
     
     if not geclassificeerd:
         st.markdown("""
-        <div style="background: #fff3e0; padding: 1rem; border-radius: 10px; border-left: 4px solid #ff9800;">
-            <b>⚠️ Classificatie nog niet uitgevoerd</b><br>
-            Ga eerst naar <b>Stap 3 — Classificatie</b> om de grondsoorten te bepalen.
+        <div class="why-card">
+            <h4>⚠️ Classificatie nog niet uitgevoerd</h4>
+            <p>Ga eerst naar <b>Stap 3 — Classificatie</b> om de grondsoorten te bepalen.</p>
         </div>
         """, unsafe_allow_html=True)
         return

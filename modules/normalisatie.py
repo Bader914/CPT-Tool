@@ -74,23 +74,23 @@ def bereken_sigma_v0(diepte: pd.Series, gamma: float = 18.0, gwl: float = 0.0) -
 
 def render():
     st.markdown("""
-    <div class="hero-container">
-        <h1>📐 Stap 2 — Normalisatie</h1>
-        <p>Poriedrukcorrectie qt, spanningen σv0, afgeleide parameters Rf & Bq</p>
+    <div class="hero-section">
+        <span class="step-label">Stap 2 van 6</span>
+        <h1>📐 Normalisatie</h1>
+        <p class="subtitle">Poriedrukcorrectie qt, spanningen σv0, afgeleide parameters Rf & Bq</p>
     </div>
     """, unsafe_allow_html=True)
     
     # --- Stap uitleg ---
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%); 
-         padding: 1.2rem; border-radius: 12px; margin-bottom: 1rem; border-left: 4px solid #1976d2;">
-        <h4 style="margin-top:0; color: #1565c0;">Waarom deze stap?</h4>
-        <p style="margin-bottom:0.5rem;">
+    <div class="why-card">
+        <h4>💡 Waarom deze stap?</h4>
+        <p>
             De <b>gemeten conusweerstand</b> ($q_c$) is niet de werkelijke weerstand. 
             Door poriedruk die werkt op het verschiloppervlak achter de conuspunt, is de gemeten waarde 
             <b>lager</b> dan de werkelijke. Zonder correctie zou je de sterkte van de grond <b>onderschatten</b>.
         </p>
-        <p style="margin-bottom:0;">
+        <p>
             Daarnaast berekenen we de <b>spanningen</b> en <b>afgeleide parameters</b> die nodig zijn 
             voor de Robertson classificatie (Stap 3) en de Su-berekening (Stap 4).
         </p>
@@ -109,9 +109,9 @@ def render():
     # --- Check of er sonderingen zijn ---
     if not st.session_state.get("sonderingen"):
         st.markdown("""
-        <div style="background: #fff3e0; padding: 1rem; border-radius: 10px; border-left: 4px solid #ff9800;">
-            <b>⚠️ Geen sonderingen geladen</b><br>
-            Ga eerst naar <b>Stap 1 — Data Inladen</b> om sonderingen te uploaden.
+        <div class="why-card">
+            <h4>⚠️ Geen sonderingen geladen</h4>
+            <p>Ga eerst naar <b>Stap 1 — Data Inladen</b> om sonderingen te uploaden.</p>
         </div>
         """, unsafe_allow_html=True)
         return
@@ -262,9 +262,10 @@ def render():
         
         if succes_count > 0:
             st.markdown("""
-            <div style="background: #e8f5e9; padding: 1rem; border-radius: 10px; border-left: 4px solid #4caf50; margin-top: 1rem;">
-                <b>👉 Volgende stap:</b> Ga naar <b>Stap 3 — Classificatie</b> in het zijmenu 
-                om de grondsoorten te bepalen op basis van de genormaliseerde parameters.
+            <div class="next-step">
+                <span class="arrow">➡</span>
+                <p>Ga naar <b>Stap 3 — Classificatie</b> in het zijmenu 
+                om de grondsoorten te bepalen op basis van de genormaliseerde parameters.</p>
             </div>
             """, unsafe_allow_html=True)
     

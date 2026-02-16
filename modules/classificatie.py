@@ -57,23 +57,23 @@ def classificeer_robertson(qt: pd.Series, Rf: pd.Series, sigma_v0: pd.Series) ->
 
 def render():
     st.markdown("""
-    <div class="hero-container">
-        <h1>🧱 Stap 3 — Classificatie</h1>
-        <p>Robertson 1990 classificatie — grondsoort & dijkmateriaal selectie</p>
+    <div class="hero-section">
+        <span class="step-label">Stap 3 van 6</span>
+        <h1>🧱 Classificatie</h1>
+        <p class="subtitle">Robertson 1990 classificatie — grondsoort & dijkmateriaal selectie</p>
     </div>
     """, unsafe_allow_html=True)
     
     # --- Stap uitleg ---
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%); 
-         padding: 1.2rem; border-radius: 12px; margin-bottom: 1rem; border-left: 4px solid #1976d2;">
-        <h4 style="margin-top:0; color: #1565c0;">Waarom deze stap?</h4>
-        <p style="margin-bottom:0.5rem;">
+    <div class="why-card">
+        <h4>💡 Waarom deze stap?</h4>
+        <p>
             Su (ongedraineerde schuifsterkte) is alleen relevant voor <b>fijnkorrelig materiaal</b> 
             (klei, silt, veen). Zand en grof materiaal hebben geen Su nodig — die worden 
             beoordeeld op basis van hoek van inwendige wrijving (φ).
         </p>
-        <p style="margin-bottom:0;">
+        <p>
             Met de <b>Robertson 1990 classificatie</b> bepalen we per meetpunt de grondsoort, 
             zodat we in Stap 4 alleen Su berekenen voor de relevante lagen.
         </p>
@@ -102,9 +102,9 @@ def render():
     
     if not sonderingen:
         st.markdown("""
-        <div style="background: #fff3e0; padding: 1rem; border-radius: 10px; border-left: 4px solid #ff9800;">
-            <b>⚠️ Geen sonderingen geladen</b><br>
-            Ga eerst naar <b>Stap 1 — Data Inladen</b> om sonderingen te uploaden.
+        <div class="why-card">
+            <h4>⚠️ Geen sonderingen geladen</h4>
+            <p>Ga eerst naar <b>Stap 1 — Data Inladen</b> om sonderingen te uploaden.</p>
         </div>
         """, unsafe_allow_html=True)
         return
@@ -136,11 +136,11 @@ def render():
     
     if not genormaliseerd:
         st.markdown("""
-        <div style="background: #ffebee; padding: 1rem; border-radius: 10px; border-left: 4px solid #f44336;">
-            <b>❌ Geen genormaliseerde sonderingen beschikbaar</b><br><br>
-            Dit kan twee oorzaken hebben:<br>
-            <b>1.</b> De kolommen (diepte, qc) zijn niet herkend → ga naar <b>Stap 1</b> en stel de kolom mapping in<br>
-            <b>2.</b> De normalisatie is nog niet uitgevoerd → ga naar <b>Stap 2</b> en klik op "Bereken Qt"
+        <div class="why-card">
+            <h4>❌ Geen genormaliseerde sonderingen</h4>
+            <p>Dit kan twee oorzaken hebben:</p>
+            <p><b>1.</b> De kolommen (diepte, qc) zijn niet herkend → ga naar <b>Stap 1</b> en stel de kolom mapping in</p>
+            <p><b>2.</b> De normalisatie is nog niet uitgevoerd → ga naar <b>Stap 2</b> en klik op "Bereken Qt"</p>
         </div>
         """, unsafe_allow_html=True)
         return
@@ -196,9 +196,10 @@ def render():
         
         if succes_count > 0:
             st.markdown("""
-            <div style="background: #e8f5e9; padding: 1rem; border-radius: 10px; border-left: 4px solid #4caf50; margin-top: 1rem;">
-                <b>👉 Volgende stap:</b> Ga naar <b>Stap 4 — Su Berekening</b> in het zijmenu 
-                om de ongedraineerde schuifsterkte te berekenen voor de fijnkorrelige lagen.
+            <div class="next-step">
+                <span class="arrow">➡</span>
+                <p>Ga naar <b>Stap 4 — Su Berekening</b> in het zijmenu 
+                om de ongedraineerde schuifsterkte te berekenen voor de fijnkorrelige lagen.</p>
             </div>
             """, unsafe_allow_html=True)
     

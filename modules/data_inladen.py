@@ -263,26 +263,27 @@ def check_poriedruk_correctie(df: pd.DataFrame, col_mapping: dict) -> dict:
 
 def render():
     st.markdown("""
-    <div class="hero-container">
-        <h1>📁 Stap 1 — Data Inladen</h1>
-        <p>Upload sonderingen — GEF, CSV of Excel — automatische kolomherkenning</p>
+    <div class="hero-section">
+        <span class="step-label">Stap 1 van 6</span>
+        <h1>📁 Data Inladen</h1>
+        <p class="subtitle">Upload sonderingen — GEF, CSV of Excel — automatische kolomherkenning</p>
     </div>
     """, unsafe_allow_html=True)
     
     # --- Stap uitleg ---
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%); 
-         padding: 1.2rem; border-radius: 12px; margin-bottom: 1rem; border-left: 4px solid #1976d2;">
-        <h4 style="margin-top:0; color: #1565c0;">Waarom deze stap?</h4>
-        <p style="margin-bottom:0.5rem;">
+    <div class="why-card">
+        <h4>💡 Waarom deze stap?</h4>
+        <p>
             CPT-sonderingen worden opgeslagen in <b>GEF-bestanden</b> — een Nederlands standaard formaat. 
             In deze stap laden we de bestanden in en herkennen automatisch welke kolommen de 
             <b>diepte</b>, <b>conusweerstand (qc)</b>, <b>wrijving (fs)</b> en <b>poriedruk (u2)</b> bevatten.
         </p>
-        <p style="margin-bottom:0;">
-            ⚡ <b>Tip:</b> Controleer na het uploaden altijd of de kolommen correct zijn herkend. 
-            Je kunt ze handmatig aanpassen bij "Kolom Mapping" als de automatische herkenning niet klopt.
-        </p>
+        <div class="tip">
+            <span>⚡</span>
+            <p>Controleer na het uploaden altijd of de kolommen correct zijn herkend. 
+            Je kunt ze handmatig aanpassen bij "Kolom Mapping" als de automatische herkenning niet klopt.</p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
