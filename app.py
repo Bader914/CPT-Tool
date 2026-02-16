@@ -10,14 +10,23 @@ st.set_page_config(
 # ── Modern CSS Styling v5.1 ──
 st.markdown("""
 <style>
-/* === FONTS === */
+/* === FONTS — exclude icon fonts === */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-* { font-family: 'Inter', sans-serif !important; }
+body, p, span, label, h1, h2, h3, h4, h5, h6, div, input, button, select, textarea, td, th, li, a {
+    font-family: 'Inter', sans-serif !important;
+}
+/* Preserve Streamlit icon fonts */
+[data-testid="stExpander"] summary svg,
+[data-testid="stExpander"] details summary span[data-testid="stExpanderToggleIcon"],
+.material-symbols-rounded, .material-icons {
+    font-family: 'Material Symbols Rounded', 'Material Icons' !important;
+}
 
 /* === DARK THEME === */
 [data-testid="stAppViewContainer"] { background: #0a0e1a; color: #e2e8f0; }
 [data-testid="stAppViewContainer"] p, [data-testid="stAppViewContainer"] li,
-[data-testid="stAppViewContainer"] span, [data-testid="stAppViewContainer"] label { color: #cbd5e1 !important; }
+[data-testid="stAppViewContainer"] span:not([data-testid="stExpanderToggleIcon"]),
+[data-testid="stAppViewContainer"] label { color: #cbd5e1 !important; }
 [data-testid="stAppViewContainer"] h1, [data-testid="stAppViewContainer"] h2,
 [data-testid="stAppViewContainer"] h3, [data-testid="stAppViewContainer"] h4 { color: #f1f5f9 !important; }
 [data-testid="stHeader"] { background: rgba(10, 14, 26, 0.9) !important; backdrop-filter: blur(10px); }
@@ -95,11 +104,11 @@ st.markdown("""
 [data-testid="stTabs"] [aria-selected="true"] {
     background: rgba(99, 102, 241, 0.18) !important; color: #c7d2fe !important; }
 
-/* === EXPANDERS (compact) === */
+/* === EXPANDERS === */
 [data-testid="stExpander"] { background: rgba(30, 41, 59, 0.35) !important;
     border: 1px solid rgba(99, 102, 241, 0.12) !important; border-radius: 12px !important; }
 [data-testid="stExpander"] summary { font-weight: 600; color: #c7d2fe !important; }
-[data-testid="stExpander"] summary span { color: #c7d2fe !important; }
+[data-testid="stExpander"] summary > span:not([data-testid="stExpanderToggleIcon"]) { color: #c7d2fe !important; }
 
 /* === BUTTONS === */
 .stButton > button { border-radius: 10px !important; font-weight: 600;
