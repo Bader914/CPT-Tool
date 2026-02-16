@@ -47,7 +47,7 @@ body, p, label, h1, h2, h3, h4, h5, h6, div, input, button, select, textarea, td
 [data-testid="collapsedControl"] { display: none !important; }
 
 /* === REDUCE ALL PADDING === */
-.block-container { padding-top: 1rem !important; padding-bottom: 0 !important; }
+.block-container { padding-top: 3.5rem !important; padding-bottom: 0 !important; }
 
 /* === HORIZONTAL RADIO as pill nav === */
 [data-testid="stRadio"] > div { gap: 0 !important; }
