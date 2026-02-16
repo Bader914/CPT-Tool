@@ -59,14 +59,14 @@ def render():
     lagen = up.get("lagen", [])
     
     if lagen:
-        with st.expander("📋 Verwachte dijkopbouw (uit Uitgangspunten)", expanded=False):
+        with st.expander("Verwachte dijkopbouw (uit Uitgangspunten)", expanded=False):
             for laag in lagen:
-                dijkmat_icon = "🟢" if laag.get("is_dijkmateriaal") else "⚪"
+                dijk_tag = " **[Su]**" if laag.get("is_dijkmateriaal") else ""
                 top = laag.get("top_nap")
                 onder = laag.get("onder_nap")
                 positie = f"NAP {top:+.1f}m tot {onder:+.1f}m" if top is not None and onder is not None else "variabel"
                 st.markdown(
-                    f"- {dijkmat_icon} **{laag['naam']}**: {positie} — {laag['materiaal']}"
+                    f"- **{laag['naam']}**: {positie} — {laag['materiaal']}{dijk_tag}"
                 )
     
     # --- Check stappen status ---

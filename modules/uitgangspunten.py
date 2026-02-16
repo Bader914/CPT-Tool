@@ -321,7 +321,8 @@ def render():
             lagen = up.get("lagen", DEFAULT_UITGANGSPUNTEN["lagen"])
             
             for i, laag in enumerate(lagen):
-                with st.expander(f"{'🟢' if laag['is_dijkmateriaal'] else '⚪'} {laag['naam']}", expanded=False):
+                dijk_label = "[Su]" if laag['is_dijkmateriaal'] else ""
+                with st.expander(f"{laag['naam']}  {dijk_label}", expanded=False):
                     st.markdown(f"*{laag['beschrijving']}*")
                     
                     c1, c2 = st.columns(2)
@@ -403,7 +404,7 @@ def render():
         with col2:
             fig = maak_dijkprofiel_figuur(lagen)
             st.plotly_chart(fig, use_container_width=True)
-            st.caption("🟢 Dijkmateriaal (Su) · ⚪ Geen dijkmateriaal · 🔵 GWS")
+            st.caption("[Su] = Dijkmateriaal · Blauw = GWS")
     
     # ─── TAB 2: STERKTEPARAMETERS (TABEL 91) ───
     with tab2:
