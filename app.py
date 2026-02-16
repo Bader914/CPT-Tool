@@ -1,15 +1,19 @@
 import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
 
-st.set_page_config(page_title="CPT Tool", page_icon="📊", layout="wide")
+st.set_page_config(
+    page_title="CPT Su Tool | HHSK",
+    page_icon="🔬",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # --- Wachtwoordbeveiliging ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.title("🔒 CPT Tool")
+    st.title("🔒 CPT Su Tool")
+    st.caption("Dijkmateriaal & Ongedraineerde Schuifsterkte")
     pwd = st.text_input("Voer het wachtwoord in:", type="password")
     if st.button("Login"):
         if pwd == st.secrets.get("password", ""):
@@ -19,81 +23,29 @@ if not st.session_state.authenticated:
             st.error("❌ Onjuist wachtwoord")
     st.stop()
 
-# --- Hoofdapp (alleen zichtbaar na login) ---
-st.title("📊 CPT Tool")
-st.markdown("Upload een CPT bestand (CSV of GEF) en bekijk de grafieken.")
+# --- Navigatie ---
+from modules import data_inladen, normalisatie, classificatie, su_berekening, validatie, visualisatie
 
-uploaded_file = st.file_uploader(
-    "Kies een CPT bestand",
-    type=["csv", "gef", "xlsx"],
-    help="Upload een CSV, GEF of Excel bestand met CPT data"
-)
+PAGES = {
+    "📁 1. Data Inladen & Controle": data_inladen,
+    "📐 2. Normalisatie (Qt)": normalisatie,
+    "🧱 3. Classificatie & Materiaal": classificatie,
+    "📊 4. Su Berekening": su_berekening,
+    "✅ 5. Validatie & Labvergelijking": validatie,
+    "📈 6. Visualisatie & Rapportage": visualisatie,
+}
 
-if uploaded_file is not None:
-    try:
-        if uploaded_file.name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file, sep=None, engine="python")
-        elif uploaded_file.name.endswith(".xlsx"):
-            df = pd.read_excel(uploaded_file)
-        else:
-            st.warning("GEF-bestanden worden binnenkort ondersteund.")
-            st.stop()
+st.sidebar.title("🔬 CPT Su Tool")
+st.sidebar.caption("v2.0")
+st.sidebar.markdown("---")
 
-        st.success(f"Bestand geladen: {uploaded_file.name} ({len(df)} rijen)")
+selection = st.sidebar.radio("Module", list(PAGES.keys()))
 
-        with st.expander("Data preview", expanded=False):
-            st.dataframe(df.head(20), use_container_width=True)
+# Toon status in sidebar
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Data status:**")
+n_sonderingen = len(st.session_state.get("sonderingen", {}))
+st.sidebar.info(f"{n_sonderingen} sondering(en) geladen")
 
-        st.subheader("Kolommen selecteren")
-        col1, col2 = st.columns(2)
-
-        with col1:
-            diepte_kolom = st.selectbox(
-                "Diepte kolom (Y-as)",
-                options=df.columns.tolist()
-            )
-
-        with col2:
-            waarde_kolommen = st.multiselect(
-                "Meetwaarde kolommen (X-as)",
-                options=[c for c in df.columns if c != diepte_kolom]
-            )
-
-        if waarde_kolommen:
-            st.subheader("CPT Grafiek")
-
-            fig = go.Figure()
-            for kolom in waarde_kolommen:
-                fig.add_trace(go.Scatter(
-                    x=df[kolom],
-                    y=df[diepte_kolom],
-                    mode="lines",
-                    name=kolom
-                ))
-
-            fig.update_layout(
-                yaxis=dict(autorange="reversed", title=diepte_kolom),
-                xaxis=dict(title="Meetwaarde"),
-                height=700,
-                template="plotly_white",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02)
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.download_button(
-                label="Download gefilterde data als CSV",
-                data=df[[diepte_kolom] + waarde_kolommen].to_csv(index=False),
-                file_name="cpt_data_gefilterd.csv",
-                mime="text/csv"
-            )
-        else:
-            st.info("Selecteer meetwaarde kolommen om een grafiek te maken.")
-
-    except Exception as e:
-        st.error(f"Fout bij het inlezen: {e}")
-else:
-    st.info("Upload een CPT bestand om te beginnen.")
-
-st.markdown("---")
-st.caption("CPT Tool v1.0 | Gemaakt met Streamlit")
+# Render geselecteerde pagina
+PAGES[selection].render()
