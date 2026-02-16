@@ -242,13 +242,13 @@ if not st.session_state.authenticated:
 from modules import uitgangspunten, data_inladen, normalisatie, classificatie, su_berekening, validatie, visualisatie
 
 PAGES = {
-    "📋 Uitgangspunten": {"module": uitgangspunten, "step": 0, "short": "Parameters"},
-    "📁 Data Inladen": {"module": data_inladen, "step": 1, "short": "Upload"},
-    "📐 Normalisatie": {"module": normalisatie, "step": 2, "short": "Qt correctie"},
-    "🧱 Classificatie": {"module": classificatie, "step": 3, "short": "Grondtype"},
-    "📊 Su Berekening": {"module": su_berekening, "step": 4, "short": "Su = qnet/Nkt"},
-    "✅ Validatie": {"module": validatie, "step": 5, "short": "Lab check"},
-    "📈 Rapportage": {"module": visualisatie, "step": 6, "short": "Export"},
+    "📋 Stap 0 — Uitgangspunten": {"module": uitgangspunten, "step": 0, "short": "Parameters"},
+    "📁 Stap 1 — Data Inladen": {"module": data_inladen, "step": 1, "short": "Upload"},
+    "📐 Stap 2 — Normalisatie": {"module": normalisatie, "step": 2, "short": "Qt correctie"},
+    "🧱 Stap 3 — Classificatie": {"module": classificatie, "step": 3, "short": "Grondtype"},
+    "📊 Stap 4 — Su Berekening": {"module": su_berekening, "step": 4, "short": "Su = qnet/Nkt"},
+    "✅ Stap 5 — Validatie": {"module": validatie, "step": 5, "short": "Lab check"},
+    "📈 Stap 6 — Rapportage": {"module": visualisatie, "step": 6, "short": "Export"},
 }
 
 
@@ -289,10 +289,11 @@ with st.sidebar:
         ("Su berekend", has_su),
     ]
     
-    st.markdown("**Voortgang**")
-    for label, done in steps_status:
+    st.markdown("**Workflow Voortgang**")
+    for i, (label, done) in enumerate(steps_status):
         icon = "✅" if done else "⬜"
-        st.markdown(f"{icon} {label}")
+        style = "opacity: 1.0;" if done else "opacity: 0.6;"
+        st.markdown(f"<span style='{style}'>{icon} Stap {i}: {label}</span>", unsafe_allow_html=True)
     
     st.markdown("---")
     

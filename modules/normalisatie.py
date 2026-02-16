@@ -75,31 +75,84 @@ def bereken_sigma_v0(diepte: pd.Series, gamma: float = 18.0, gwl: float = 0.0) -
 def render():
     st.markdown("""
     <div class="hero-container">
-        <h1>📐 Normalisatie</h1>
+        <h1>📐 Stap 2 — Normalisatie</h1>
         <p>Poriedrukcorrectie qt, spanningen σv0, afgeleide parameters Rf & Bq</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # --- Stap uitleg ---
     st.markdown("""
-    In deze stap corrigeren we de **gemeten conusweerstand** ($q_c$) voor het effect van 
-    **poriedruk** ($u_2$). Dit is nodig omdat de poriedruk werkt op het verschiloppervlak 
-    achter de conuspunt, waardoor de gemeten waarde lager is dan de werkelijke weerstand.
+    <div style="background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%); 
+         padding: 1.2rem; border-radius: 12px; margin-bottom: 1rem; border-left: 4px solid #1976d2;">
+        <h4 style="margin-top:0; color: #1565c0;">Waarom deze stap?</h4>
+        <p style="margin-bottom:0.5rem;">
+            De <b>gemeten conusweerstand</b> ($q_c$) is niet de werkelijke weerstand. 
+            Door poriedruk die werkt op het verschiloppervlak achter de conuspunt, is de gemeten waarde 
+            <b>lager</b> dan de werkelijke. Zonder correctie zou je de sterkte van de grond <b>onderschatten</b>.
+        </p>
+        <p style="margin-bottom:0;">
+            Daarnaast berekenen we de <b>spanningen</b> en <b>afgeleide parameters</b> die nodig zijn 
+            voor de Robertson classificatie (Stap 3) en de Su-berekening (Stap 4).
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    Daarnaast berekenen we **afgeleide parameters** die nodig zijn voor classificatie en 
-    Su-berekening:
-    
+    st.markdown("""
     | Parameter | Formule | Betekenis |
     |---|---|---|
     | $q_t$ | $q_c + (1-a) \\cdot u_2$ | Gecorrigeerde conusweerstand |
     | $q_{net}$ | $q_t - \\sigma_{v0}$ | Netto conusweerstand (gecorrigeerd voor diepte) |
     | $R_f$ | $(f_s / q_c) \\times 100\\%$ | Wrijvingsgetal (indicator grondtype) |
     | $B_q$ | $(u_2 - u_0) / q_{net}$ | Poriedrukratio (indicator drainagegedrag) |
-    
-    **De parameters worden overgenomen uit de Uitgangspunten (Module 0).** 
-    Pas ze daar aan als je andere waarden wilt gebruiken.
     """)
     
+    # --- Check of er sonderingen zijn ---
     if not st.session_state.get("sonderingen"):
-        st.warning("⚠️ Ga eerst naar Module 1 om sonderingen te laden.")
+        st.markdown("""
+        <div style="background: #fff3e0; padding: 1rem; border-radius: 10px; border-left: 4px solid #ff9800;">
+            <b>⚠️ Geen sonderingen geladen</b><br>
+            Ga eerst naar <b>Stap 1 — Data Inladen</b> om sonderingen te uploaden.
+        </div>
+        """, unsafe_allow_html=True)
+        return
+    
+    # --- Check readiness van sonderingen ---
+    sonderingen = st.session_state.sonderingen
+    gereed = {k: v for k, v in sonderingen.items() 
+              if v.get("col_mapping", {}).get("diepte") and v.get("col_mapping", {}).get("qc")}
+    niet_gereed = {k: v for k, v in sonderingen.items() 
+                   if not (v.get("col_mapping", {}).get("diepte") and v.get("col_mapping", {}).get("qc"))}
+    
+    # Status overzicht
+    col_s1, col_s2, col_s3 = st.columns(3)
+    with col_s1:
+        st.metric("Totaal", f"{len(sonderingen)} sonderingen")
+    with col_s2:
+        st.metric("Gereed voor normalisatie", f"{len(gereed)} ✅")
+    with col_s3:
+        already_done = sum(1 for v in sonderingen.values() if v.get("genormaliseerd"))
+        if already_done > 0:
+            st.metric("Al genormaliseerd", f"{already_done} 🔄")
+        else:
+            st.metric("Nog te verwerken", f"{len(gereed)} ⏳")
+    
+    if niet_gereed:
+        with st.expander(f"⚠️ {len(niet_gereed)} sondering(en) kunnen niet worden verwerkt", expanded=True):
+            for name in niet_gereed:
+                cm = niet_gereed[name].get("col_mapping", {})
+                missing = []
+                if not cm.get("diepte"):
+                    missing.append("diepte")
+                if not cm.get("qc"):
+                    missing.append("qc")
+                st.markdown(f"- **{name}**: kolom(men) `{', '.join(missing)}` ontbreken — "
+                           f"ga terug naar **Stap 1** en stel de kolom mapping in")
+    
+    if not gereed:
+        st.error(
+            "❌ **Geen enkele sondering heeft de benodigde kolommen (diepte + qc).** "
+            "Ga terug naar Stap 1 en controleer de kolom mapping van elke sondering."
+        )
         return
     
     # --- Haal uitgangspunten op ---
@@ -137,53 +190,83 @@ def render():
     # --- Verwerk per sondering ---
     st.markdown("---")
     
-    if st.button("Bereken Qt en afgeleide parameters", type="primary", use_container_width=True):
+    if st.button("▶️ Bereken Qt en afgeleide parameters", type="primary", use_container_width=True):
         progress = st.progress(0)
-        sonderingen = st.session_state.sonderingen
-        total = len(sonderingen)
+        total = len(gereed)
+        succes_count = 0
+        fout_count = 0
+        resultaten = []  # Per-file status bijhouden
         
-        for i, (name, data) in enumerate(sonderingen.items()):
+        for i, (name, data) in enumerate(gereed.items()):
             df = data["df"].copy()
             cm = data["col_mapping"]
             
-            if not cm.get("diepte") or not cm.get("qc"):
-                st.warning(f"⚠️ {name}: Diepte of qc kolom ontbreekt. Overgeslagen.")
-                continue
-            
-            diepte = df[cm["diepte"]]
-            qc = df[cm["qc"]]
-            
-            # Spanningsberekening
-            sigma_v0, sigma_v0_eff, u0 = bereken_sigma_v0(diepte, gamma, gwl)
-            df["sigma_v0"] = sigma_v0 / 1000  # kPa → MPa
-            df["sigma_v0_eff"] = sigma_v0_eff / 1000
-            df["u0"] = u0 / 1000
-            
-            # Qt correctie
-            if cm.get("u2"):
-                u2 = df[cm["u2"]]
-                df["qt"] = bereken_qt(qc, u2, a_factor)
-                df["Bq"] = bereken_Bq(u2, df["u0"], df["qt"], df["sigma_v0"])
-            else:
-                df["qt"] = qc  # Geen correctie mogelijk
-                st.info(f"ℹ️ {name}: Geen u2 beschikbaar, qt = qc (geen correctie)")
-            
-            # Afgeleide parameters
-            df["q_net"] = bereken_q_net(df["qt"], df["sigma_v0"])
-            
-            if cm.get("fs"):
-                df["Rf"] = bereken_Rf(df[cm["fs"]], qc)
-            
-            # Sla op
-            st.session_state.sonderingen[name]["df"] = df
-            st.session_state.sonderingen[name]["genormaliseerd"] = True
-            st.session_state.sonderingen[name]["parameters"] = {
-                "a": a_factor, "gamma": gamma, "gwl": gwl
-            }
+            try:
+                diepte = df[cm["diepte"]]
+                qc = df[cm["qc"]]
+                
+                # Spanningsberekening
+                sigma_v0, sigma_v0_eff, u0 = bereken_sigma_v0(diepte, gamma, gwl)
+                df["sigma_v0"] = sigma_v0 / 1000  # kPa → MPa
+                df["sigma_v0_eff"] = sigma_v0_eff / 1000
+                df["u0"] = u0 / 1000
+                
+                # Qt correctie
+                if cm.get("u2") and cm["u2"] in df.columns:
+                    u2 = df[cm["u2"]]
+                    df["qt"] = bereken_qt(qc, u2, a_factor)
+                    df["Bq"] = bereken_Bq(u2, df["u0"], df["qt"], df["sigma_v0"])
+                    resultaten.append({"Sondering": name, "Status": "✅ Verwerkt", "qt correctie": "Met u2 correctie", "Metingen": len(df)})
+                else:
+                    df["qt"] = qc  # Geen correctie mogelijk
+                    resultaten.append({"Sondering": name, "Status": "✅ Verwerkt", "qt correctie": "Zonder u2 (qt = qc)", "Metingen": len(df)})
+                
+                # Afgeleide parameters
+                df["q_net"] = bereken_q_net(df["qt"], df["sigma_v0"])
+                
+                if cm.get("fs") and cm["fs"] in df.columns:
+                    df["Rf"] = bereken_Rf(df[cm["fs"]], qc)
+                
+                # Sla op
+                st.session_state.sonderingen[name]["df"] = df
+                st.session_state.sonderingen[name]["genormaliseerd"] = True
+                st.session_state.sonderingen[name]["parameters"] = {
+                    "a": a_factor, "gamma": gamma, "gwl": gwl
+                }
+                
+                succes_count += 1
+                
+            except Exception as e:
+                fout_count += 1
+                resultaten.append({"Sondering": name, "Status": f"❌ Fout: {e}", "qt correctie": "—", "Metingen": 0})
             
             progress.progress((i + 1) / total)
         
-        st.success(f"✅ {total} sondering(en) genormaliseerd")
+        # --- Resultaat samenvatting ---
+        st.markdown("---")
+        st.markdown("### Resultaat")
+        
+        if succes_count > 0 and fout_count == 0:
+            st.success(f"✅ **{succes_count} van {succes_count} sondering(en)** succesvol genormaliseerd!")
+        elif succes_count > 0 and fout_count > 0:
+            st.warning(f"⚠️ **{succes_count} van {succes_count + fout_count} sondering(en)** genormaliseerd. {fout_count} mislukt.")
+        else:
+            st.error(f"❌ **Geen enkele sondering** kon worden genormaliseerd. Controleer de kolom mapping in Stap 1.")
+        
+        if niet_gereed:
+            st.info(f"ℹ️ {len(niet_gereed)} sondering(en) overgeslagen wegens ontbrekende kolommen.")
+        
+        # Toon per-file resultaten
+        if resultaten:
+            st.dataframe(pd.DataFrame(resultaten), use_container_width=True, hide_index=True)
+        
+        if succes_count > 0:
+            st.markdown("""
+            <div style="background: #e8f5e9; padding: 1rem; border-radius: 10px; border-left: 4px solid #4caf50; margin-top: 1rem;">
+                <b>👉 Volgende stap:</b> Ga naar <b>Stap 3 — Classificatie</b> in het zijmenu 
+                om de grondsoorten te bepalen op basis van de genormaliseerde parameters.
+            </div>
+            """, unsafe_allow_html=True)
     
     # --- Resultaten tonen ---
     genormaliseerd = {k: v for k, v in st.session_state.sonderingen.items() 

@@ -58,23 +58,30 @@ def classificeer_robertson(qt: pd.Series, Rf: pd.Series, sigma_v0: pd.Series) ->
 def render():
     st.markdown("""
     <div class="hero-container">
-        <h1>🧱 Classificatie</h1>
+        <h1>🧱 Stap 3 — Classificatie</h1>
         <p>Robertson 1990 classificatie — grondsoort & dijkmateriaal selectie</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # --- Stap uitleg ---
     st.markdown("""
-    We bepalen per meetpunt de **grondsoort** op basis van de CPT-gegevens (Robertson 1990 classificatie), 
-    en selecteren vervolgens welke lagen als **dijkmateriaal** beschouwd worden.
-    
-    **Waarom is dit nodig?**
-    - Su wordt alleen berekend voor **fijnkorrelig materiaal** (klei, silt, veen)
-    - Zand en grof materiaal hebben geen ongedraineerde schuifsterkte
-    - De classificatie helpt bij het identificeren van de dijkopbouw
-    
-    **Verwachte dijkopbouw (uit Uitgangspunten):**
-    """)
+    <div style="background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%); 
+         padding: 1.2rem; border-radius: 12px; margin-bottom: 1rem; border-left: 4px solid #1976d2;">
+        <h4 style="margin-top:0; color: #1565c0;">Waarom deze stap?</h4>
+        <p style="margin-bottom:0.5rem;">
+            Su (ongedraineerde schuifsterkte) is alleen relevant voor <b>fijnkorrelig materiaal</b> 
+            (klei, silt, veen). Zand en grof materiaal hebben geen Su nodig — die worden 
+            beoordeeld op basis van hoek van inwendige wrijving (φ).
+        </p>
+        <p style="margin-bottom:0;">
+            Met de <b>Robertson 1990 classificatie</b> bepalen we per meetpunt de grondsoort, 
+            zodat we in Stap 4 alleen Su berekenen voor de relevante lagen.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Toon verwachte dijkopbouw uit uitgangspunten
+    st.markdown("**Verwachte dijkopbouw (uit Uitgangspunten):**")
     up = st.session_state.get("uitgangspunten", {})
     lagen = up.get("lagen", [])
     
@@ -90,24 +97,72 @@ def render():
     
     st.markdown("---")
     
-    # Check of normalisatie is uitgevoerd
-    genormaliseerd = {k: v for k, v in st.session_state.get("sonderingen", {}).items() 
-                      if v.get("genormaliseerd")}
+    # --- Check stappen status ---
+    sonderingen = st.session_state.get("sonderingen", {})
+    
+    if not sonderingen:
+        st.markdown("""
+        <div style="background: #fff3e0; padding: 1rem; border-radius: 10px; border-left: 4px solid #ff9800;">
+            <b>⚠️ Geen sonderingen geladen</b><br>
+            Ga eerst naar <b>Stap 1 — Data Inladen</b> om sonderingen te uploaden.
+        </div>
+        """, unsafe_allow_html=True)
+        return
+    
+    # Check genormaliseerd status per sondering
+    genormaliseerd = {k: v for k, v in sonderingen.items() if v.get("genormaliseerd")}
+    niet_genormaliseerd = {k: v for k, v in sonderingen.items() if not v.get("genormaliseerd")}
+    
+    # Status overzicht
+    col_s1, col_s2, col_s3 = st.columns(3)
+    with col_s1:
+        st.metric("Totaal sonderingen", f"{len(sonderingen)}")
+    with col_s2:
+        st.metric("Genormaliseerd (Stap 2)", f"{len(genormaliseerd)} ✅")
+    with col_s3:
+        already_classified = sum(1 for v in sonderingen.values() if v.get("geclassificeerd"))
+        st.metric("Al geclassificeerd", f"{already_classified} 🔄")
+    
+    if niet_genormaliseerd:
+        with st.expander(f"⚠️ {len(niet_genormaliseerd)} sondering(en) nog niet genormaliseerd", expanded=False):
+            for name in niet_genormaliseerd:
+                cm = niet_genormaliseerd[name].get("col_mapping", {})
+                has_cols = cm.get("diepte") and cm.get("qc")
+                if has_cols:
+                    st.markdown(f"- **{name}**: Kolommen gevonden, maar Stap 2 nog niet uitgevoerd")
+                else:
+                    missing = [k for k in ["diepte", "qc"] if not cm.get(k)]
+                    st.markdown(f"- **{name}**: Kolom(men) `{', '.join(missing)}` ontbreken — eerst Stap 1 afronden")
     
     if not genormaliseerd:
-        st.warning("⚠️ Voer eerst de normalisatie uit in Module 2.")
+        st.markdown("""
+        <div style="background: #ffebee; padding: 1rem; border-radius: 10px; border-left: 4px solid #f44336;">
+            <b>❌ Geen genormaliseerde sonderingen beschikbaar</b><br><br>
+            Dit kan twee oorzaken hebben:<br>
+            <b>1.</b> De kolommen (diepte, qc) zijn niet herkend → ga naar <b>Stap 1</b> en stel de kolom mapping in<br>
+            <b>2.</b> De normalisatie is nog niet uitgevoerd → ga naar <b>Stap 2</b> en klik op "Bereken Qt"
+        </div>
+        """, unsafe_allow_html=True)
         return
+    
+    st.success(f"✅ **{len(genormaliseerd)} sondering(en)** gereed voor classificatie")
     
     # --- Classificatie uitvoeren ---
     st.subheader("Robertson Classificatie")
     
-    if st.button("Classificeer alle sonderingen", type="primary", use_container_width=True):
+    if st.button("▶️ Classificeer alle sonderingen", type="primary", use_container_width=True):
+        succes_count = 0
+        fout_count = 0
+        resultaten = []
+        
         for name, data in genormaliseerd.items():
             df = data["df"]
             cm = data["col_mapping"]
             
             if "qt" not in df.columns or "Rf" not in df.columns or "sigma_v0" not in df.columns:
-                st.warning(f"⚠️ {name}: qt, Rf of sigma_v0 ontbreekt. Normaliseer eerst.")
+                fout_count += 1
+                missing = [c for c in ["qt", "Rf", "sigma_v0"] if c not in df.columns]
+                resultaten.append({"Sondering": name, "Status": f"⚠️ Ontbreekt: {', '.join(missing)}", "Zones": "—"})
                 continue
             
             # Classificatie
@@ -117,8 +172,35 @@ def render():
             
             st.session_state.sonderingen[name]["df"] = df
             st.session_state.sonderingen[name]["geclassificeerd"] = True
+            
+            # Samenvatting zones
+            zone_counts = df["robertson_zone"].value_counts()
+            top_zones = ", ".join([f"Zone {z}" for z in zone_counts.head(3).index])
+            
+            succes_count += 1
+            resultaten.append({"Sondering": name, "Status": "✅ Geclassificeerd", "Zones": top_zones})
         
-        st.success("✅ Alle sonderingen geclassificeerd")
+        # Resultaat
+        st.markdown("---")
+        st.markdown("### Resultaat")
+        
+        if succes_count > 0 and fout_count == 0:
+            st.success(f"✅ **{succes_count} sondering(en)** succesvol geclassificeerd!")
+        elif succes_count > 0:
+            st.warning(f"⚠️ {succes_count} succesvol, {fout_count} mislukt")
+        else:
+            st.error("❌ Geen enkele sondering kon worden geclassificeerd")
+        
+        if resultaten:
+            st.dataframe(pd.DataFrame(resultaten), use_container_width=True, hide_index=True)
+        
+        if succes_count > 0:
+            st.markdown("""
+            <div style="background: #e8f5e9; padding: 1rem; border-radius: 10px; border-left: 4px solid #4caf50; margin-top: 1rem;">
+                <b>👉 Volgende stap:</b> Ga naar <b>Stap 4 — Su Berekening</b> in het zijmenu 
+                om de ongedraineerde schuifsterkte te berekenen voor de fijnkorrelige lagen.
+            </div>
+            """, unsafe_allow_html=True)
     
     # --- Resultaten tonen ---
     geclassificeerd = {k: v for k, v in st.session_state.get("sonderingen", {}).items() 

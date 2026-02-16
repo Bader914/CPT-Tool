@@ -11,30 +11,62 @@ import numpy as np
 
 
 def parse_gef(file_content: str) -> pd.DataFrame:
-    """Parse een GEF bestand naar een DataFrame."""
+    """
+    Parse een GEF bestand naar een DataFrame.
+    Ondersteunt GEF standaard met COLUMNINFO, COLUMNVOID, en quantity numbers.
+    """
     lines = file_content.split("\n")
     
     # Zoek header info
-    column_info = {}
-    column_names = []
+    column_info = {}       # col_nr -> naam
+    quantity_info = {}     # col_nr -> quantity nummer
+    column_void = {}       # col_nr -> void waarde
+    column_units = {}      # col_nr -> eenheid
     data_start = 0
     column_separator = None
+    gef_type = None
     
     for i, line in enumerate(lines):
         line = line.strip()
         
         if line.startswith("#COLUMNINFO"):
             # Format: #COLUMNINFO = col_nr, unit, name, quantity_nr
-            parts = line.split("=")[1].strip().split(",")
+            parts = line.split("=", 1)[1].strip().split(",")
             if len(parts) >= 3:
-                col_nr = int(parts[0].strip())
-                col_name = parts[2].strip()
-                column_info[col_nr] = col_name
+                try:
+                    col_nr = int(parts[0].strip())
+                    col_unit = parts[1].strip()
+                    col_name = parts[2].strip()
+                    column_info[col_nr] = col_name
+                    column_units[col_nr] = col_unit
+                    if len(parts) >= 4:
+                        try:
+                            quantity_nr = int(parts[3].strip())
+                            quantity_info[col_nr] = quantity_nr
+                        except ValueError:
+                            pass
+                except (ValueError, IndexError):
+                    pass
         
-        if line.startswith("#COLUMNSEPARATOR"):
-            column_separator = line.split("=")[1].strip()
+        elif line.startswith("#COLUMNVOID"):
+            parts = line.split("=", 1)[1].strip().split(",")
+            if len(parts) >= 2:
+                try:
+                    col_nr = int(parts[0].strip())
+                    void_val = float(parts[1].strip())
+                    column_void[col_nr] = void_val
+                except (ValueError, IndexError):
+                    pass
         
-        if line == "#EOH=":
+        elif line.startswith("#COLUMNSEPARATOR"):
+            column_separator = line.split("=", 1)[1].strip()
+        
+        elif line.startswith("#PROCEDURECODE") or line.startswith("#REPORTCODE"):
+            val = line.split("=", 1)[1].strip().lower()
+            if "diss" in val or "dsp" in val:
+                gef_type = "dissipatie"
+        
+        elif line == "#EOH=":
             data_start = i + 1
             break
     
@@ -60,15 +92,58 @@ def parse_gef(file_content: str) -> pd.DataFrame:
     
     # Kolom namen toewijzen
     if column_info:
+        rename_map = {}
         for col_nr, col_name in column_info.items():
             if col_nr - 1 < len(df.columns):
-                df.rename(columns={df.columns[col_nr - 1]: col_name}, inplace=True)
+                rename_map[df.columns[col_nr - 1]] = col_name
+        df.rename(columns=rename_map, inplace=True)
+    
+    # Vervang void waarden door NaN
+    for col_nr, void_val in column_void.items():
+        col_name = column_info.get(col_nr)
+        if col_name and col_name in df.columns:
+            df[col_name] = df[col_name].replace(void_val, np.nan)
+        elif col_nr - 1 < len(df.columns):
+            col = df.columns[col_nr - 1]
+            df[col] = df[col].replace(void_val, np.nan)
+    
+    # Sla metadata op voor kolomdetectie
+    df.attrs["gef_quantity_info"] = quantity_info
+    df.attrs["gef_column_info"] = column_info
+    df.attrs["gef_column_units"] = column_units
+    df.attrs["gef_type"] = gef_type
     
     return df
 
 
+# GEF Quantity Numbers (NEN-EN-ISO 22476-1 / GEF-CPT standaard)
+GEF_QUANTITY_MAPPING = {
+    1: "diepte",      # Sondeerlengte
+    2: "qc",          # Conusweerstand
+    3: "fs",          # Plaatselijke wrijving (mantelwrijving)
+    4: None,          # Wrijvingsgetal Rf (afgeleid, niet nodig als input)
+    5: "u2",          # Waterspanning u1 (soms als u2)
+    6: "u2",          # Waterspanning u2
+    7: None,          # Waterspanning u3
+    8: None,          # Hellingshoek resultante
+    11: "diepte",     # Gecorrigeerde diepte (heeft prioriteit)
+    13: None,         # Tijd
+    14: "qc",         # Gecorrigeerde conusweerstand
+    21: None,         # Hellingshoek N-S
+    22: None,         # Hellingshoek E-W
+    23: None,         # Diepte (gemeten langs sondeerstang)
+}
+
+
 def detect_columns(df: pd.DataFrame) -> dict:
-    """Detecteer automatisch welke kolommen qc, fs, u2, diepte etc. zijn."""
+    """
+    Detecteer automatisch welke kolommen qc, fs, u2, diepte etc. zijn.
+    
+    Gebruikt drie methoden in volgorde (betrouwbaarheid):
+    1. GEF quantity numbers (meest betrouwbaar)
+    2. Kolom naam matching (uitgebreide patronen)
+    3. Positie-gebaseerde fallback (standaard GEF-volgorde)
+    """
     mapping = {
         "diepte": None,
         "qc": None,
@@ -76,23 +151,90 @@ def detect_columns(df: pd.DataFrame) -> dict:
         "u2": None,
     }
     
+    # ── Methode 1: GEF quantity numbers ──
+    quantity_info = df.attrs.get("gef_quantity_info", {})
+    column_info = df.attrs.get("gef_column_info", {})
+    
+    if quantity_info:
+        # Prioriteit: gecorrigeerde diepte (11) boven sondeerlengte (1)
+        for col_nr, qty_nr in sorted(quantity_info.items(), key=lambda x: x[1], reverse=True):
+            param = GEF_QUANTITY_MAPPING.get(qty_nr)
+            if param and param in mapping:
+                col_name = column_info.get(col_nr)
+                if col_name and col_name in df.columns:
+                    # Gecorrigeerde waarden krijgen prioriteit (hogere qty nrs)
+                    if mapping[param] is None or qty_nr in (11, 14):
+                        mapping[param] = col_name
+    
+    # ── Methode 2: Kolom naam matching (uitgebreid) ──
     common_names = {
-        "diepte": ["diepte", "depth", "sondeerlengte", "penetration_length", "z"],
-        "qc": ["qc", "conusweerstand", "cone_resistance", "conus"],
-        "fs": ["fs", "plaatselijke_wrijving", "sleeve_friction", "wrijving", "friction"],
-        "u2": ["u2", "u", "poriedruk", "pore_pressure", "waterspanning", "pwp"],
+        "diepte": [
+            "diepte", "depth", "sondeerlengte", "penetration_length", "z",
+            "gecorrigeerde diepte", "corrected depth", "lengte",
+            "penetratie lengte", "punt diepte", "meetdiepte",
+            "diepte tov maaiveld", "diepte t.o.v. maaiveld",
+            "sondeerlengte (m)", "penetratielengte",
+        ],
+        "qc": [
+            "qc", "conusweerstand", "cone_resistance", "conus",
+            "punt weerstand", "puntweerstand", "conusweerstand qc",
+            "qc (mpa)", "qc [mpa]", "qc(mpa)", "tip resistance",
+            "cone resistance", "gecorrigeerde conusweerstand",
+            "conusweerstand (mpa)", "conusweerstand in mpa",
+            "punt druk", "puntdruk",
+        ],
+        "fs": [
+            "fs", "plaatselijke wrijving", "plaatselijke_wrijving",
+            "sleeve_friction", "wrijving", "friction",
+            "lokale wrijving", "wrijvingsweerstand", 
+            "fs (mpa)", "fs [mpa]", "fs(mpa)", "sleeve friction",
+            "wrijvingsweerstand fs", "mantelwrijving", "kleefweerstand",
+            "plaatselijke wrijving (mpa)", "plaatselijke wrijving in mpa",
+        ],
+        "u2": [
+            "u2", "poriedruk", "pore_pressure", "waterspanning", "pwp",
+            "waterspanning u2", "u2 (mpa)", "u2 [mpa]", "u2(mpa)",
+            "pore pressure", "water pressure", "waterdruk",
+            "poriedruk u2", "porewaterpressure", "waterspanning u",
+            "waterspanning (mpa)", "waterspanning in mpa",
+            "poriedruk (mpa)", "poriedruk in mpa",
+        ],
     }
     
     col_lower = {c: c.lower().strip() for c in df.columns}
     
     for param, names in common_names.items():
+        if mapping[param] is not None:
+            continue  # Al gevonden via quantity numbers
         for col, col_l in col_lower.items():
             for name in names:
-                if name in col_l:
+                if name == col_l or name in col_l:
                     mapping[param] = col
                     break
             if mapping[param]:
                 break
+    
+    # Speciale check: 'u' als losse kolom alleen matchen als het écht u2 kan zijn
+    if mapping["u2"] is None:
+        for col, col_l in col_lower.items():
+            if col_l == "u":
+                mapping["u2"] = col
+                break
+    
+    # ── Methode 3: Positie-gebaseerd (standaard GEF volgorde) ──
+    # Standaard CPT GEF: kolom 1=diepte, 2=qc, 3=fs, 4=u2 of Rf
+    if mapping["diepte"] is None and mapping["qc"] is None:
+        num_cols = len(df.columns)
+        if num_cols >= 2:
+            mapping["diepte"] = df.columns[0]
+            mapping["qc"] = df.columns[1]
+            if num_cols >= 3 and mapping["fs"] is None:
+                mapping["fs"] = df.columns[2]
+            if num_cols >= 4 and mapping["u2"] is None:
+                # Kolom 4 kan u2 of Rf zijn — check waardebereik
+                col4 = df[df.columns[3]].dropna()
+                if len(col4) > 0 and col4.abs().median() < 5:
+                    mapping["u2"] = df.columns[3]
     
     return mapping
 
@@ -122,24 +264,27 @@ def check_poriedruk_correctie(df: pd.DataFrame, col_mapping: dict) -> dict:
 def render():
     st.markdown("""
     <div class="hero-container">
-        <h1>📁 Data Inladen</h1>
+        <h1>📁 Stap 1 — Data Inladen</h1>
         <p>Upload sonderingen — GEF, CSV of Excel — automatische kolomherkenning</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # --- Stap uitleg ---
     st.markdown("""
-    We beginnen met het **inladen van alle sonderingen**. De tool:
-    
-    1. **Herkent automatisch** de kolommen (diepte, qc, fs, u2)
-    2. **Controleert** of de conusweerstand al gecorrigeerd is voor poriedruk
-    3. **Geeft een overzicht** van alle geladen sonderingen en hun kwaliteit
-    
-    **Waarom is de poriedrukcontrole belangrijk?**  
-    Als de conusweerstand ($q_c$) niet is gecorrigeerd voor poriedruk ($u_2$), 
-    onderschatten we de werkelijke weerstand. Dit leidt tot een te lage Su. 
-    De correctie wordt uitgevoerd in Module 2.
-    
-    **Ondersteunde formaten:** GEF, CSV, Excel
-    """)
+    <div style="background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%); 
+         padding: 1.2rem; border-radius: 12px; margin-bottom: 1rem; border-left: 4px solid #1976d2;">
+        <h4 style="margin-top:0; color: #1565c0;">Waarom deze stap?</h4>
+        <p style="margin-bottom:0.5rem;">
+            CPT-sonderingen worden opgeslagen in <b>GEF-bestanden</b> — een Nederlands standaard formaat. 
+            In deze stap laden we de bestanden in en herkennen automatisch welke kolommen de 
+            <b>diepte</b>, <b>conusweerstand (qc)</b>, <b>wrijving (fs)</b> en <b>poriedruk (u2)</b> bevatten.
+        </p>
+        <p style="margin-bottom:0;">
+            ⚡ <b>Tip:</b> Controleer na het uploaden altijd of de kolommen correct zijn herkend. 
+            Je kunt ze handmatig aanpassen bij "Kolom Mapping" als de automatische herkenning niet klopt.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # --- Initialiseer session state ---
     if "sonderingen" not in st.session_state:
@@ -158,10 +303,18 @@ def render():
             if f.name in st.session_state.sonderingen:
                 continue  # Al geladen
             
+            # Detecteer dissipatie-tests
+            is_dissipatie = "_dsp_" in f.name.lower() or "_diss" in f.name.lower()
+            
             try:
                 if f.name.lower().endswith(".gef"):
                     content = f.read().decode("utf-8", errors="ignore")
                     df = parse_gef(content)
+                    
+                    # Check of het een dissipatie-test is (via bestandsnaam of GEF type)
+                    if df.attrs.get("gef_type") == "dissipatie":
+                        is_dissipatie = True
+                    
                 elif f.name.lower().endswith(".csv"):
                     df = pd.read_csv(f, sep=None, engine="python")
                 elif f.name.lower().endswith(".xlsx"):
@@ -170,12 +323,21 @@ def render():
                     continue
                 
                 if df.empty:
-                    st.warning(f"⚠️ {f.name}: Geen data gevonden.")
+                    st.warning(f"⚠️ **{f.name}**: Geen data gevonden in dit bestand.")
+                    continue
+                
+                if is_dissipatie:
+                    st.info(f"ℹ️ **{f.name}**: Dit lijkt een **dissipatie-test** te zijn (geen CPT-sondering). "
+                            f"Dissipatie-tests worden overgeslagen voor Su-berekening.")
                     continue
                 
                 # Kolomherkenning
                 col_mapping = detect_columns(df)
                 poriedruk_check = check_poriedruk_correctie(df, col_mapping)
+                
+                # Controleer of essentiële kolommen gevonden zijn
+                has_diepte = col_mapping["diepte"] is not None
+                has_qc = col_mapping["qc"] is not None
                 
                 st.session_state.sonderingen[f.name] = {
                     "df": df,
@@ -183,14 +345,60 @@ def render():
                     "poriedruk_check": poriedruk_check,
                 }
                 
-                st.success(f"✅ {f.name}: {len(df)} metingen geladen")
+                if has_diepte and has_qc:
+                    cols_found = []
+                    for k, v in col_mapping.items():
+                        if v:
+                            cols_found.append(f"{k}='{v}'")
+                    st.success(f"✅ **{f.name}**: {len(df)} metingen geladen — Kolommen: {', '.join(cols_found)}")
+                else:
+                    missing = []
+                    if not has_diepte:
+                        missing.append("diepte")
+                    if not has_qc:
+                        missing.append("qc")
+                    st.warning(
+                        f"⚠️ **{f.name}**: {len(df)} metingen geladen, maar **{', '.join(missing)}** kolom(men) "
+                        f"niet automatisch herkend. Ga naar **'Kolom Mapping'** hieronder om de juiste kolommen "
+                        f"handmatig te selecteren. Beschikbare kolommen: {list(df.columns)}"
+                    )
             
             except Exception as e:
-                st.error(f"❌ {f.name}: Fout bij inlezen — {e}")
+                st.error(f"❌ **{f.name}**: Fout bij inlezen — {e}")
     
     # --- Overzicht geladen sonderingen ---
     if st.session_state.sonderingen:
         st.markdown("---")
+        
+        # Status samenvatting
+        total = len(st.session_state.sonderingen)
+        ready = sum(1 for d in st.session_state.sonderingen.values() 
+                     if d["col_mapping"].get("diepte") and d["col_mapping"].get("qc"))
+        not_ready = total - ready
+        
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1:
+            st.metric("Totaal geladen", f"{total} sonderingen")
+        with col_m2:
+            st.metric("Gereed voor analyse", f"{ready} ✅")
+        with col_m3:
+            if not_ready > 0:
+                st.metric("Actie nodig", f"{not_ready} ⚠️")
+            else:
+                st.metric("Actie nodig", "0 🎉")
+        
+        if not_ready > 0:
+            st.warning(
+                f"⚠️ **{not_ready} sondering(en)** missen essentiële kolommen (diepte/qc). "
+                f"Selecteer hieronder de juiste kolommen bij 'Kolom Mapping' voordat je doorgaat naar Stap 2."
+            )
+        elif ready == total:
+            st.success(
+                f"✅ **Alle {total} sonderingen gereed** voor de volgende stap! "
+                f"Ga naar **Stap 2 — Normalisatie** in het zijmenu."
+            )
+        
+        # Overzichtstabel
         st.subheader("Overzicht Geladen Sonderingen")
         
         overview_data = []
@@ -201,21 +409,24 @@ def render():
             
             depth_range = ""
             if cm["diepte"] and cm["diepte"] in df.columns:
-                depth_range = f"{df[cm['diepte']].min():.1f} - {df[cm['diepte']].max():.1f} m"
+                depth_range = f"{df[cm['diepte']].min():.1f} — {df[cm['diepte']].max():.1f} m"
+            
+            status = "✅ Gereed" if (cm["diepte"] and cm["qc"]) else "⚠️ Kolom mapping nodig"
             
             overview_data.append({
                 "Sondering": name,
+                "Status": status,
                 "Metingen": len(df),
-                "Diepte": depth_range,
-                "qc": "✅" if cm["qc"] else "❌",
-                "fs": "✅" if cm["fs"] else "❌",
-                "u2": "✅" if cm["u2"] else "❌",
-                "Poriedruk status": pc["message"],
+                "Dieptebereik": depth_range,
+                "qc": f"✅ {cm['qc']}" if cm["qc"] else "❌ Niet gevonden",
+                "fs": f"✅ {cm['fs']}" if cm["fs"] else "⚠️ Niet gevonden",
+                "u2": f"✅ {cm['u2']}" if cm["u2"] else "⚠️ Niet gevonden",
             })
         
         st.dataframe(pd.DataFrame(overview_data), use_container_width=True, hide_index=True)
         
         # --- Detail per sondering ---
+        st.markdown("---")
         st.subheader("Detail per sondering")
         selected = st.selectbox("Selecteer sondering", list(st.session_state.sonderingen.keys()))
         
@@ -224,52 +435,73 @@ def render():
             df = data["df"]
             cm = data["col_mapping"]
             
-            tab1, tab2 = st.tabs(["📋 Data", "🔧 Kolom Mapping"])
+            # Status indicator
+            if cm["diepte"] and cm["qc"]:
+                st.success(f"✅ **{selected}** — Gereed voor analyse")
+            else:
+                missing = [k for k in ["diepte", "qc"] if not cm.get(k)]
+                st.error(
+                    f"❌ **{selected}** — Kolom(men) **{', '.join(missing)}** niet gevonden. "
+                    f"Selecteer de juiste kolommen hieronder bij 'Kolom Mapping'."
+                )
+            
+            tab1, tab2 = st.tabs(["📋 Data Preview", "🔧 Kolom Mapping"])
             
             with tab1:
+                st.caption(f"Eerste 30 rijen van {len(df)} totaal — Kolommen: {list(df.columns)}")
                 st.dataframe(df.head(30), use_container_width=True)
             
             with tab2:
-                st.markdown("**Automatische kolomherkenning** (pas aan indien nodig):")
+                st.markdown("""
+                **Automatische kolomherkenning** — controleer en pas aan indien nodig.
+                
+                De kolommen **diepte** en **qc** zijn **verplicht** voor verdere analyse. 
+                Als deze niet automatisch zijn herkend, selecteer ze hier handmatig.
+                """)
+                
                 cols = df.columns.tolist()
                 
                 new_mapping = {}
                 col1, col2 = st.columns(2)
                 with col1:
+                    idx_diepte = cols.index(cm["diepte"]) + 1 if cm.get("diepte") and cm["diepte"] in cols else 0
                     new_mapping["diepte"] = st.selectbox(
-                        "Diepte kolom", 
+                        "🔴 Diepte kolom (verplicht)", 
                         options=["(niet gevonden)"] + cols,
-                        index=cols.index(cm["diepte"]) + 1 if cm["diepte"] in cols else 0,
+                        index=idx_diepte,
                         key=f"diepte_{selected}"
                     )
+                    idx_qc = cols.index(cm["qc"]) + 1 if cm.get("qc") and cm["qc"] in cols else 0
                     new_mapping["qc"] = st.selectbox(
-                        "qc (conusweerstand) kolom",
+                        "🔴 qc (conusweerstand) kolom (verplicht)",
                         options=["(niet gevonden)"] + cols,
-                        index=cols.index(cm["qc"]) + 1 if cm["qc"] in cols else 0,
+                        index=idx_qc,
                         key=f"qc_{selected}"
                     )
                 with col2:
+                    idx_fs = cols.index(cm["fs"]) + 1 if cm.get("fs") and cm["fs"] in cols else 0
                     new_mapping["fs"] = st.selectbox(
-                        "fs (wrijving) kolom",
+                        "🟡 fs (wrijving) kolom (optioneel)",
                         options=["(niet gevonden)"] + cols,
-                        index=cols.index(cm["fs"]) + 1 if cm["fs"] in cols else 0,
+                        index=idx_fs,
                         key=f"fs_{selected}"
                     )
+                    idx_u2 = cols.index(cm["u2"]) + 1 if cm.get("u2") and cm["u2"] in cols else 0
                     new_mapping["u2"] = st.selectbox(
-                        "u2 (poriedruk) kolom",
+                        "🟡 u2 (poriedruk) kolom (optioneel)",
                         options=["(niet gevonden)"] + cols,
-                        index=cols.index(cm["u2"]) + 1 if cm["u2"] in cols else 0,
+                        index=idx_u2,
                         key=f"u2_{selected}"
                     )
                 
-                if st.button("💾 Mapping opslaan", key=f"save_{selected}"):
+                if st.button("💾 Mapping opslaan", key=f"save_{selected}", type="primary"):
                     for k, v in new_mapping.items():
                         st.session_state.sonderingen[selected]["col_mapping"][k] = v if v != "(niet gevonden)" else None
                     # Herbereken poriedruk check
                     st.session_state.sonderingen[selected]["poriedruk_check"] = check_poriedruk_correctie(
                         df, st.session_state.sonderingen[selected]["col_mapping"]
                     )
-                    st.success("✅ Kolom mapping opgeslagen")
+                    st.success("✅ Kolom mapping opgeslagen! Herlaad de pagina om het overzicht bij te werken.")
                     st.rerun()
         
         # --- Verwijder sonderingen ---
@@ -278,4 +510,4 @@ def render():
             st.session_state.sonderingen = {}
             st.rerun()
     else:
-        st.info("Upload sonderingen om te beginnen.")
+        st.info("👆 Upload sonderingen hierboven om te beginnen.")

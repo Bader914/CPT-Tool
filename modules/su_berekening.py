@@ -23,23 +23,35 @@ def bereken_Su(q_net: pd.Series, Nkt: float) -> pd.Series:
 def render():
     st.markdown("""
     <div class="hero-container">
-        <h1>📊 Su Berekening</h1>
+        <h1>📊 Stap 4 — Su Berekening</h1>
         <p>Ongedraineerde schuifsterkte uit CPT — Su = q_net / Nkt</p>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("""
-    We berekenen $S_u$ per meetpunt op basis van de netto conusweerstand en de 
-    **Nkt-factor per grondlaag** (Tabel 71). Alleen fijnkorrelig dijkmateriaal 
-    (geselecteerd in Module 3) krijgt een Su-waarde.
-    """)
+    <div style="background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%); 
+         padding: 1.2rem; border-radius: 12px; margin-bottom: 1rem; border-left: 4px solid #1976d2;">
+        <h4 style="margin-top:0; color: #1565c0;">Waarom deze stap?</h4>
+        <p style="margin-bottom:0;">
+            De <b>ongedraineerde schuifsterkte</b> ($S_u$) is de sterkteparameter die bepaalt of de dijk 
+            stabiel is bij snel optreden van belasting. We berekenen $S_u$ per meetpunt op basis 
+            van de <b>netto conusweerstand</b> en de <b>Nkt-factor per grondlaag</b> (Tabel 71). 
+            Alleen fijnkorrelig dijkmateriaal (geselecteerd in Stap 3) krijgt een Su-waarde.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Check of classificatie is uitgevoerd
     geclassificeerd = {k: v for k, v in st.session_state.get("sonderingen", {}).items() 
                        if v.get("geclassificeerd")}
     
     if not geclassificeerd:
-        st.warning("Voer eerst de classificatie uit in Module 3.")
+        st.markdown("""
+        <div style="background: #fff3e0; padding: 1rem; border-radius: 10px; border-left: 4px solid #ff9800;">
+            <b>⚠️ Classificatie nog niet uitgevoerd</b><br>
+            Ga eerst naar <b>Stap 3 — Classificatie</b> om de grondsoorten te bepalen.
+        </div>
+        """, unsafe_allow_html=True)
         return
     
     # --- Haal Nkt per grondlaag uit uitgangspunten ---

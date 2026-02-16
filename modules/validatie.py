@@ -13,27 +13,33 @@ import plotly.graph_objects as go
 def render():
     st.markdown("""
     <div class="hero-container">
-        <h1>✅ Validatie</h1>
+        <h1>✅ Stap 5 — Validatie</h1>
         <p>Vergelijk Su-profielen met laboratoriumproeven — kalibreer Nkt</p>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("""
-    We **valideren** de berekende Su-profielen door ze te vergelijken met laboratoriumproeven:
-    
-    - **Triaxiaalproeven**, **DSS-proeven** of **vane tests** geven de "echte" Su. 
-    - Als er labproeven beschikbaar zijn, kunnen we de Nkt-factor kalibreren.
-    
-    **Waarom is validatie cruciaal?**  
-    De Nkt-factor is een empirische aanname. Door te vergelijken met labresultaten 
-    kunnen we beoordelen of de gekozen Nkt realistisch is. Als de CPT-Su systematisch 
-    hoger of lager is dan de lab-Su, moet de Nkt worden aangepast in Module 0 (Uitgangspunten).
-    """)
+    <div style="background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%); 
+         padding: 1.2rem; border-radius: 12px; margin-bottom: 1rem; border-left: 4px solid #1976d2;">
+        <h4 style="margin-top:0; color: #1565c0;">Waarom deze stap?</h4>
+        <p style="margin-bottom:0;">
+            De Nkt-factor is een <b>empirische aanname</b>. Door de CPT-Su te vergelijken met 
+            laboratoriumproeven (triaxiaal, DSS, vane test) controleren we of de gekozen Nkt 
+            realistisch is. Als de CPT-Su systematisch afwijkt, moet de Nkt worden aangepast 
+            in <b>Stap 0 — Uitgangspunten</b>.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
     su_berekend = {k: v for k, v in st.session_state.get("sonderingen", {}).items() 
                    if v.get("su_berekend")}
     
     if not su_berekend:
-        st.warning("⚠️ Bereken eerst Su in Module 4.")
+        st.markdown("""
+        <div style="background: #fff3e0; padding: 1rem; border-radius: 10px; border-left: 4px solid #ff9800;">
+            <b>⚠️ Su nog niet berekend</b><br>
+            Ga eerst naar <b>Stap 4 — Su Berekening</b> om de schuifsterkte te berekenen.
+        </div>
+        """, unsafe_allow_html=True)
         return
     
     st.subheader("Vergelijking met Laboratoriumproeven")

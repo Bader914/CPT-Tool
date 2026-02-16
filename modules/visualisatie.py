@@ -15,29 +15,34 @@ import io
 def render():
     st.markdown("""
     <div class="hero-container">
-        <h1>📈 Rapportage & Export</h1>
+        <h1>📈 Stap 6 — Rapportage & Export</h1>
         <p>Totaaloverzicht Su-profielen — trends, afwijkingen & Excel/CSV export</p>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("""
-    We visualiseren **alle Su-profielen samen** om:
-    
-    - **Trends** te herkennen (neemt Su toe/af met diepte?)
-    - **Afwijkende sonderingen** te identificeren (uitbijters)
-    - **Samenvattende statistieken** te berekenen per sondering
-    - **Resultaten te exporteren** als CSV of Excel voor verdere verwerking
-    
-    **Waarom is dit de laatste stap?**  
-    Door alle sonderingen samen te plotten, zien we of het Su-beeld consistent is 
-    over het dijktraject. Grote afwijkingen kunnen wijzen op lokale bodemvariatie, 
-    meetfouten, of een verkeerde Nkt-keuze.
-    """)
+    <div style="background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%); 
+         padding: 1.2rem; border-radius: 12px; margin-bottom: 1rem; border-left: 4px solid #1976d2;">
+        <h4 style="margin-top:0; color: #1565c0;">Waarom deze stap?</h4>
+        <p style="margin-bottom:0;">
+            Door <b>alle Su-profielen samen</b> te plotten, zien we of het Su-beeld consistent is 
+            over het dijktraject. Grote afwijkingen kunnen wijzen op <b>lokale bodemvariatie</b>, 
+            <b>meetfouten</b>, of een <b>verkeerde Nkt-keuze</b>. De resultaten worden geëxporteerd 
+            voor verdere verwerking in D-Stability of andere tools.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
     su_berekend = {k: v for k, v in st.session_state.get("sonderingen", {}).items() 
                    if v.get("su_berekend")}
     
     if not su_berekend:
-        st.warning("⚠️ Bereken eerst Su in Module 4.")
+        st.markdown("""
+        <div style="background: #fff3e0; padding: 1rem; border-radius: 10px; border-left: 4px solid #ff9800;">
+            <b>⚠️ Su nog niet berekend</b><br>
+            Ga eerst naar <b>Stap 4 — Su Berekening</b> om de schuifsterkte te berekenen.
+        </div>
+        """, unsafe_allow_html=True)
+        return
         return
     
     tab1, tab2, tab3 = st.tabs(["📊 Overzicht", "🔍 Afwijkingen", "📥 Export"])
