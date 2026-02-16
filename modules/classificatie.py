@@ -56,36 +56,22 @@ def classificeer_robertson(qt: pd.Series, Rf: pd.Series, sigma_v0: pd.Series) ->
 
 
 def render():
-    st.markdown("""
-    <div class="hero-compact">
-        <div class="hero-text">
-            <div class="step-tag">Stap 3 van 6</div>
-            <h1>🧱 Classificatie</h1>
-            <p class="sub">Robertson 1990 — grondsoort & dijkmateriaal</p>
-        </div>
-        <div class="hero-why">
-            Bepaal per meetpunt de <b>grondsoort</b> zodat we alleen Su berekenen voor 
-            fijnkorrelig dijkmateriaal (klei, silt, veen).
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.caption("Stap 3 — Robertson 1990 classificatie, grondsoort & dijkmateriaal")
     
-    # Toon verwachte dijkopbouw uit uitgangspunten
-    st.markdown("**Verwachte dijkopbouw (uit Uitgangspunten):**")
+    # Toon verwachte dijkopbouw in expander
     up = st.session_state.get("uitgangspunten", {})
     lagen = up.get("lagen", [])
     
     if lagen:
-        for laag in lagen:
-            dijkmat_icon = "🟢" if laag.get("is_dijkmateriaal") else "⚪"
-            top = laag.get("top_nap")
-            onder = laag.get("onder_nap")
-            positie = f"NAP {top:+.1f}m tot {onder:+.1f}m" if top is not None and onder is not None else "variabel"
-            st.markdown(
-                f"- {dijkmat_icon} **{laag['naam']}**: {positie} — {laag['materiaal']}"
-            )
-    
-    st.markdown("---")
+        with st.expander("📋 Verwachte dijkopbouw (uit Uitgangspunten)", expanded=False):
+            for laag in lagen:
+                dijkmat_icon = "🟢" if laag.get("is_dijkmateriaal") else "⚪"
+                top = laag.get("top_nap")
+                onder = laag.get("onder_nap")
+                positie = f"NAP {top:+.1f}m tot {onder:+.1f}m" if top is not None and onder is not None else "variabel"
+                st.markdown(
+                    f"- {dijkmat_icon} **{laag['naam']}**: {positie} — {laag['materiaal']}"
+                )
     
     # --- Check stappen status ---
     sonderingen = st.session_state.get("sonderingen", {})

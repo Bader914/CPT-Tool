@@ -73,29 +73,7 @@ def bereken_sigma_v0(diepte: pd.Series, gamma: float = 18.0, gwl: float = 0.0) -
 
 
 def render():
-    st.markdown("""
-    <div class="hero-compact">
-        <div class="hero-text">
-            <div class="step-tag">Stap 2 van 6</div>
-            <h1>📐 Normalisatie</h1>
-            <p class="sub">Poriedrukcorrectie qt, spanningen σv0, Rf & Bq</p>
-        </div>
-        <div class="hero-why">
-            Corrigeer <b>qc → qt</b> voor poriedruk en bereken spanningen + afgeleide parameters 
-            voor de Robertson classificatie en Su-berekening.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    with st.expander("📘 Formules", expanded=False):
-        st.markdown("""
-        | Parameter | Formule | Betekenis |
-        |---|---|---|
-        | $q_t$ | $q_c + (1-a) \\cdot u_2$ | Gecorrigeerde conusweerstand |
-        | $q_{net}$ | $q_t - \\sigma_{v0}$ | Netto conusweerstand (gecorrigeerd voor diepte) |
-        | $R_f$ | $(f_s / q_c) \\times 100\\%$ | Wrijvingsgetal (indicator grondtype) |
-        | $B_q$ | $(u_2 - u_0) / q_{net}$ | Poriedrukratio (indicator drainagegedrag) |
-        """)
+    st.caption("Stap 2 — Poriedrukcorrectie qt, spanningen σv0, Rf & Bq")
     
     # --- Check of er sonderingen zijn ---
     if not st.session_state.get("sonderingen"):

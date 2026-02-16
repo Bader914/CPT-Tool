@@ -21,20 +21,7 @@ def bereken_Su(q_net: pd.Series, Nkt: float) -> pd.Series:
 
 
 def render():
-    st.markdown("""
-    <div class="hero-compact">
-        <div class="hero-text">
-            <div class="step-tag">Stap 4 van 6</div>
-            <h1>📊 Su Berekening</h1>
-            <p class="sub">Su = q_net / Nkt per grondlaag</p>
-        </div>
-        <div class="hero-why">
-            Bereken de <b>ongedraineerde schuifsterkte</b> per meetpunt met de 
-            <b>Nkt-factor per grondlaag</b> (Tabel 71). Alleen fijnkorrelig dijkmateriaal 
-            krijgt een Su-waarde.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.caption("Stap 4 — Su = q_net / Nkt per grondlaag")
     
     # Check of classificatie is uitgevoerd
     geclassificeerd = {k: v for k, v in st.session_state.get("sonderingen", {}).items() 

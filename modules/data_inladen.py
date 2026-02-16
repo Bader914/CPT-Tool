@@ -262,19 +262,7 @@ def check_poriedruk_correctie(df: pd.DataFrame, col_mapping: dict) -> dict:
 
 
 def render():
-    st.markdown("""
-    <div class="hero-compact">
-        <div class="hero-text">
-            <div class="step-tag">Stap 1 van 6</div>
-            <h1>📁 Data Inladen</h1>
-            <p class="sub">Upload GEF/CSV/Excel — automatische kolomherkenning</p>
-        </div>
-        <div class="hero-why">
-            Upload <b>GEF-bestanden</b> en controleer of diepte, qc, fs en u2 correct zijn herkend. 
-            Pas de kolom mapping aan als de automatische herkenning niet klopt.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.caption("Stap 1 — Upload GEF/CSV/Excel, automatische kolomherkenning")
     
     # --- Initialiseer session state ---
     if "sonderingen" not in st.session_state:

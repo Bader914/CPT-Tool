@@ -13,19 +13,7 @@ import io
 
 
 def render():
-    st.markdown("""
-    <div class="hero-compact">
-        <div class="hero-text">
-            <div class="step-tag">Stap 6 van 6</div>
-            <h1>📈 Rapportage & Export</h1>
-            <p class="sub">Totaaloverzicht, trends & Excel/CSV export</p>
-        </div>
-        <div class="hero-why">
-            Plot <b>alle Su-profielen samen</b>, identificeer afwijkingen en exporteer 
-            resultaten voor D-Stability of andere tools.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.caption("Stap 6 — Totaaloverzicht, trends & export")
     
     su_berekend = {k: v for k, v in st.session_state.get("sonderingen", {}).items() 
                    if v.get("su_berekend")}

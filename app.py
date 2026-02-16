@@ -7,7 +7,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ── Modern CSS Styling v5.0 ──
+# ── Modern CSS Styling v5.1 ──
 st.markdown("""
 <style>
 /* === FONTS === */
@@ -22,124 +22,47 @@ st.markdown("""
 [data-testid="stAppViewContainer"] h3, [data-testid="stAppViewContainer"] h4 { color: #f1f5f9 !important; }
 [data-testid="stHeader"] { background: rgba(10, 14, 26, 0.9) !important; backdrop-filter: blur(10px); }
 
-/* Hide default sidebar toggle */
+/* Hide sidebar */
 [data-testid="stSidebar"] { display: none !important; }
 [data-testid="collapsedControl"] { display: none !important; }
 
-/* === TOP NAV BAR === */
-.topbar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(15, 23, 42, 0.95);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(99, 102, 241, 0.12);
-    border-radius: 16px;
-    padding: 8px 12px;
-    margin-bottom: 1rem;
-}
-.topbar-brand {
-    display: flex; align-items: center; gap: 10px;
-    padding-right: 16px; border-right: 1px solid rgba(99, 102, 241, 0.15);
-    margin-right: 4px; flex-shrink: 0;
-}
-.topbar-brand span.icon { font-size: 1.4rem; filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.5)); }
-.topbar-brand .name {
-    font-size: 0.95rem; font-weight: 800;
-    background: linear-gradient(135deg, #c7d2fe, #818cf8);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-}
+/* === REDUCE ALL PADDING === */
+.block-container { padding-top: 1rem !important; padding-bottom: 0 !important; }
 
-/* Step pills in topbar */
-.step-pills { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; flex: 1; }
-.step-pill {
-    display: flex; align-items: center; gap: 6px;
-    padding: 7px 14px; border-radius: 10px; cursor: pointer;
-    transition: all 0.2s ease; white-space: nowrap; flex-shrink: 0;
-    font-size: 0.78rem; font-weight: 500; text-decoration: none;
-    border: 1px solid transparent;
+/* === HORIZONTAL RADIO as pill nav === */
+[data-testid="stRadio"] > div { gap: 0 !important; }
+[data-testid="stRadio"] [role="radiogroup"] {
+    gap: 3px !important; background: rgba(15, 23, 42, 0.8);
+    border-radius: 12px; padding: 3px; border: 1px solid rgba(99, 102, 241, 0.12);
+    backdrop-filter: blur(12px);
 }
-.step-pill.done { background: rgba(34, 197, 94, 0.12); color: #86efac; border-color: rgba(34, 197, 94, 0.2); }
-.step-pill.active { background: rgba(99, 102, 241, 0.2); color: #c7d2fe; border-color: rgba(99, 102, 241, 0.4);
-    box-shadow: 0 2px 12px rgba(99, 102, 241, 0.25); }
-.step-pill.todo { background: rgba(30, 41, 59, 0.4); color: #475569; }
-.step-pill .num {
-    width: 20px; height: 20px; border-radius: 50%; display: flex;
-    align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700; flex-shrink: 0;
+[data-testid="stRadio"] [role="radiogroup"] label {
+    border-radius: 9px !important; padding: 6px 12px !important;
+    margin: 0 !important; font-size: 0.78rem !important; font-weight: 500;
+    color: #64748b !important; transition: all 0.2s ease;
+    white-space: nowrap;
 }
-.step-pill.done .num { background: #22c55e; color: white; }
-.step-pill.active .num { background: #6366f1; color: white; }
-.step-pill.todo .num { background: rgba(51, 65, 85, 0.6); color: #64748b; border: 1px solid #334155; }
+[data-testid="stRadio"] [role="radiogroup"] label:hover {
+    background: rgba(99, 102, 241, 0.1) !important; color: #a5b4fc !important;
+}
+[data-testid="stRadio"] [role="radiogroup"] label[data-checked="true"],
+[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+    color: white !important; box-shadow: 0 2px 10px rgba(99, 102, 241, 0.3);
+}
+/* Hide radio circles */
+[data-testid="stRadio"] [role="radiogroup"] label > div:first-child { display: none !important; }
+[data-testid="stRadio"] [role="radiogroup"] label p { font-size: 0.78rem !important; margin: 0; }
 
-/* Stats in topbar */
-.topbar-stats {
-    display: flex; gap: 12px; margin-left: auto; padding-left: 16px;
-    border-left: 1px solid rgba(99, 102, 241, 0.15); flex-shrink: 0;
-}
-.topbar-stat { text-align: center; }
-.topbar-stat .val { font-size: 1.1rem; font-weight: 800; color: #c7d2fe; }
-.topbar-stat .lbl { font-size: 0.6rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; }
-
-/* === COMPACT HERO === */
-.hero-compact {
-    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%);
-    border-radius: 16px; padding: 1.4rem 2rem; color: white;
-    margin-bottom: 1rem; position: relative; overflow: hidden;
-    border: 1px solid rgba(99, 102, 241, 0.25);
-    display: flex; align-items: center; justify-content: space-between; gap: 2rem;
-}
-.hero-compact::before {
-    content: ''; position: absolute; top: -60%; right: -10%;
-    width: 250px; height: 250px;
-    background: radial-gradient(circle, rgba(139, 92, 246, 0.25) 0%, transparent 70%);
-    border-radius: 50%;
-}
-.hero-compact .hero-text { position: relative; flex: 1; }
-.hero-compact .step-tag {
-    display: inline-block; background: rgba(255,255,255,0.12);
-    color: #c7d2fe; font-size: 0.65rem; font-weight: 700;
-    padding: 3px 10px; border-radius: 14px; text-transform: uppercase;
-    letter-spacing: 0.1em; margin-bottom: 0.4rem;
-}
-.hero-compact h1 { font-size: 1.5rem !important; font-weight: 800 !important;
-    margin: 0 !important; color: white !important; }
-.hero-compact .sub { color: #a5b4fc; font-size: 0.88rem; margin: 0.2rem 0 0 0; }
-.hero-compact .hero-why {
-    position: relative; max-width: 340px; background: rgba(255,255,255,0.08);
-    border-radius: 12px; padding: 0.9rem 1.1rem; font-size: 0.82rem;
-    color: #c7d2fe; line-height: 1.5; border: 1px solid rgba(255,255,255,0.08);
-}
-.hero-compact .hero-why b { color: #e0e7ff; }
-
-/* Legacy hero-section / hero-container now maps to compact */
-.hero-section, .hero-container {
-    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%);
-    border-radius: 16px; padding: 1.4rem 2rem; color: white;
-    margin-bottom: 1rem; border: 1px solid rgba(99, 102, 241, 0.25);
-    position: relative; overflow: hidden;
-}
-.hero-section h1, .hero-container h1 { font-size: 1.5rem !important; font-weight: 800 !important;
-    margin: 0 0 0.3rem 0 !important; color: white !important; }
-.hero-section p, .hero-section .subtitle, .hero-container p { color: #a5b4fc; font-size: 0.88rem; margin: 0; }
-.hero-section .step-label { display: inline-block; background: rgba(255,255,255,0.12);
-    color: #c7d2fe; font-size: 0.65rem; font-weight: 700; padding: 3px 10px;
-    border-radius: 14px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.4rem; }
-
-/* === WHY CARD (compact) === */
+/* === WHY CARD === */
 .why-card {
     background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(99, 102, 241, 0.15);
     border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 1rem;
-    position: relative; border-left: 3px solid #6366f1;
+    border-left: 3px solid #6366f1;
 }
 .why-card h4 { color: #818cf8 !important; font-size: 0.82rem; font-weight: 700;
     margin: 0 0 0.4rem 0; text-transform: uppercase; letter-spacing: 0.05em; }
 .why-card p { color: #cbd5e1 !important; font-size: 0.85rem; line-height: 1.5; margin: 0 0 0.3rem 0; }
-.why-card .tip {
-    display: flex; align-items: flex-start; gap: 8px;
-    background: rgba(99, 102, 241, 0.08); border-radius: 8px;
-    padding: 8px 12px; margin-top: 0.5rem;
-}
-.why-card .tip p { color: #a5b4fc !important; font-size: 0.8rem; margin: 0; }
 
 /* === NEXT-STEP === */
 .next-step {
@@ -172,7 +95,7 @@ st.markdown("""
 [data-testid="stTabs"] [aria-selected="true"] {
     background: rgba(99, 102, 241, 0.18) !important; color: #c7d2fe !important; }
 
-/* === EXPANDERS === */
+/* === EXPANDERS (compact) === */
 [data-testid="stExpander"] { background: rgba(30, 41, 59, 0.35) !important;
     border: 1px solid rgba(99, 102, 241, 0.12) !important; border-radius: 12px !important; }
 [data-testid="stExpander"] summary { font-weight: 600; color: #c7d2fe !important; }
@@ -218,10 +141,14 @@ st.markdown("""
     border-bottom: 1px solid rgba(99, 102, 241, 0.06); font-size: 0.85rem; }
 
 /* === DIVIDERS & SCROLLBAR === */
-[data-testid="stAppViewContainer"] hr { border-color: rgba(99, 102, 241, 0.1) !important; margin: 1rem 0; }
+[data-testid="stAppViewContainer"] hr { border-color: rgba(99, 102, 241, 0.1) !important; margin: 0.8rem 0; }
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: #0a0e1a; }
 ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+/* Reduce subheader margins */
+[data-testid="stAppViewContainer"] h2 { margin-top: 0.5rem !important; margin-bottom: 0.3rem !important; font-size: 1.1rem !important; }
+[data-testid="stAppViewContainer"] h3 { margin-top: 0.3rem !important; margin-bottom: 0.2rem !important; font-size: 1rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -303,73 +230,51 @@ step_done = [
 ]
 
 su_count = sum(1 for v in st.session_state.get("sonderingen", {}).values() if v.get("su_berekend"))
+
+# === BUILD RADIO LABELS with status icons ===
+radio_labels = []
+for i, s in enumerate(STEPS):
+    check = "✅" if step_done[i] else f"{i}"
+    radio_labels.append(f"{check}  {s['icon']} {s['label']}")
+
 active = st.session_state.current_step
 
-# === TOP NAVIGATION BAR (HTML) ===
-pills_html = ""
-for i, s in enumerate(STEPS):
-    if step_done[i]:
-        cls = "done"
-    elif i == active:
-        cls = "active"
-    else:
-        cls = "todo"
-    pills_html += f'''<div class="step-pill {cls}" id="step-{i}">
-        <div class="num">{("✓" if step_done[i] else str(i))}</div>
-        {s["icon"]} {s["label"]}
-    </div>'''
-
-stats_html = f"""<div class="topbar-stats">
-    <div class="topbar-stat"><div class="val">{n_sond}</div><div class="lbl">CPT's</div></div>
-    <div class="topbar-stat"><div class="val">{su_count}</div><div class="lbl">Su</div></div>
-</div>"""
-
-st.markdown(f"""
-<div class="topbar">
-    <div class="topbar-brand">
-        <span class="icon">🔬</span>
-        <div class="name">CPT Su Tool</div>
+# === SINGLE NAV ROW: brand + radio + stats ===
+nav_left, nav_mid, nav_right = st.columns([1.5, 8, 1.5])
+with nav_left:
+    st.markdown(f"""
+    <div style="display:flex; align-items:center; gap:8px; padding:4px 0;">
+        <span style="font-size:1.3rem; filter:drop-shadow(0 0 8px rgba(99,102,241,0.5));">🔬</span>
+        <span style="font-weight:800; font-size:0.9rem;
+            background:linear-gradient(135deg,#c7d2fe,#818cf8);
+            -webkit-background-clip:text; -webkit-text-fill-color:transparent;">CPT Su Tool</span>
     </div>
-    <div class="step-pills">{pills_html}</div>
-    {stats_html}
-</div>
-""", unsafe_allow_html=True)
-
-# === STEP SELECTOR BUTTONS (Streamlit) ===
-btn_cols = st.columns(7)
-for i, s in enumerate(STEPS):
-    with btn_cols[i]:
-        label = f"{'✅ ' if step_done[i] else ''}{s['label']}"
-        if st.button(label, key=f"nav_{i}", use_container_width=True,
-                     type="primary" if i == active else "secondary"):
-            st.session_state.current_step = i
-            st.rerun()
-
-# Style the nav buttons to be tiny and match theme
-st.markdown("""
-<style>
-/* Make nav buttons compact, sitting below the visual topbar */
-[data-testid="stHorizontalBlock"]:has(button[kind]) {
-    gap: 4px !important; margin-top: -0.5rem; margin-bottom: 0.5rem;
-}
-div[data-testid="stHorizontalBlock"] .stButton > button {
-    font-size: 0.7rem !important; padding: 0.3rem 0.4rem !important;
-    border-radius: 8px !important; min-height: 0 !important;
-    background: rgba(30, 41, 59, 0.3) !important;
-    color: #64748b !important; border: 1px solid rgba(99, 102, 241, 0.1) !important;
-}
-div[data-testid="stHorizontalBlock"] .stButton > button[kind="primary"] {
-    background: rgba(99, 102, 241, 0.2) !important;
-    color: #c7d2fe !important; border-color: rgba(99, 102, 241, 0.3) !important;
-}
-div[data-testid="stHorizontalBlock"] .stButton > button:hover {
-    background: rgba(99, 102, 241, 0.15) !important; color: #a5b4fc !important;
-    transform: none !important; box-shadow: none !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("---")
+    """, unsafe_allow_html=True)
+with nav_mid:
+    selection = st.radio(
+        "nav", radio_labels, index=active,
+        horizontal=True, label_visibility="collapsed",
+        key="step_radio"
+    )
+    # Sync back
+    new_step = radio_labels.index(selection)
+    if new_step != active:
+        st.session_state.current_step = new_step
+        st.rerun()
+with nav_right:
+    st.markdown(f"""
+    <div style="display:flex; gap:16px; justify-content:flex-end; padding:6px 0;">
+        <div style="text-align:center;">
+            <div style="font-size:1.1rem; font-weight:800; color:#c7d2fe;">{n_sond}</div>
+            <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase; letter-spacing:0.08em;">CPT's</div>
+        </div>
+        <div style="text-align:center;">
+            <div style="font-size:1.1rem; font-weight:800; color:#c7d2fe;">{su_count}</div>
+            <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase; letter-spacing:0.08em;">Su</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # === MAIN CONTENT ===
+active = st.session_state.current_step
 STEPS[active]["module"].render()

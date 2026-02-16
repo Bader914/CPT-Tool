@@ -295,19 +295,7 @@ def maak_dijkprofiel_figuur(lagen: list) -> go.Figure:
 
 
 def render():
-    st.markdown("""
-    <div class="hero-compact">
-        <div class="hero-text">
-            <div class="step-tag">Stap 0 — Start hier</div>
-            <h1>📋 Uitgangspunten</h1>
-            <p class="sub">Alle projectparameters op één plek</p>
-        </div>
-        <div class="hero-why">
-            Leg hier alle <b>projectparameters</b> vast: dijkopbouw, sterkteparameters, Nkt-factoren. 
-            Deze waarden worden automatisch doorgerekend in alle volgende stappen.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.caption("Stap 0 — Alle projectparameters op één plek")
     
     # Initialiseer uitgangspunten in session state
     if "uitgangspunten" not in st.session_state:
@@ -327,19 +315,9 @@ def render():
     
     # ─── TAB 1: DIJKOPBOUW ───
     with tab1:
-        st.subheader("Globale Dijkopbouw")
-        st.markdown("""
-        **Waarom is dit belangrijk?**  
-        De dijkopbouw bepaalt welke lagen we als dijkmateriaal beschouwen en waar we Su berekenen.
-        De grondwaterstand bepaalt of de klei droog of verzadigd is, wat invloed heeft op het 
-        volumegewicht en daarmee op de spanningsberekening.
-        """)
-        
         col1, col2 = st.columns([1, 1])
         
         with col1:
-            st.markdown("**Laagopbouw aanpassen:**")
-            
             lagen = up.get("lagen", DEFAULT_UITGANGSPUNTEN["lagen"])
             
             for i, laag in enumerate(lagen):
@@ -386,13 +364,6 @@ def render():
             
             # Grondwaterstand
             st.markdown("---")
-            st.markdown("""  
-            **Grondwaterstand ten tijde van sonderen**  
-            De GWS varieert tussen **NAP +1,0m** en **NAP -0,5m** ten tijde van 
-            sonderen (bron: notitie Arnold). Dit is relevant voor de poriedrukcorrectie 
-            en de effectieve spanningsberekening.
-            """)
-            
             c_gwl1, c_gwl2, c_gwl3 = st.columns(3)
             with c_gwl1:
                 gwl = st.number_input(
@@ -430,36 +401,13 @@ def render():
             up["dijkopbouw"]["kruinniveau"] = kruinniveau
         
         with col2:
-            st.markdown("**Schematisch profiel:**")
             fig = maak_dijkprofiel_figuur(lagen)
             st.plotly_chart(fig, use_container_width=True)
-            
-            # Legenda
-            st.markdown("**Legenda:**")
-            st.markdown("🟢 = Dijkmateriaal (Su wordt berekend)")
-            st.markdown("⚪ = Geen dijkmateriaal")
-            st.markdown("🔵 --- = Grondwaterstand")
+            st.caption("🟢 Dijkmateriaal (Su) · ⚪ Geen dijkmateriaal · 🔵 GWS")
     
     # ─── TAB 2: STERKTEPARAMETERS (TABEL 91) ───
     with tab2:
-        st.subheader("Sterkteparameters per Grondlaag — Tabel 91")
-        st.markdown("""
-        **Samenvatting sterkteparameters traject 14-1**
-        
-        Deze tabel bevat de volumegewichten, hoek van interne wrijving en SHANSEP-parameters 
-        per grondlaag. De SHANSEP-methode relateert de ongedraineerde schuifsterkte aan de 
-        effectieve spanning en overconsolidatiegraad:
-        
-        $$S_u = S \\cdot \\sigma'_{v0} \\cdot OCR^m$$
-        
-        Waarbij:
-        - **S** = S-ratio (Su/σ'v0 bij normaal geconsolideerde toestand)
-        - **m** = exponent die de invloed van overconsolidatie beschrijft
-        - **OCR** = overconsolidatiegraad
-        
-        **Let op:** Lagen gemarkeerd met * zijn aannames (onvoldoende proeven beschikbaar).  
-        Lagen gemarkeerd met ** hebben geen S en m (gedraineerd materiaal, geen Su-berekening).
-        """)
+        st.caption("SHANSEP: Su = S · σ'v0 · OCRᵐ  |  * = aanname  |  ** = gedraineerd")
         
         # Maak Tabel 91 dataframe
         lagen = up.get("lagen", DEFAULT_UITGANGSPUNTEN["lagen"])
@@ -556,20 +504,7 @@ def render():
     
     # ─── TAB 2: CONUSTYPE ───
     with tab3:
-        st.subheader("Conustype & Poriedrukcorrectie")
-        st.markdown("""
-        **Waarom corrigeren we voor poriedruk?**  
-        
-        De gemeten conusweerstand $q_c$ is niet de werkelijke weerstand aan de conuspunt.
-        Door de poriedruk ($u_2$) die werkt op het ongelijke oppervlak achter de conuspunt, 
-        wordt een deel van de weerstand niet gemeten. De correctie hangt af van het conustype:
-        
-        $$q_t = q_c + (1 - a) \\cdot u_2$$
-        
-        Het **nettoquotient** $a$ is een eigenschap van de conus en varieert typisch tussen 0.70 en 0.85.
-        
-        **Controleer altijd** of de waarde van $a$ in het GEF-bestand staat en gebruik die waarde.
-        """)
+        st.caption("qt = qc + (1−a) · u2  —  a hangt af van conustype (0.70–0.85)")
         
         conus = up.get("conustype", DEFAULT_UITGANGSPUNTEN["conustype"])
         
@@ -610,22 +545,7 @@ def render():
     
     # ─── TAB 3: NKT-FACTOREN PER GRONDLAAG (TABEL 71) ───
     with tab4:
-        st.subheader("Nkt-factoren per Grondlaag — Tabel 71")
-        st.markdown("""
-        <div class="section-header">
-            <h3>Waarom is Nkt belangrijk?</h3>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        De Nkt-factor is de sleutelparameter in de Su-berekening: $S_u = q_{net} / N_{kt}$
-        
-        - Een **hogere Nkt** geeft een **lagere Su** (conservatiever)  
-        - Een **lagere Nkt** geeft een **hogere Su** (optimistischer)
-        
-        De Nkt-waarden zijn **per grondlaag** bepaald op basis van het project (Tabel 71).  
-        Lagen met \\* gebruiken default waarden uit de schematiseringshandleiding.
-        """)
+        st.caption("Su = q_net / Nkt  —  * = default waarde uit schematiseringshandleiding")
         
         lagen = up.get("lagen", DEFAULT_UITGANGSPUNTEN["lagen"])
         
@@ -691,113 +611,53 @@ def render():
     
     # ─── TAB 4: FORMULES & METHODE ───
     with tab5:
-        st.subheader("Berekeningsformules & Methode")
-        st.markdown("""
-        ### Stap 1: Poriedrukcorrectie
-        De gemeten conusweerstand wordt gecorrigeerd voor het effect van poriedruk:
-        
-        $$q_t = q_c + (1 - a) \\cdot u_2$$
-        
-        **Waarom?** De poriedruk werkt op het verschiloppervlak achter de conuspunt, 
-        waardoor de gemeten $q_c$ lager is dan de werkelijke weerstand.
-        
-        ---
-        
-        ### Stap 2: Spanningsberekening
-        De totale en effectieve verticale spanning worden berekend:
-        
-        $$\\sigma_{v0} = \\sum \\gamma_i \\cdot \\Delta z_i$$
-        
-        $$u_0 = \\gamma_w \\cdot (z - z_{gwl})$$  (alleen onder grondwaterstand)
-        
-        $$\\sigma'_{v0} = \\sigma_{v0} - u_0$$
-        
-        **Waarom?** De netto conusweerstand moet worden berekend t.o.v. de in-situ spanning.
-        
-        ---
-        
-        ### Stap 3: Netto conusweerstand
-        
-        $$q_{net} = q_t - \\sigma_{v0}$$
-        
-        **Waarom?** Om de conusweerstand te normaliseren voor diepte-effecten, zodat 
-        sonderingen op verschillende dieptes vergelijkbaar zijn.
-        
-        ---
-        
-        ### Stap 4: Classificatie (Robertson 1990)
-        Op basis van $Q_t$ en $R_f$ wordt de grondsoort geclassificeerd:
-        
-        $$Q_t = \\frac{q_t - \\sigma_{v0}}{\\sigma'_{v0}}$$
-        
-        $$R_f = \\frac{f_s}{q_c} \\times 100\\%$$
-        
-        **Waarom?** Om te bepalen welke lagen klei (dijkmateriaal) zijn en welke niet.
-        
-        ---
-        
-        ### Stap 5: Ongedraineerde schuifsterkte
-        
-        $$S_u = \\frac{q_{net}}{N_{kt}}$$
-        
-        **Waarom?** Su is de sterkteparameter die nodig is voor stabiliteitsberekeningen 
-        van de dijk. De Nkt-factor is empirisch en moet worden gevalideerd met labproeven.
-        
-        ---
-        
-        ### Stap 6: Validatie
-        De berekende Su wordt vergeleken met:
-        - **Laboratoriumproeven** (triaxiaal, DSS) als ground truth
-        
-        **Waarom?** Om de gekozen Nkt te kalibreren en de betrouwbaarheid van de 
-        CPT-interpretatie te beoordelen.
-        """)
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            st.markdown("""
+            | Stap | Formule |
+            |---|---|
+            | qt correctie | $q_t = q_c + (1-a) \\cdot u_2$ |
+            | Spanning | $\\sigma_{v0} = \\sum \\gamma_i \\cdot \\Delta z_i$ |
+            | Effectief | $\\sigma'_{v0} = \\sigma_{v0} - u_0$ |
+            | q_net | $q_{net} = q_t - \\sigma_{v0}$ |
+            """)
+        with col_f2:
+            st.markdown("""
+            | Stap | Formule |
+            |---|---|
+            | Qt (Robertson) | $Q_t = (q_t - \\sigma_{v0}) / \\sigma'_{v0}$ |
+            | Rf | $R_f = (f_s / q_c) \\times 100\\%$ |
+            | Su | $S_u = q_{net} / N_{kt}$ |
+            | SHANSEP | $S_u = S \\cdot \\sigma'_{v0} \\cdot OCR^m$ |
+            """)
     
     # ─── TAB 5: SAMENVATTING ───
     with tab6:
-        st.subheader("Samenvatting Uitgangspunten")
-        st.markdown("**Alle gehanteerde uitgangspunten op een rij:**")
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            # Project + Dijkopbouw
+            st.markdown(f"**{up['project']['naam']}** — {up['project']['beschrijving']}")
+            gwl_val = up['dijkopbouw']['gwl']
+            gwl_max_val = up['dijkopbouw'].get('gwl_max', 1.0)
+            gwl_min_val = up['dijkopbouw'].get('gwl_min', -0.5)
+            st.markdown(f"Kruin NAP {up['dijkopbouw']['kruinniveau']:+.1f}m · "
+                       f"GWS NAP {gwl_val:+.1f}m ({gwl_min_val:+.1f} tot {gwl_max_val:+.1f})")
+            st.markdown(f"Conus: {up['conustype']['type']} · a = {up['conustype']['a_factor']}")
         
-        # Project
-        st.markdown("#### 🏢 Project")
-        st.markdown(f"- **Naam:** {up['project']['naam']}")
-        st.markdown(f"- **Beschrijving:** {up['project']['beschrijving']}")
-        
-        # Dijkopbouw
-        st.markdown("#### 🏗️ Dijkopbouw")
-        st.markdown(f"- **Kruinniveau:** NAP {up['dijkopbouw']['kruinniveau']:+.1f}m")
-        gwl_val = up['dijkopbouw']['gwl']
-        gwl_max_val = up['dijkopbouw'].get('gwl_max', 1.0)
-        gwl_min_val = up['dijkopbouw'].get('gwl_min', -0.5)
-        st.markdown(f"- **Grondwaterstand (gebruikt):** NAP {gwl_val:+.1f}m")
-        st.markdown(f"- **GWS range t.t.v. sonderen:** NAP {gwl_min_val:+.1f}m tot NAP {gwl_max_val:+.1f}m")
-        
-        for laag in up["lagen"]:
-            dijkmat = "✅ dijkmateriaal" if laag["is_dijkmateriaal"] else "—"
-            top = laag.get("top_nap")
-            onder = laag.get("onder_nap")
-            positie = f"NAP {top:+.1f}m tot {onder:+.1f}m" if top is not None and onder is not None else "variabel"
-            s_info = f" | S={laag['S_ratio']}, m={laag['m_factor']}" if laag.get("S_ratio") is not None else ""
-            st.markdown(
-                f"- **{laag['naam']}:** {positie} "
-                f"| γ_nat = {laag['gamma_nat']} kN/m³{s_info} | {dijkmat}"
-            )
-        
-        # Conustype
-        st.markdown("#### 📐 Conustype")
-        st.markdown(f"- **Type:** {up['conustype']['type']}")
-        st.markdown(f"- **a-factor:** {up['conustype']['a_factor']}")
-        
-        # Nkt
-        st.markdown("#### 🔢 Nkt-factoren (Tabel 71)")
-        for laag in up["lagen"]:
-            nkt_val = laag.get("Nkt")
-            if nkt_val is not None:
-                st.markdown(f"- **{laag['naam']}:** Nkt = {nkt_val}")
-        
-        st.markdown("---")
-        st.caption("Deze uitgangspunten worden automatisch gebruikt in alle modules. "
-                   "Wijzigingen worden direct doorgevoerd.")
+        with col_s2:
+            # Lagen overzicht als compacte tabel
+            lagen_rows = []
+            for laag in up["lagen"]:
+                top = laag.get("top_nap")
+                onder = laag.get("onder_nap")
+                pos = f"{top:+.1f} tot {onder:+.1f}" if top is not None and onder is not None else "var."
+                nkt_val = laag.get("Nkt", "—")
+                dijk = "✅" if laag["is_dijkmateriaal"] else "—"
+                lagen_rows.append({
+                    "Laag": laag["naam"], "NAP [m]": pos,
+                    "γ_nat": laag["gamma_nat"], "Nkt": nkt_val, "Dijk": dijk
+                })
+            st.dataframe(pd.DataFrame(lagen_rows), use_container_width=True, hide_index=True, height=300)
     
     # Sla op in session state
     st.session_state.uitgangspunten = up

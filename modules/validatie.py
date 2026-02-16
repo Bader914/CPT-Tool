@@ -11,19 +11,7 @@ import plotly.graph_objects as go
 
 
 def render():
-    st.markdown("""
-    <div class="hero-compact">
-        <div class="hero-text">
-            <div class="step-tag">Stap 5 van 6</div>
-            <h1>✅ Validatie</h1>
-            <p class="sub">Vergelijk Su met laboratoriumproeven</p>
-        </div>
-        <div class="hero-why">
-            Vergelijk CPT-Su met <b>labproeven</b> (triaxiaal, DSS, vane) om te controleren of 
-            de gekozen Nkt realistisch is.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.caption("Stap 5 — Vergelijk Su met labproeven, kalibreer Nkt")
     
     su_berekend = {k: v for k, v in st.session_state.get("sonderingen", {}).items() 
                    if v.get("su_berekend")}
