@@ -4,39 +4,6 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="CPT Tool", page_icon="📊", layout="wide")
 
-# --- Wachtwoordbeveiliging ---
-def check_password():
-    """Vraagt om een wachtwoord en controleert het."""
-    # Controleer of secrets zijn ingesteld
-    if "password" not in st.secrets:
-        st.error("⚠️ Geen wachtwoord ingesteld in Streamlit Secrets.")
-        return False
-
-    def password_entered():
-        if st.session_state.get("user_password", "") == st.secrets["password"]:
-            st.session_state["password_correct"] = True
-        else:
-            st.session_state["password_correct"] = False
-
-    if st.session_state.get("password_correct", False):
-        return True
-
-    st.title("🔒 CPT Tool")
-    st.text_input(
-        "Voer het wachtwoord in:", 
-        type="password", 
-        key="user_password", 
-        on_change=password_entered
-    )
-
-    if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-        st.error("❌ Onjuist wachtwoord")
-
-    return False
-
-if not check_password():
-    st.stop()
-
 st.title("📊 CPT Tool")
 st.markdown("Upload een CPT bestand (CSV of GEF) en bekijk de grafieken.")
 
