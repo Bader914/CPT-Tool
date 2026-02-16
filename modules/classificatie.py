@@ -58,9 +58,30 @@ def classificeer_robertson(qt: pd.Series, Rf: pd.Series, sigma_v0: pd.Series) ->
 def render():
     st.title("🧱 Module 3: Classificatie & Dijkmateriaal")
     st.markdown("""
-    Bepaal de grondsoort per laag op basis van CPT-classificatie (Robertson) 
-    en selecteer het dijkmateriaal.
+    ### Wat doen we hier?
+    We bepalen per meetpunt de **grondsoort** op basis van de CPT-gegevens (Robertson 1990 classificatie), 
+    en selecteren vervolgens welke lagen als **dijkmateriaal** beschouwd worden.
+    
+    **Waarom is dit nodig?**
+    - Su wordt alleen berekend voor **fijnkorrelig materiaal** (klei, silt, veen)
+    - Zand en grof materiaal hebben geen ongedraineerde schuifsterkte
+    - De classificatie helpt bij het identificeren van de dijkopbouw
+    
+    **Verwachte dijkopbouw (uit Uitgangspunten):**
     """)
+    
+    # Toon verwachte dijkopbouw uit uitgangspunten
+    up = st.session_state.get("uitgangspunten", {})
+    lagen = up.get("lagen", [])
+    
+    if lagen:
+        for laag in lagen:
+            dijkmat_icon = "🟢" if laag.get("is_dijkmateriaal") else "⚪"
+            st.markdown(
+                f"- {dijkmat_icon} **{laag['naam']}**: NAP {laag['top_nap']:+.1f}m tot {laag['onder_nap']:+.1f}m — {laag['materiaal']}"
+            )
+    
+    st.markdown("---")
     
     # Check of normalisatie is uitgevoerd
     genormaliseerd = {k: v for k, v in st.session_state.get("sonderingen", {}).items() 

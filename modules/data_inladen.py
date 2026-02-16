@@ -122,8 +122,19 @@ def check_poriedruk_correctie(df: pd.DataFrame, col_mapping: dict) -> dict:
 def render():
     st.title("📁 Module 1: Data Inladen & Controle")
     st.markdown("""
-    Upload een of meerdere sonderingen (GEF, CSV of Excel). 
-    De tool controleert automatisch of de conusweerstand gecorrigeerd is voor poriedruk.
+    ### Wat doen we hier?
+    We beginnen met het **inladen van alle sonderingen**. De tool:
+    
+    1. **Herkent automatisch** de kolommen (diepte, qc, fs, u2)
+    2. **Controleert** of de conusweerstand al gecorrigeerd is voor poriedruk
+    3. **Geeft een overzicht** van alle geladen sonderingen en hun kwaliteit
+    
+    **Waarom is de poriedrukcontrole belangrijk?**  
+    Als de conusweerstand ($q_c$) niet is gecorrigeerd voor poriedruk ($u_2$), 
+    onderschatten we de werkelijke weerstand. Dit leidt tot een te lage Su. 
+    De correctie wordt uitgevoerd in Module 2.
+    
+    **Ondersteunde formaten:** GEF, CSV, Excel
     """)
     
     # --- Initialiseer session state ---

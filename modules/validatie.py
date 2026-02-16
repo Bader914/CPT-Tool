@@ -13,9 +13,18 @@ import plotly.graph_objects as go
 def render():
     st.title("✅ Module 5: Validatie & Labvergelijking")
     st.markdown("""
-    Valideer de berekende Su-profielen door te vergelijken met:
-    1. **Deltares CPT-tool** resultaten
-    2. **Laboratoriumproeven** (triaxiaalproeven, DSS, etc.)
+    ### Wat doen we hier?
+    We **valideren** de berekende Su-profielen door ze te vergelijken met onafhankelijke bronnen:
+    
+    1. **Deltares CPT-tool** — Onafhankelijke herberekening van Su met andere software.
+       Hiermee controleren we of onze berekening consistent is.
+    2. **Laboratoriumproeven** — Triaxiaalproeven, DSS-proeven of vane tests geven de 
+       "echte" Su. Als er labproeven beschikbaar zijn, kunnen we de Nkt-factor kalibreren.
+    
+    **Waarom is validatie cruciaal?**  
+    De Nkt-factor is een empirische aanname. Door te vergelijken met labresultaten 
+    kunnen we beoordelen of de gekozen Nkt realistisch is. Als de CPT-Su systematisch 
+    hoger of lager is dan de lab-Su, moet de Nkt worden aangepast in Module 0 (Uitgangspunten).
     """)
     
     su_berekend = {k: v for k, v in st.session_state.get("sonderingen", {}).items() 

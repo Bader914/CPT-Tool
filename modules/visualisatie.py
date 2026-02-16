@@ -15,7 +15,18 @@ import io
 def render():
     st.title("📈 Module 6: Visualisatie & Rapportage")
     st.markdown("""
-    Visualiseer alle resultaten samen om trends en afwijkende sonderingen te identificeren.
+    ### Wat doen we hier?
+    We visualiseren **alle Su-profielen samen** om:
+    
+    - **Trends** te herkennen (neemt Su toe/af met diepte?)
+    - **Afwijkende sonderingen** te identificeren (uitbijters)
+    - **Samenvattende statistieken** te berekenen per sondering
+    - **Resultaten te exporteren** als CSV of Excel voor verdere verwerking
+    
+    **Waarom is dit de laatste stap?**  
+    Door alle sonderingen samen te plotten, zien we of het Su-beeld consistent is 
+    over het dijktraject. Grote afwijkingen kunnen wijzen op lokale bodemvariatie, 
+    meetfouten, of een verkeerde Nkt-keuze.
     """)
     
     su_berekend = {k: v for k, v in st.session_state.get("sonderingen", {}).items() 

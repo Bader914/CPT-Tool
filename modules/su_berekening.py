@@ -39,11 +39,20 @@ def bereken_Su(q_net: pd.Series, Nkt: float) -> pd.Series:
 def render():
     st.title("📊 Module 4: Su Berekening")
     st.markdown("""
-    Bereken de ongedraineerde schuifsterkte ($S_u$) voor het dijkmateriaal.
+    ### Wat doen we hier?
+    We berekenen de **ongedraineerde schuifsterkte** ($S_u$) van het dijkmateriaal. 
+    Dit is de belangrijkste sterkteparameter voor stabiliteitsberekeningen van dijken.
     
     $$S_u = \\frac{q_{net}}{N_{kt}}$$
     
-    De $N_{kt}$-factor wordt gekozen op basis van literatuur en projectervaring.
+    **Hoe werkt het?**
+    - We nemen de **netto conusweerstand** ($q_{net}$) uit Module 2
+    - We delen door de **Nkt-factor** die afhangt van het grondtype (uit Module 3)
+    - Su wordt **alleen berekend voor het dijkmateriaal** (fijnkorrelig, geselecteerd in Module 3)
+    - Zand en grof materiaal hebben geen ongedraineerde schuifsterkte
+    
+    **De Nkt-waarden worden overgenomen uit de Uitgangspunten (Module 0).**
+    Pas ze daar aan als je andere waarden wilt gebruiken op basis van labresultaten.
     """)
     
     # Check of classificatie is uitgevoerd
@@ -54,29 +63,34 @@ def render():
         st.warning("⚠️ Voer eerst de classificatie uit in Module 3.")
         return
     
+    # --- Haal Nkt uit uitgangspunten ---
+    up = st.session_state.get("uitgangspunten", {})
+    nkt_up = up.get("nkt_factoren", {})
+    
+    default_nkt_klei = nkt_up.get("klei_nc", {}).get("Nkt", 15.0)
+    default_nkt_veen = nkt_up.get("veen", {}).get("Nkt", 12.0)
+    default_nkt_silt = nkt_up.get("silt", {}).get("Nkt", 14.0)
+    default_nkt_overig = nkt_up.get("klei_oc", {}).get("Nkt", 17.0)
+    
     # --- Nkt instellingen ---
     st.subheader("Nkt-factor Instellingen")
-    
-    st.markdown("""
-    | Grondtype | Nkt range (literatuur) | Aanbevolen |
-    |---|---|---|
-    | Klei (NC) | 12 – 18 | 15 |
-    | Klei (OC) | 15 – 20 | 17 |
-    | Veen / organisch | 8 – 15 | 12 |
-    | Silt / kleiig silt | 10 – 18 | 14 |
-    """)
+    st.info("📋 **Uit Uitgangspunten overgenomen.** Pas aan in Module 0 of hieronder voor deze berekening.")
     
     col1, col2 = st.columns(2)
     with col1:
-        Nkt_klei = st.slider("Nkt — Klei", 8.0, 25.0, 15.0, 0.5, key="nkt_klei")
+        Nkt_klei = st.slider("Nkt — Klei (NC)", 8.0, 25.0, float(default_nkt_klei), 0.5, key="nkt_klei",
+                             help="Normaal geconsolideerde klei. Hogere Nkt = lagere Su (conservatiever).")
     with col2:
-        Nkt_veen = st.slider("Nkt — Veen / Organisch", 5.0, 20.0, 12.0, 0.5, key="nkt_veen")
+        Nkt_veen = st.slider("Nkt — Veen / Organisch", 5.0, 20.0, float(default_nkt_veen), 0.5, key="nkt_veen",
+                             help="Veen heeft typisch een lagere Nkt vanwege hoog vochtgehalte.")
     
     col3, col4 = st.columns(2)
     with col3:
-        Nkt_silt = st.slider("Nkt — Silt", 8.0, 22.0, 14.0, 0.5, key="nkt_silt")
+        Nkt_silt = st.slider("Nkt — Silt", 8.0, 22.0, float(default_nkt_silt), 0.5, key="nkt_silt",
+                             help="Tussenwaarde voor silt en siltig klei.")
     with col4:
-        Nkt_overig = st.slider("Nkt — Overig fijnkorrelig", 10.0, 22.0, 15.0, 0.5, key="nkt_overig")
+        Nkt_overig = st.slider("Nkt — Overgeconsolideerde klei", 10.0, 22.0, float(default_nkt_overig), 0.5, key="nkt_overig",
+                               help="OC klei heeft hogere Nkt door hogere stijfheid.")
     
     # --- Bereken Su ---
     st.markdown("---")

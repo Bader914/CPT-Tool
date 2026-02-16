@@ -24,9 +24,10 @@ if not st.session_state.authenticated:
     st.stop()
 
 # --- Navigatie ---
-from modules import data_inladen, normalisatie, classificatie, su_berekening, validatie, visualisatie
+from modules import uitgangspunten, data_inladen, normalisatie, classificatie, su_berekening, validatie, visualisatie
 
 PAGES = {
+    "📋 0. Uitgangspunten": uitgangspunten,
     "📁 1. Data Inladen & Controle": data_inladen,
     "📐 2. Normalisatie (Qt)": normalisatie,
     "🧱 3. Classificatie & Materiaal": classificatie,

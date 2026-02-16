@@ -75,40 +75,59 @@ def bereken_sigma_v0(diepte: pd.Series, gamma: float = 18.0, gwl: float = 0.0) -
 def render():
     st.title("📐 Module 2: Normalisatie (Qt)")
     st.markdown("""
-    Corrigeer de conusweerstand voor poriedruk en bereken afgeleide parameters.
+    ### Wat doen we hier?
+    In deze stap corrigeren we de **gemeten conusweerstand** ($q_c$) voor het effect van 
+    **poriedruk** ($u_2$). Dit is nodig omdat de poriedruk werkt op het verschiloppervlak 
+    achter de conuspunt, waardoor de gemeten waarde lager is dan de werkelijke weerstand.
     
-    **Formules:**
-    - $q_t = q_c + (1 - a) \\cdot u_2$
-    - $q_{net} = q_t - \\sigma_{v0}$
-    - $R_f = (f_s / q_c) \\times 100\\%$
-    - $B_q = (u_2 - u_0) / (q_t - \\sigma_{v0})$
+    Daarnaast berekenen we **afgeleide parameters** die nodig zijn voor classificatie en 
+    Su-berekening:
+    
+    | Parameter | Formule | Betekenis |
+    |---|---|---|
+    | $q_t$ | $q_c + (1-a) \\cdot u_2$ | Gecorrigeerde conusweerstand |
+    | $q_{net}$ | $q_t - \\sigma_{v0}$ | Netto conusweerstand (gecorrigeerd voor diepte) |
+    | $R_f$ | $(f_s / q_c) \\times 100\\%$ | Wrijvingsgetal (indicator grondtype) |
+    | $B_q$ | $(u_2 - u_0) / q_{net}$ | Poriedrukratio (indicator drainagegedrag) |
+    
+    **De parameters worden overgenomen uit de Uitgangspunten (Module 0).** 
+    Pas ze daar aan als je andere waarden wilt gebruiken.
     """)
     
     if not st.session_state.get("sonderingen"):
         st.warning("⚠️ Ga eerst naar Module 1 om sonderingen te laden.")
         return
     
-    # --- Uitgangspunten ---
-    st.subheader("Uitgangspunten")
+    # --- Haal uitgangspunten op ---
+    up = st.session_state.get("uitgangspunten", {})
+    default_a = up.get("conustype", {}).get("a_factor", 0.80)
+    default_gwl = up.get("dijkopbouw", {}).get("gwl", 0.0)
+    default_kruin = up.get("dijkopbouw", {}).get("kruinniveau", 4.0)
+    lagen = up.get("lagen", [])
+    
+    # --- Parameters tonen (uit uitgangspunten) ---
+    st.subheader("Gebruikte parameters")
+    st.info(f"📋 **Uit Uitgangspunten:** a = {default_a} | GWS = NAP {default_gwl:+.1f}m | Kruinniveau = NAP {default_kruin:+.1f}m")
+    
     col1, col2, col3 = st.columns(3)
     
     with col1:
         a_factor = st.number_input(
             "Nettoquotient conus (a)", 
-            min_value=0.50, max_value=1.00, value=0.80, step=0.01,
-            help="Afhankelijk van conustype. Standaard 0.80 voor de meeste conussen."
+            min_value=0.50, max_value=1.00, value=default_a, step=0.01,
+            help="Uit Uitgangspunten. Afhankelijk van conustype."
         )
     with col2:
         gamma = st.number_input(
             "Volumegewicht grond γ [kN/m³]",
             min_value=10.0, max_value=25.0, value=18.0, step=0.5,
-            help="Gemiddeld volumegewicht voor spanningsberekening."
+            help="Gemiddeld volumegewicht. De tool gebruikt per laag de γ uit de Uitgangspunten."
         )
     with col3:
         gwl = st.number_input(
-            "Grondwaterstand [m-mv]",
-            min_value=0.0, max_value=20.0, value=0.5, step=0.1,
-            help="Diepte grondwaterspiegel t.o.v. maaiveld."
+            "Grondwaterstand [m NAP]",
+            min_value=-10.0, max_value=10.0, value=default_gwl, step=0.1,
+            help="Uit Uitgangspunten. Dagelijkse grondwaterstand."
         )
     
     # --- Verwerk per sondering ---
