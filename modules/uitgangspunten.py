@@ -23,7 +23,11 @@ DEFAULT_UITGANGSPUNTEN = {
         "kruinniveau": 4.0,          # NAP +4m
         "funderingslaag_dikte": 1.5,  # 1-2m, gemiddeld 1.5m
         "funderingslaag_materiaal": "Puin en zand",
-        "gwl": 0.0,                  # NAP 0m (dagelijkse grondwaterstand)
+        "gwl": 0.0,                  # NAP 0m (gemiddeld t.t.v. sonderen)
+        "gwl_max": 1.0,              # NAP +1m (hoogste GWS t.t.v. sonderen)
+        "gwl_min": -0.5,             # NAP -0.5m (laagste GWS t.t.v. sonderen)
+        "gwl_toelichting": "Grondwaterstand varieert tussen NAP +1m en NAP -0,5m "
+                          "ten tijde van sonderen. Uitgezocht a.h.v. notitie Arnold.",
         "dijkmateriaal_droog_top": None,  # Wordt berekend: kruin - funderingslaag
         "dijkmateriaal_droog_onder": 0.0,  # NAP 0m (= GWS)
         "dijkmateriaal_nat_top": 0.0,      # NAP 0m
@@ -375,15 +379,41 @@ def render():
             
             # Grondwaterstand
             st.markdown("---")
-            gwl = st.number_input(
-                "Dagelijkse grondwaterstand [m NAP]",
-                value=up.get("dijkopbouw", {}).get("gwl", 0.0),
-                step=0.1,
-                help="De dagelijkse grondwaterstand bepaalt de waterspanning in de grond "
-                     "en daarmee de effectieve spanning en de netto conusweerstand."
-            )
-            up["dijkopbouw"]["gwl"] = gwl
+            st.markdown("""  
+            **Grondwaterstand ten tijde van sonderen**  
+            De GWS varieert tussen **NAP +1,0m** en **NAP -0,5m** ten tijde van 
+            sonderen (bron: notitie Arnold). Dit is relevant voor de poriedrukcorrectie 
+            en de effectieve spanningsberekening.
+            """)
             
+            c_gwl1, c_gwl2, c_gwl3 = st.columns(3)
+            with c_gwl1:
+                gwl = st.number_input(
+                    "GWS [m NAP] (gebruikt)",
+                    value=up.get("dijkopbouw", {}).get("gwl", 0.0),
+                    step=0.1,
+                    help="Grondwaterstand die wordt gebruikt voor de berekening. "
+                         "Kies een waarde binnen de bandbreedte."
+                )
+                up["dijkopbouw"]["gwl"] = gwl
+            with c_gwl2:
+                gwl_max = st.number_input(
+                    "GWS max [m NAP]",
+                    value=up.get("dijkopbouw", {}).get("gwl_max", 1.0),
+                    step=0.1,
+                    help="Hoogste grondwaterstand ten tijde van sonderen."
+                )
+                up["dijkopbouw"]["gwl_max"] = gwl_max
+            with c_gwl3:
+                gwl_min = st.number_input(
+                    "GWS min [m NAP]",
+                    value=up.get("dijkopbouw", {}).get("gwl_min", -0.5),
+                    step=0.1,
+                    help="Laagste grondwaterstand ten tijde van sonderen."
+                )
+                up["dijkopbouw"]["gwl_min"] = gwl_min
+            
+            st.markdown("---")
             kruinniveau = st.number_input(
                 "Kruinniveau [m NAP]",
                 value=up.get("dijkopbouw", {}).get("kruinniveau", 4.0),
@@ -729,7 +759,11 @@ def render():
         # Dijkopbouw
         st.markdown("#### 🏗️ Dijkopbouw")
         st.markdown(f"- **Kruinniveau:** NAP {up['dijkopbouw']['kruinniveau']:+.1f}m")
-        st.markdown(f"- **Grondwaterstand:** NAP {up['dijkopbouw']['gwl']:+.1f}m")
+        gwl_val = up['dijkopbouw']['gwl']
+        gwl_max_val = up['dijkopbouw'].get('gwl_max', 1.0)
+        gwl_min_val = up['dijkopbouw'].get('gwl_min', -0.5)
+        st.markdown(f"- **Grondwaterstand (gebruikt):** NAP {gwl_val:+.1f}m")
+        st.markdown(f"- **GWS range t.t.v. sonderen:** NAP {gwl_min_val:+.1f}m tot NAP {gwl_max_val:+.1f}m")
         
         for laag in up["lagen"]:
             dijkmat = "✅ dijkmateriaal" if laag["is_dijkmateriaal"] else "—"
