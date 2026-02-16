@@ -45,16 +45,30 @@ def render():
     # Robertson zones → meest passende grondlaag Nkt
     nkt_per_robertson = {}
     
-    # Zoek Nkt waarden per type grondlaag
-    nkt_veen = next((l["Nkt"] for l in lagen if "Veen" in l["naam"] and "kleiig" not in l["naam"] and l.get("Nkt")), 17.1)
-    nkt_veen_kleiig = next((l["Nkt"] for l in lagen if "Veen_kleiig" in l["naam"] and l.get("Nkt")), 16.7)
-    nkt_klei_humeus = next((l["Nkt"] for l in lagen if "Klei_humeus" in l["naam"] and l.get("Nkt")), 16.8)
-    nkt_klei_siltig = next((l["Nkt"] for l in lagen if "Klei_siltig" in l["naam"] and l.get("Nkt")), 18.2)
-    nkt_klei_zandig = next((l["Nkt"] for l in lagen if "Klei_zandig" in l["naam"] and l.get("Nkt")), 20.0)
-    nkt_dijkmat_boven = next((l["Nkt"] for l in lagen if "7a_" in l["naam"] and l.get("Nkt")), 14.5)
-    nkt_dijkmat_onder = next((l["Nkt"] for l in lagen if "7b_Dijksmateriaal klei <" in l["naam"] and l.get("Nkt")), 14.1)
-    nkt_klei_diep = next((l["Nkt"] for l in lagen if "Klei_diep" in l["naam"] and l.get("Nkt")), 20.0)
-    nkt_basisveen = next((l["Nkt"] for l in lagen if "Basisveen" in l["naam"] and l.get("Nkt")), 20.0)
+    if not lagen:
+        st.error("❌ **Geen grondlagen gevonden.** Ga eerst naar Stap 0 — Uitgangspunten en vul de lagen in.")
+        return
+    
+    # Zoek Nkt waarden per type grondlaag — uitsluitend uit uitgangspunten
+    nkt_veen = next((l["Nkt"] for l in lagen if "Veen" in l["naam"] and "kleiig" not in l["naam"] and l.get("Nkt")), None)
+    nkt_veen_kleiig = next((l["Nkt"] for l in lagen if "Veen_kleiig" in l["naam"] and l.get("Nkt")), None)
+    nkt_klei_humeus = next((l["Nkt"] for l in lagen if "Klei_humeus" in l["naam"] and l.get("Nkt")), None)
+    nkt_klei_siltig = next((l["Nkt"] for l in lagen if "Klei_siltig" in l["naam"] and l.get("Nkt")), None)
+    nkt_klei_zandig = next((l["Nkt"] for l in lagen if "Klei_zandig" in l["naam"] and l.get("Nkt")), None)
+    nkt_dijkmat_boven = next((l["Nkt"] for l in lagen if "7a_" in l["naam"] and l.get("Nkt")), None)
+    nkt_dijkmat_onder = next((l["Nkt"] for l in lagen if "7b_Dijksmateriaal klei <" in l["naam"] and l.get("Nkt")), None)
+    nkt_klei_diep = next((l["Nkt"] for l in lagen if "Klei_diep" in l["naam"] and l.get("Nkt")), None)
+    nkt_basisveen = next((l["Nkt"] for l in lagen if "Basisveen" in l["naam"] and l.get("Nkt")), None)
+    
+    # Controleer of alle benodigde Nkt waarden beschikbaar zijn
+    missing_nkt = []
+    if nkt_veen is None: missing_nkt.append("1_Veen")
+    if nkt_dijkmat_boven is None: missing_nkt.append("7a_Dijksmateriaal")
+    if nkt_dijkmat_onder is None: missing_nkt.append("7b_Dijksmateriaal")
+    if nkt_klei_diep is None: missing_nkt.append("8_Klei_diep")
+    
+    if missing_nkt:
+        st.warning(f"⚠️ Nkt ontbreekt voor: {', '.join(missing_nkt)}. Vul deze in bij Stap 0 — Uitgangspunten.")
     
     # Toon overzicht Nkt-toewijzing
     st.markdown("""
@@ -84,15 +98,14 @@ def render():
         | 9 — Stijf fijnkorrelig | 8 Klei diep |
         """)
     
-    # Robertson zone → Nkt mapping
-    nkt_map = {
-        1: nkt_klei_diep,        # Gevoelig fijnkorrelig → default
-        2: nkt_veen,             # Organisch/veen → 1_Veen
-        3: nkt_dijkmat_onder,    # Klei (slap) → 7b dijksmateriaal
-        4: nkt_klei_humeus,      # Klei tot silt → 4_Klei_humeus
-        5: nkt_klei_siltig,      # Silt → 5_Klei_siltig
-        9: nkt_klei_diep,        # Stijf fijnkorrelig → 8_Klei_diep
-    }
+    # Robertson zone → Nkt mapping (alleen uit uitgangspunten, geen fallbacks)
+    nkt_map = {}
+    if nkt_klei_diep is not None: nkt_map[1] = nkt_klei_diep     # Gevoelig fijnkorrelig
+    if nkt_veen is not None: nkt_map[2] = nkt_veen               # Organisch/veen
+    if nkt_dijkmat_onder is not None: nkt_map[3] = nkt_dijkmat_onder  # Klei (slap)
+    if nkt_klei_humeus is not None: nkt_map[4] = nkt_klei_humeus  # Klei tot silt
+    if nkt_klei_siltig is not None: nkt_map[5] = nkt_klei_siltig  # Silt
+    if nkt_klei_diep is not None: nkt_map[9] = nkt_klei_diep     # Stijf fijnkorrelig
     
     # --- Bereken Su ---
     st.markdown("---")
@@ -109,11 +122,15 @@ def render():
                 st.warning(f"{name}: q_net ontbreekt. Normaliseer eerst.")
                 continue
             
-            # Bepaal Nkt per meting op basis van Robertson classificatie
+            # Bepaal Nkt per meting op basis van Robertson classificatie (uit uitgangspunten)
             if "robertson_zone" in df.columns:
                 df["Nkt_gebruikt"] = df["robertson_zone"].map(nkt_map)
+                unmapped = df["Nkt_gebruikt"].isna() & df["robertson_zone"].notna()
+                if unmapped.any():
+                    st.info(f"{name}: {unmapped.sum()} meetpunten zonder Nkt-toewijzing (zones: {df.loc[unmapped, 'robertson_zone'].unique().tolist()})")
             else:
-                df["Nkt_gebruikt"] = nkt_dijkmat_onder  # Fallback
+                st.warning(f"{name}: Geen Robertson zone — classificeer eerst (Stap 3).")
+                continue
             
             # Dijksmateriaal klei: onderscheid boven/onder GWS → Nkt 7a / 7b
             gwl = up.get("dijkopbouw", {}).get("gwl", 0.0)

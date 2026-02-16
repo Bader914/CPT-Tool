@@ -26,7 +26,6 @@ def render():
         </div>
         """, unsafe_allow_html=True)
         return
-        return
     
     tab1, tab2, tab3 = st.tabs(["📊 Overzicht", "🔍 Afwijkingen", "📥 Export"])
     

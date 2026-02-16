@@ -49,14 +49,16 @@ def bereken_Bq(u2: pd.Series, u0: pd.Series, qt: pd.Series, sigma_v0: pd.Series)
     return (u2 - u0) / q_net.replace(0, np.nan)
 
 
-def bereken_sigma_v0(diepte: pd.Series, gamma: float = 18.0, gwl: float = 0.0) -> tuple:
+def bereken_sigma_v0_per_laag(diepte: pd.Series, lagen: list, kruinniveau: float, gwl_nap: float) -> tuple:
     """
-    Bereken totale en effectieve verticale spanning.
+    Bereken σv0, σ'v0 en u0 met per-laag volumegewicht uit uitgangspunten.
+    Gebruikt gamma_droog boven GWS, gamma_nat onder GWS per grondlaag.
     
     Parameters:
-        diepte: diepte [m]
-        gamma: volumegewicht grond [kN/m³]
-        gwl: grondwaterstand [m-mv] (positief naar beneden)
+        diepte: sondeerlengte [m] (positief naar beneden, t.o.v. maaiveld/kruin)
+        lagen: grondlagen uit uitgangspunten (top_nap, onder_nap, gamma_nat, gamma_droog)
+        kruinniveau: bovenkant dijk [m NAP]
+        gwl_nap: grondwaterstand [m NAP]
     
     Returns:
         sigma_v0: totale verticale spanning [kPa]
@@ -64,12 +66,52 @@ def bereken_sigma_v0(diepte: pd.Series, gamma: float = 18.0, gwl: float = 0.0) -
         u0: hydrostatische waterspanning [kPa]
     """
     gamma_w = 9.81  # kN/m³
+    gwl_depth = kruinniveau - gwl_nap  # GWS diepte t.o.v. maaiveld [m]
     
-    sigma_v0 = diepte * gamma
-    u0 = np.maximum(0, (diepte - gwl)) * gamma_w
-    sigma_v0_eff = sigma_v0 - u0
+    # Bouw lagen profiel: converteer NAP → diepte t.o.v. maaiveld
+    defined_layers = []
+    for laag in lagen:
+        top_nap = laag.get("top_nap")
+        onder_nap = laag.get("onder_nap")
+        if top_nap is not None and onder_nap is not None:
+            defined_layers.append({
+                "top": max(0.0, kruinniveau - top_nap),
+                "bottom": kruinniveau - onder_nap,
+                "gamma_droog": laag.get("gamma_droog", laag.get("gamma_nat", 18.0)),
+                "gamma_nat": laag.get("gamma_nat", 18.0),
+            })
+    defined_layers.sort(key=lambda x: x["top"])
     
-    return sigma_v0, sigma_v0_eff, u0
+    # Gemiddelde gamma voor lagen zonder gedefinieerde grenzen (veen, klei etc.)
+    undefined_gammas = [laag["gamma_nat"] for laag in lagen
+                        if laag.get("top_nap") is None and laag.get("gamma_nat")]
+    gamma_undefined = float(np.mean(undefined_gammas)) if undefined_gammas else 15.0
+    
+    # Bouw gamma-profiel per meetpunt
+    d = diepte.values.astype(float)
+    gamma_profile = np.full_like(d, gamma_undefined, dtype=float)
+    
+    for lg in defined_layers:
+        mask = (d >= lg["top"]) & (d < lg["bottom"])
+        above_gwl = mask & (d < gwl_depth)
+        below_gwl = mask & (d >= gwl_depth)
+        gamma_profile[above_gwl] = lg["gamma_droog"]
+        gamma_profile[below_gwl] = lg["gamma_nat"]
+    
+    # Integreer σv0: cumulatieve som van gamma × Δz
+    dz = np.diff(d, prepend=0.0)
+    dz[0] = d[0]  # eerste punt: van maaiveld tot eerste meting
+    sigma_v0 = np.cumsum(gamma_profile * dz)
+    
+    # Waterspanning (nul boven GWS)
+    u0 = np.maximum(0.0, (d - gwl_depth)) * gamma_w
+    sigma_v0_eff = np.maximum(0.0, sigma_v0 - u0)
+    
+    return (
+        pd.Series(sigma_v0, index=diepte.index),
+        pd.Series(sigma_v0_eff, index=diepte.index),
+        pd.Series(u0, index=diepte.index),
+    )
 
 
 def render():
@@ -133,9 +175,12 @@ def render():
     
     # --- Parameters tonen (uit uitgangspunten) ---
     st.subheader("Gebruikte parameters")
-    st.info(f"📋 **Uit Uitgangspunten:** a = {default_a} | GWS = NAP {default_gwl:+.1f}m | Kruinniveau = NAP {default_kruin:+.1f}m")
     
-    col1, col2, col3 = st.columns(3)
+    if not lagen:
+        st.error("❌ **Geen grondlagen gevonden.** Ga eerst naar Stap 0 — Uitgangspunten en vul de dijkopbouw in.")
+        return
+    
+    col1, col2 = st.columns(2)
     
     with col1:
         a_factor = st.number_input(
@@ -143,18 +188,26 @@ def render():
             min_value=0.50, max_value=1.00, value=default_a, step=0.01,
             help="Uit Uitgangspunten. Afhankelijk van conustype."
         )
-    with col2:
-        gamma = st.number_input(
-            "Volumegewicht grond γ [kN/m³]",
-            min_value=10.0, max_value=25.0, value=18.0, step=0.5,
-            help="Gemiddeld volumegewicht. De tool gebruikt per laag de γ uit de Uitgangspunten."
-        )
-    with col3:
         gwl = st.number_input(
             "Grondwaterstand [m NAP]",
             min_value=-10.0, max_value=10.0, value=default_gwl, step=0.1,
             help="Uit Uitgangspunten. Dagelijkse grondwaterstand."
         )
+    
+    with col2:
+        # Toon gamma per laag (read-only, uit uitgangspunten)
+        gamma_info = []
+        for laag in lagen:
+            if laag.get("gamma_nat"):
+                top = laag.get("top_nap")
+                onder = laag.get("onder_nap")
+                pos = f"NAP {top:+.1f} tot {onder:+.1f}" if top is not None and onder is not None else "variabel"
+                gamma_info.append({
+                    "Laag": laag["naam"], "γ_droog": laag.get("gamma_droog", "—"),
+                    "γ_nat": laag["gamma_nat"], "Positie": pos
+                })
+        st.caption(f"σv0 berekend met per-laag γ uit Uitgangspunten · GWS = NAP {default_gwl:+.1f}m · Kruin = NAP {default_kruin:+.1f}m")
+        st.dataframe(pd.DataFrame(gamma_info), use_container_width=True, hide_index=True, height=200)
     
     # --- Verwerk per sondering ---
     st.markdown("---")
@@ -174,8 +227,10 @@ def render():
                 diepte = df[cm["diepte"]]
                 qc = df[cm["qc"]]
                 
-                # Spanningsberekening
-                sigma_v0, sigma_v0_eff, u0 = bereken_sigma_v0(diepte, gamma, gwl)
+                # Spanningsberekening — per-laag gamma uit uitgangspunten
+                sigma_v0, sigma_v0_eff, u0 = bereken_sigma_v0_per_laag(
+                    diepte, lagen, default_kruin, gwl
+                )
                 df["sigma_v0"] = sigma_v0 / 1000  # kPa → MPa
                 df["sigma_v0_eff"] = sigma_v0_eff / 1000
                 df["u0"] = u0 / 1000
@@ -203,7 +258,8 @@ def render():
                 st.session_state.sonderingen[name]["df"] = df
                 st.session_state.sonderingen[name]["genormaliseerd"] = True
                 st.session_state.sonderingen[name]["parameters"] = {
-                    "a": a_factor, "gamma": gamma, "gwl": gwl
+                    "a": a_factor, "gwl": gwl, "kruinniveau": default_kruin,
+                    "gamma_methode": "per-laag uit uitgangspunten"
                 }
                 
                 succes_count += 1

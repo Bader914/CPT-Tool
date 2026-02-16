@@ -25,19 +25,15 @@ ROBERTSON_ZONES = {
 }
 
 
-def classificeer_robertson(qt: pd.Series, Rf: pd.Series, sigma_v0: pd.Series) -> pd.Series:
+def classificeer_robertson(Qt: pd.Series, Rf: pd.Series) -> pd.Series:
     """
-    Vereenvoudigde Robertson classificatie op basis van qt en Rf.
-    Gebaseerd op Robertson 1990 SBTn chart.
+    Robertson 1990 classificatie op basis van Qt (genormaliseerd) en Rf.
+    Gebruikt Qt = q_net / σ'v0 (effectieve spanning) zoals berekend in normalisatie.
     
     Returns:
         Series met zone nummers (1-9)
     """
-    # Genormaliseerde parameters
-    q_net = qt - sigma_v0
-    Qt = q_net / sigma_v0.replace(0, np.nan)
-    
-    zones = pd.Series(index=qt.index, dtype=int)
+    zones = pd.Series(index=Qt.index, dtype=int)
     
     # Vereenvoudigde classificatie op basis van Qt en Rf
     zones[(Qt <= 1)] = 2                                    # Organisch/veen
@@ -135,14 +131,14 @@ def render():
             df = data["df"]
             cm = data["col_mapping"]
             
-            if "qt" not in df.columns or "Rf" not in df.columns or "sigma_v0" not in df.columns:
+            if "Qt" not in df.columns or "Rf" not in df.columns:
                 fout_count += 1
-                missing = [c for c in ["qt", "Rf", "sigma_v0"] if c not in df.columns]
+                missing = [c for c in ["Qt", "Rf"] if c not in df.columns]
                 resultaten.append({"Sondering": name, "Status": f"⚠️ Ontbreekt: {', '.join(missing)}", "Zones": "—"})
                 continue
             
-            # Classificatie
-            df["robertson_zone"] = classificeer_robertson(df["qt"], df["Rf"], df["sigma_v0"])
+            # Classificatie — gebruikt Qt (=q_net/σ'v0) uit normalisatie
+            df["robertson_zone"] = classificeer_robertson(df["Qt"], df["Rf"])
             df["grondsoort"] = df["robertson_zone"].map(lambda z: ROBERTSON_ZONES.get(z, {}).get("naam", "Onbekend"))
             df["materiaal_type"] = df["robertson_zone"].map(lambda z: ROBERTSON_ZONES.get(z, {}).get("type", "onbekend"))
             
