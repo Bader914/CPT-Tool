@@ -193,6 +193,9 @@ def render():
                 # Afgeleide parameters
                 df["q_net"] = bereken_q_net(df["qt"], df["sigma_v0"])
                 
+                # Qt — genormaliseerde conusweerstand (Robertson)
+                df["Qt"] = df["q_net"] / df["sigma_v0_eff"].replace(0, np.nan)
+                
                 if cm.get("fs") and cm["fs"] in df.columns:
                     df["Rf"] = bereken_Rf(df[cm["fs"]], qc)
                 
@@ -253,10 +256,10 @@ def render():
             df = data["df"]
             cm = data["col_mapping"]
             
-            # Plot qt, fs, u2 naast elkaar
+            # Plot qt, Qt, Rf naast elkaar
             fig = make_subplots(
                 rows=1, cols=3,
-                subplot_titles=["qt [MPa]", "fs [MPa]", "Rf [%]"],
+                subplot_titles=["qt [MPa]", "Qt [-] (genormaliseerd)", "Rf [%]"],
                 shared_yaxes=True
             )
             
@@ -264,26 +267,26 @@ def render():
             
             # qt
             if "qt" in df.columns:
-                fig.add_trace(go.Scatter(x=df["qt"], y=diepte, name="qt", line=dict(color="blue")), row=1, col=1)
+                fig.add_trace(go.Scatter(x=df["qt"], y=diepte, name="qt", line=dict(color="#3b82f6", width=1.5)), row=1, col=1)
                 if cm.get("qc"):
-                    fig.add_trace(go.Scatter(x=df[cm["qc"]], y=diepte, name="qc", line=dict(color="lightblue", dash="dot")), row=1, col=1)
+                    fig.add_trace(go.Scatter(x=df[cm["qc"]], y=diepte, name="qc", line=dict(color="#93c5fd", dash="dot", width=1)), row=1, col=1)
             
-            # fs
-            if cm.get("fs"):
-                fig.add_trace(go.Scatter(x=df[cm["fs"]], y=diepte, name="fs", line=dict(color="green")), row=1, col=2)
+            # Qt (genormaliseerd)
+            if "Qt" in df.columns:
+                fig.add_trace(go.Scatter(x=df["Qt"], y=diepte, name="Qt", line=dict(color="#8b5cf6", width=1.5)), row=1, col=2)
             
             # Rf
             if "Rf" in df.columns:
-                fig.add_trace(go.Scatter(x=df["Rf"], y=diepte, name="Rf", line=dict(color="red")), row=1, col=3)
+                fig.add_trace(go.Scatter(x=df["Rf"], y=diepte, name="Rf", line=dict(color="#ef4444", width=1.5)), row=1, col=3)
             
             fig.update_yaxes(autorange="reversed", title_text="Diepte [m]", row=1, col=1)
             fig.update_yaxes(autorange="reversed", row=1, col=2)
             fig.update_yaxes(autorange="reversed", row=1, col=3)
-            fig.update_layout(height=700, template="plotly_white", showlegend=True)
+            fig.update_layout(height=600, template="plotly_white", showlegend=True)
             
             st.plotly_chart(fig, use_container_width=True)
             
             # Data tabel
             with st.expander("📋 Genormaliseerde data"):
-                show_cols = [c for c in [cm["diepte"], cm["qc"], "qt", "q_net", cm.get("fs"), "Rf", cm.get("u2"), "Bq", "sigma_v0"] if c and c in df.columns]
+                show_cols = [c for c in [cm["diepte"], cm["qc"], "qt", "q_net", "Qt", cm.get("fs"), "Rf", cm.get("u2"), "Bq", "sigma_v0", "sigma_v0_eff"] if c and c in df.columns]
                 st.dataframe(df[show_cols].head(50), use_container_width=True)

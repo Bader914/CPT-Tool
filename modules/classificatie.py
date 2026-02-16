@@ -252,23 +252,131 @@ def render():
                 st.info(f"📌 {mask.sum()} van {len(df)} metingen geselecteerd als dijkmateriaal ({mask.sum()/len(df)*100:.0f}%)")
         
         # --- Boringinformatie (optioneel) ---
+        with st.expander("📂 Boringinformatie uploaden (optioneel)", expanded=False):
+            boring_file = st.file_uploader(
+                "Upload boring (CSV/Excel) om classificatie te valideren",
+                type=["csv", "xlsx"],
+                key=f"boring_{selected}"
+            )
+            
+            if boring_file:
+                try:
+                    if boring_file.name.endswith(".csv"):
+                        boring_df = pd.read_csv(boring_file, sep=None, engine="python")
+                    else:
+                        boring_df = pd.read_excel(boring_file)
+                    
+                    st.session_state.sonderingen[selected]["boring"] = boring_df
+                    st.success(f"✅ Boring geladen: {len(boring_df)} lagen")
+                    st.dataframe(boring_df, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Fout bij inlezen boring: {e}")
+    
+    # ═══════════════════════════════════════════════════════════════
+    # FIGUUR 1 — OVERZICHT DIJKTRAJECT
+    # Alle sonderingen met dijkmateriaal, qt over diepte
+    # ═══════════════════════════════════════════════════════════════
+    all_classified = {k: v for k, v in st.session_state.get("sonderingen", {}).items()
+                      if v.get("geclassificeerd")}
+    
+    if len(all_classified) >= 1:
         st.markdown("---")
-        st.subheader("Boringinformatie (optioneel)")
-        boring_file = st.file_uploader(
-            "Upload boring (CSV/Excel) om classificatie te valideren",
-            type=["csv", "xlsx"],
-            key=f"boring_{selected}"
+        st.subheader("Figuur 1 — Overzicht Sonderingen Dijktraject")
+        st.caption("Alle geclassificeerde sonderingen — alleen dijkmateriaal (fijnkorrelig) — qt over diepte")
+        
+        # Keuze welke parameter
+        param_col = st.radio(
+            "Parameter", ["qt [MPa]", "Qt [-] (genormaliseerd)"],
+            horizontal=True, key="fig1_param"
         )
         
-        if boring_file:
-            try:
-                if boring_file.name.endswith(".csv"):
-                    boring_df = pd.read_csv(boring_file, sep=None, engine="python")
-                else:
-                    boring_df = pd.read_excel(boring_file)
+        fig = go.Figure()
+        colors = ["#ef4444", "#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6", 
+                  "#ec4899", "#14b8a6", "#f97316", "#06b6d4", "#84cc16",
+                  "#e11d48", "#7c3aed", "#0891b2", "#65a30d"]
+        
+        for i, (name, data) in enumerate(all_classified.items()):
+            df = data["df"]
+            cm = data["col_mapping"]
+            diepte_col = cm.get("diepte")
+            
+            if not diepte_col or diepte_col not in df.columns:
+                continue
+            
+            # Filter op dijkmateriaal als kolom beschikbaar is
+            if "is_dijkmateriaal" in df.columns:
+                mask = df["is_dijkmateriaal"] == True
+            elif "materiaal_type" in df.columns:
+                mask = df["materiaal_type"].isin(["fijnkorrelig", "organisch"])
+            else:
+                mask = pd.Series([True] * len(df), index=df.index)
+            
+            if not mask.any():
+                continue
+            
+            df_dijk = df[mask]
+            diepte = df_dijk[diepte_col]
+            
+            if param_col.startswith("Qt") and "Qt" in df_dijk.columns:
+                x_vals = df_dijk["Qt"]
+                x_title = "Qt [-]"
+            elif "qt" in df_dijk.columns:
+                x_vals = df_dijk["qt"]
+                x_title = "qt [MPa]"
+            else:
+                continue
+            
+            fig.add_trace(go.Scatter(
+                x=x_vals, y=diepte,
+                mode="lines", name=name,
+                line=dict(color=colors[i % len(colors)], width=1.5),
+                opacity=0.8,
+            ))
+        
+        # GWS lijn
+        up = st.session_state.get("uitgangspunten", {})
+        gwl = up.get("dijkopbouw", {}).get("gwl", 0.0)
+        
+        fig.update_layout(
+            title="Overzicht Dijktraject — Dijkmateriaal",
+            yaxis=dict(autorange="reversed", title="Diepte [m NAP]"),
+            xaxis=dict(title=x_title if 'x_title' in dir() else "qt [MPa]"),
+            height=700,
+            template="plotly_white",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, font=dict(size=10)),
+            font=dict(family="Inter"),
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Samenvattingstabel
+        with st.expander("📊 Samenvatting per sondering", expanded=False):
+            summary_data = []
+            for name, data in all_classified.items():
+                df = data["df"]
+                cm = data["col_mapping"]
                 
-                st.session_state.sonderingen[selected]["boring"] = boring_df
-                st.success(f"✅ Boring geladen: {len(boring_df)} lagen")
-                st.dataframe(boring_df, use_container_width=True)
-            except Exception as e:
-                st.error(f"Fout bij inlezen boring: {e}")
+                # Dijkmateriaal percentage
+                if "is_dijkmateriaal" in df.columns:
+                    dijk_pct = df["is_dijkmateriaal"].sum() / len(df) * 100
+                elif "materiaal_type" in df.columns:
+                    dijk_pct = df["materiaal_type"].isin(["fijnkorrelig", "organisch"]).sum() / len(df) * 100
+                else:
+                    dijk_pct = 0
+                
+                # Dieptebereik
+                d_col = cm.get("diepte")
+                d_range = f"{df[d_col].min():.1f} — {df[d_col].max():.1f}" if d_col and d_col in df.columns else "—"
+                
+                # qt statistieken voor dijkmateriaal
+                qt_mean = df.loc[df.get("is_dijkmateriaal", pd.Series([True]*len(df))).fillna(False), "qt"].mean() if "qt" in df.columns else None
+                
+                summary_data.append({
+                    "Sondering": name,
+                    "Diepte [m]": d_range,
+                    "Dijkmateriaal [%]": f"{dijk_pct:.0f}%",
+                    "qt gem. [MPa]": f"{qt_mean:.2f}" if qt_mean and not np.isnan(qt_mean) else "—",
+                    "Metingen": len(df),
+                })
+            
+            st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
