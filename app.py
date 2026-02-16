@@ -10,16 +10,27 @@ st.set_page_config(
 # ── Modern CSS Styling v5.1 ──
 st.markdown("""
 <style>
-/* === FONTS — exclude icon fonts === */
+/* === FONTS === */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-body, p, span, label, h1, h2, h3, h4, h5, h6, div, input, button, select, textarea, td, th, li, a {
+body, p, label, h1, h2, h3, h4, h5, h6, div, input, button, select, textarea, td, th, li, a {
     font-family: 'Inter', sans-serif !important;
 }
-/* Preserve Streamlit icon fonts */
-[data-testid="stExpander"] summary svg,
-[data-testid="stExpander"] details summary span[data-testid="stExpanderToggleIcon"],
-.material-symbols-rounded, .material-icons {
-    font-family: 'Material Symbols Rounded', 'Material Icons' !important;
+
+/* === FIX EXPANDER ICON — replace broken Material Icon with CSS arrow === */
+[data-testid="stExpanderToggleIcon"] {
+    font-size: 0 !important;
+    width: 1rem !important;
+    height: 1rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+[data-testid="stExpanderToggleIcon"]::before {
+    content: "\\203A" !important;
+    font-size: 1.4rem !important;
+    font-family: 'Inter', sans-serif !important;
+    color: #94a3b8 !important;
+    line-height: 1 !important;
 }
 
 /* === DARK THEME === */
