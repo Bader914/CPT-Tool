@@ -296,21 +296,16 @@ def maak_dijkprofiel_figuur(lagen: list) -> go.Figure:
 
 def render():
     st.markdown("""
-    <div class="hero-section">
-        <span class="step-label">Stap 0 — Start hier</span>
-        <h1>📋 Uitgangspunten</h1>
-        <p class="subtitle">Alle projectparameters op één plek — dijkopbouw, sterkteparameters, Nkt-factoren</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="why-card">
-        <h4>💡 Waarom deze stap?</h4>
-        <p>
-            Voordat we beginnen met de analyse, leggen we hier alle <b>projectparameters</b> vast: 
-            de dijkopbouw, sterkteparameters (Tabel 91), conustype, Nkt-factoren (Tabel 71) en formules. 
+    <div class="hero-compact">
+        <div class="hero-text">
+            <div class="step-tag">Stap 0 — Start hier</div>
+            <h1>📋 Uitgangspunten</h1>
+            <p class="sub">Alle projectparameters op één plek</p>
+        </div>
+        <div class="hero-why">
+            Leg hier alle <b>projectparameters</b> vast: dijkopbouw, sterkteparameters, Nkt-factoren. 
             Deze waarden worden automatisch doorgerekend in alle volgende stappen.
-        </p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     

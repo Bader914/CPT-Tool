@@ -12,21 +12,16 @@ import plotly.graph_objects as go
 
 def render():
     st.markdown("""
-    <div class="hero-section">
-        <span class="step-label">Stap 5 van 6</span>
-        <h1>✅ Validatie</h1>
-        <p class="subtitle">Vergelijk Su-profielen met laboratoriumproeven — kalibreer Nkt</p>
-    </div>
-    """, unsafe_allow_html=True)
-    st.markdown("""
-    <div class="why-card">
-        <h4>💡 Waarom deze stap?</h4>
-        <p>
-            De Nkt-factor is een <b>empirische aanname</b>. Door de CPT-Su te vergelijken met 
-            laboratoriumproeven (triaxiaal, DSS, vane test) controleren we of de gekozen Nkt 
-            realistisch is. Als de CPT-Su systematisch afwijkt, moet de Nkt worden aangepast 
-            in <b>Stap 0 — Uitgangspunten</b>.
-        </p>
+    <div class="hero-compact">
+        <div class="hero-text">
+            <div class="step-tag">Stap 5 van 6</div>
+            <h1>✅ Validatie</h1>
+            <p class="sub">Vergelijk Su met laboratoriumproeven</p>
+        </div>
+        <div class="hero-why">
+            Vergelijk CPT-Su met <b>labproeven</b> (triaxiaal, DSS, vane) om te controleren of 
+            de gekozen Nkt realistisch is.
+        </div>
     </div>
     """, unsafe_allow_html=True)
     

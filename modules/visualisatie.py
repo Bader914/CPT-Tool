@@ -14,21 +14,16 @@ import io
 
 def render():
     st.markdown("""
-    <div class="hero-section">
-        <span class="step-label">Stap 6 van 6</span>
-        <h1>📈 Rapportage & Export</h1>
-        <p class="subtitle">Totaaloverzicht Su-profielen — trends, afwijkingen & Excel/CSV export</p>
-    </div>
-    """, unsafe_allow_html=True)
-    st.markdown("""
-    <div class="why-card">
-        <h4>💡 Waarom deze stap?</h4>
-        <p>
-            Door <b>alle Su-profielen samen</b> te plotten, zien we of het Su-beeld consistent is 
-            over het dijktraject. Grote afwijkingen kunnen wijzen op <b>lokale bodemvariatie</b>, 
-            <b>meetfouten</b>, of een <b>verkeerde Nkt-keuze</b>. De resultaten worden geëxporteerd 
-            voor verdere verwerking in D-Stability of andere tools.
-        </p>
+    <div class="hero-compact">
+        <div class="hero-text">
+            <div class="step-tag">Stap 6 van 6</div>
+            <h1>📈 Rapportage & Export</h1>
+            <p class="sub">Totaaloverzicht, trends & Excel/CSV export</p>
+        </div>
+        <div class="hero-why">
+            Plot <b>alle Su-profielen samen</b>, identificeer afwijkingen en exporteer 
+            resultaten voor D-Stability of andere tools.
+        </div>
     </div>
     """, unsafe_allow_html=True)
     

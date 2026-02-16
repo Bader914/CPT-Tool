@@ -22,22 +22,17 @@ def bereken_Su(q_net: pd.Series, Nkt: float) -> pd.Series:
 
 def render():
     st.markdown("""
-    <div class="hero-section">
-        <span class="step-label">Stap 4 van 6</span>
-        <h1>📊 Su Berekening</h1>
-        <p class="subtitle">Ongedraineerde schuifsterkte uit CPT — Su = q_net / Nkt</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="why-card">
-        <h4>💡 Waarom deze stap?</h4>
-        <p>
-            De <b>ongedraineerde schuifsterkte</b> ($S_u$) is de sterkteparameter die bepaalt of de dijk 
-            stabiel is bij snel optreden van belasting. We berekenen $S_u$ per meetpunt op basis 
-            van de <b>netto conusweerstand</b> en de <b>Nkt-factor per grondlaag</b> (Tabel 71). 
-            Alleen fijnkorrelig dijkmateriaal (geselecteerd in Stap 3) krijgt een Su-waarde.
-        </p>
+    <div class="hero-compact">
+        <div class="hero-text">
+            <div class="step-tag">Stap 4 van 6</div>
+            <h1>📊 Su Berekening</h1>
+            <p class="sub">Su = q_net / Nkt per grondlaag</p>
+        </div>
+        <div class="hero-why">
+            Bereken de <b>ongedraineerde schuifsterkte</b> per meetpunt met de 
+            <b>Nkt-factor per grondlaag</b> (Tabel 71). Alleen fijnkorrelig dijkmateriaal 
+            krijgt een Su-waarde.
+        </div>
     </div>
     """, unsafe_allow_html=True)
     

@@ -74,37 +74,28 @@ def bereken_sigma_v0(diepte: pd.Series, gamma: float = 18.0, gwl: float = 0.0) -
 
 def render():
     st.markdown("""
-    <div class="hero-section">
-        <span class="step-label">Stap 2 van 6</span>
-        <h1>📐 Normalisatie</h1>
-        <p class="subtitle">Poriedrukcorrectie qt, spanningen σv0, afgeleide parameters Rf & Bq</p>
+    <div class="hero-compact">
+        <div class="hero-text">
+            <div class="step-tag">Stap 2 van 6</div>
+            <h1>📐 Normalisatie</h1>
+            <p class="sub">Poriedrukcorrectie qt, spanningen σv0, Rf & Bq</p>
+        </div>
+        <div class="hero-why">
+            Corrigeer <b>qc → qt</b> voor poriedruk en bereken spanningen + afgeleide parameters 
+            voor de Robertson classificatie en Su-berekening.
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # --- Stap uitleg ---
-    st.markdown("""
-    <div class="why-card">
-        <h4>💡 Waarom deze stap?</h4>
-        <p>
-            De <b>gemeten conusweerstand</b> ($q_c$) is niet de werkelijke weerstand. 
-            Door poriedruk die werkt op het verschiloppervlak achter de conuspunt, is de gemeten waarde 
-            <b>lager</b> dan de werkelijke. Zonder correctie zou je de sterkte van de grond <b>onderschatten</b>.
-        </p>
-        <p>
-            Daarnaast berekenen we de <b>spanningen</b> en <b>afgeleide parameters</b> die nodig zijn 
-            voor de Robertson classificatie (Stap 3) en de Su-berekening (Stap 4).
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("""
-    | Parameter | Formule | Betekenis |
-    |---|---|---|
-    | $q_t$ | $q_c + (1-a) \\cdot u_2$ | Gecorrigeerde conusweerstand |
-    | $q_{net}$ | $q_t - \\sigma_{v0}$ | Netto conusweerstand (gecorrigeerd voor diepte) |
-    | $R_f$ | $(f_s / q_c) \\times 100\\%$ | Wrijvingsgetal (indicator grondtype) |
-    | $B_q$ | $(u_2 - u_0) / q_{net}$ | Poriedrukratio (indicator drainagegedrag) |
-    """)
+    with st.expander("📘 Formules", expanded=False):
+        st.markdown("""
+        | Parameter | Formule | Betekenis |
+        |---|---|---|
+        | $q_t$ | $q_c + (1-a) \\cdot u_2$ | Gecorrigeerde conusweerstand |
+        | $q_{net}$ | $q_t - \\sigma_{v0}$ | Netto conusweerstand (gecorrigeerd voor diepte) |
+        | $R_f$ | $(f_s / q_c) \\times 100\\%$ | Wrijvingsgetal (indicator grondtype) |
+        | $B_q$ | $(u_2 - u_0) / q_{net}$ | Poriedrukratio (indicator drainagegedrag) |
+        """)
     
     # --- Check of er sonderingen zijn ---
     if not st.session_state.get("sonderingen"):

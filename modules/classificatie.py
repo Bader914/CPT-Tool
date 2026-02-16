@@ -57,26 +57,16 @@ def classificeer_robertson(qt: pd.Series, Rf: pd.Series, sigma_v0: pd.Series) ->
 
 def render():
     st.markdown("""
-    <div class="hero-section">
-        <span class="step-label">Stap 3 van 6</span>
-        <h1>🧱 Classificatie</h1>
-        <p class="subtitle">Robertson 1990 classificatie — grondsoort & dijkmateriaal selectie</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # --- Stap uitleg ---
-    st.markdown("""
-    <div class="why-card">
-        <h4>💡 Waarom deze stap?</h4>
-        <p>
-            Su (ongedraineerde schuifsterkte) is alleen relevant voor <b>fijnkorrelig materiaal</b> 
-            (klei, silt, veen). Zand en grof materiaal hebben geen Su nodig — die worden 
-            beoordeeld op basis van hoek van inwendige wrijving (φ).
-        </p>
-        <p>
-            Met de <b>Robertson 1990 classificatie</b> bepalen we per meetpunt de grondsoort, 
-            zodat we in Stap 4 alleen Su berekenen voor de relevante lagen.
-        </p>
+    <div class="hero-compact">
+        <div class="hero-text">
+            <div class="step-tag">Stap 3 van 6</div>
+            <h1>🧱 Classificatie</h1>
+            <p class="sub">Robertson 1990 — grondsoort & dijkmateriaal</p>
+        </div>
+        <div class="hero-why">
+            Bepaal per meetpunt de <b>grondsoort</b> zodat we alleen Su berekenen voor 
+            fijnkorrelig dijkmateriaal (klei, silt, veen).
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
