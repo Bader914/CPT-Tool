@@ -12,10 +12,11 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 
-def bereken_Su(q_net: pd.Series, Nkt: float) -> pd.Series:
+def bereken_Su(q_net: pd.Series, Nkt: pd.Series) -> pd.Series:
     """
-    Bereken ongedraineerde schuifsterkte.
+    Bereken ongedraineerde schuifsterkte per meetpunt.
     Su = q_net / Nkt  →  [kPa]
+    Nkt varieert per meetpunt (Robertson zone + boven/onder GWS).
     """
     return (q_net * 1000) / Nkt  # MPa → kPa
 
@@ -114,6 +115,21 @@ def render():
             else:
                 df["Nkt_gebruikt"] = nkt_dijkmat_onder  # Fallback
             
+            # Dijksmateriaal klei: onderscheid boven/onder GWS → Nkt 7a / 7b
+            gwl = up.get("dijkopbouw", {}).get("gwl", 0.0)
+            diepte_col = cm.get("diepte")
+            if diepte_col and diepte_col in df.columns:
+                diepte_su = df[diepte_col]
+                dijkmat_flag = df.get("is_dijkmateriaal", pd.Series([False]*len(df), index=df.index))
+                if isinstance(dijkmat_flag, pd.Series):
+                    dijkmat_flag = dijkmat_flag.fillna(False).astype(bool)
+                # Alleen klei-dijksmateriaal (niet veen, zone 2)
+                niet_veen = df.get("robertson_zone", pd.Series(dtype=int)) != 2
+                klei_dijkmat = dijkmat_flag & niet_veen
+                if klei_dijkmat.any():
+                    df.loc[klei_dijkmat & (diepte_su > gwl), "Nkt_gebruikt"] = nkt_dijkmat_boven   # 7a
+                    df.loc[klei_dijkmat & (diepte_su <= gwl), "Nkt_gebruikt"] = nkt_dijkmat_onder  # 7b
+            
             # Bereken Su alleen voor dijkmateriaal (fijnkorrelig)
             dijkmat_mask = df.get("is_dijkmateriaal", pd.Series([True] * len(df), index=df.index))
             
@@ -194,6 +210,16 @@ def render():
             )
             
             st.plotly_chart(fig, use_container_width=True)
+            
+            # Data tabel: Nkt per meetpunt
+            with st.expander("📊 Data: q_net → Nkt → Su per meetpunt", expanded=False):
+                d_col = cm.get("diepte")
+                show_cols = [c for c in [d_col, "robertson_zone", "q_net", "Nkt_gebruikt", "Su"]
+                             if c and c in df.columns]
+                su_table = df[df["Su"].notna()][show_cols].copy()
+                su_table = su_table.round(3)
+                st.caption(f"{len(su_table)} meetpunten met Su — GWS = NAP {up.get('dijkopbouw', {}).get('gwl', 0.0):+.1f}m")
+                st.dataframe(su_table, use_container_width=True, hide_index=True)
     
     else:
         fig = go.Figure()
