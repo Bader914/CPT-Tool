@@ -11,9 +11,13 @@ import plotly.graph_objects as go
 
 
 def render():
-    st.title("✅ Module 5: Validatie & Labvergelijking")
     st.markdown("""
-    ### Wat doen we hier?
+    <div class="hero-container">
+        <h1>✅ Validatie</h1>
+        <p>Vergelijk Su-profielen met laboratoriumproeven — kalibreer Nkt</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("""
     We **valideren** de berekende Su-profielen door ze te vergelijken met laboratoriumproeven:
     
     - **Triaxiaalproeven**, **DSS-proeven** of **vane tests** geven de "echte" Su. 

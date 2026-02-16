@@ -56,9 +56,13 @@ def classificeer_robertson(qt: pd.Series, Rf: pd.Series, sigma_v0: pd.Series) ->
 
 
 def render():
-    st.title("🧱 Module 3: Classificatie & Dijkmateriaal")
     st.markdown("""
-    ### Wat doen we hier?
+    <div class="hero-container">
+        <h1>🧱 Classificatie</h1>
+        <p>Robertson 1990 classificatie — grondsoort & dijkmateriaal selectie</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("""
     We bepalen per meetpunt de **grondsoort** op basis van de CPT-gegevens (Robertson 1990 classificatie), 
     en selecteren vervolgens welke lagen als **dijkmateriaal** beschouwd worden.
     
@@ -77,8 +81,11 @@ def render():
     if lagen:
         for laag in lagen:
             dijkmat_icon = "🟢" if laag.get("is_dijkmateriaal") else "⚪"
+            top = laag.get("top_nap")
+            onder = laag.get("onder_nap")
+            positie = f"NAP {top:+.1f}m tot {onder:+.1f}m" if top is not None and onder is not None else "variabel"
             st.markdown(
-                f"- {dijkmat_icon} **{laag['naam']}**: NAP {laag['top_nap']:+.1f}m tot {laag['onder_nap']:+.1f}m — {laag['materiaal']}"
+                f"- {dijkmat_icon} **{laag['naam']}**: {positie} — {laag['materiaal']}"
             )
     
     st.markdown("---")
@@ -94,7 +101,7 @@ def render():
     # --- Classificatie uitvoeren ---
     st.subheader("Robertson Classificatie")
     
-    if st.button("🔄 Classificeer alle sonderingen"):
+    if st.button("Classificeer alle sonderingen", type="primary", use_container_width=True):
         for name, data in genormaliseerd.items():
             df = data["df"]
             cm = data["col_mapping"]

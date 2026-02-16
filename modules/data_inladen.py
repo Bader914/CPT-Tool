@@ -120,9 +120,13 @@ def check_poriedruk_correctie(df: pd.DataFrame, col_mapping: dict) -> dict:
 
 
 def render():
-    st.title("📁 Module 1: Data Inladen & Controle")
     st.markdown("""
-    ### Wat doen we hier?
+    <div class="hero-container">
+        <h1>📁 Data Inladen</h1>
+        <p>Upload sonderingen — GEF, CSV of Excel — automatische kolomherkenning</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("""
     We beginnen met het **inladen van alle sonderingen**. De tool:
     
     1. **Herkent automatisch** de kolommen (diepte, qc, fs, u2)
@@ -270,7 +274,7 @@ def render():
         
         # --- Verwijder sonderingen ---
         st.markdown("---")
-        if st.button("🗑️ Alle sonderingen wissen"):
+        if st.button("🗑️ Alle sonderingen wissen", type="secondary"):
             st.session_state.sonderingen = {}
             st.rerun()
     else:

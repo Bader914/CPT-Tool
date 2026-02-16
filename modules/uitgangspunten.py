@@ -45,6 +45,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 34.0,
             "S_ratio": None,
             "m_factor": None,
+            "Nkt": None,
             "beschrijving": "Wegfundering, 1 tot 2 meter dik, bestaande uit puin en zand onder de weg.",
         },
         {
@@ -59,6 +60,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 37.6,
             "S_ratio": 0.44,
             "m_factor": 0.80,
+            "Nkt": 17.1,
             "aantal_proeven": 46,
             "beschrijving": "Veenlaag. S-ratio en m-factor bepaald uit 46 proeven.",
         },
@@ -74,6 +76,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 35.7,
             "S_ratio": 0.41,
             "m_factor": 0.66,
+            "Nkt": 16.7,
             "aantal_proeven": 22,
             "beschrijving": "Kleiig veen. S-ratio en m-factor bepaald uit 22 proeven.",
         },
@@ -89,7 +92,8 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": None,
             "S_ratio": None,
             "m_factor": None,
-            "beschrijving": "Basisveen. Geen sterkteparameters beschikbaar (aanname).",
+            "Nkt": 20.0,
+            "beschrijving": "Basisveen. Nkt is default waarde uit schematiseringshandleiding.",
         },
         {
             "naam": "4_Klei_humeus",
@@ -103,6 +107,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 45.4,
             "S_ratio": 0.33,
             "m_factor": 0.84,
+            "Nkt": 16.8,
             "aantal_proeven": 23,
             "beschrijving": "Humeuze klei. S-ratio en m-factor bepaald uit 23 proeven.",
         },
@@ -118,6 +123,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 37.8,
             "S_ratio": 0.32,
             "m_factor": 1.00,
+            "Nkt": 18.2,
             "aantal_proeven": 35,
             "beschrijving": "Siltige klei. S-ratio en m-factor bepaald uit 35 proeven.",
         },
@@ -133,7 +139,8 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 30.0,
             "S_ratio": 0.28,
             "m_factor": 0.80,
-            "beschrijving": "Zandige klei. Sterkteparameters zijn aannames.",
+            "Nkt": 20.0,
+            "beschrijving": "Zandige klei. Nkt is default waarde uit schematiseringshandleiding.",
         },
         {
             "naam": "7a_Dijksmateriaal klei > gws",
@@ -147,6 +154,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 32.9,
             "S_ratio": 0.41,
             "m_factor": 0.88,
+            "Nkt": 14.5,
             "aantal_proeven": 28,
             "beschrijving": "Kleiig dijksmateriaal boven de dagelijkse grondwaterstand. "
                            "S-ratio en m-factor bepaald uit 28 proeven.",
@@ -163,6 +171,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 33.4,
             "S_ratio": 0.35,
             "m_factor": 0.79,
+            "Nkt": 14.1,
             "aantal_proeven": 40,
             "beschrijving": "Kleiig dijksmateriaal onder de dagelijkse grondwaterstand tot NAP -3m. "
                            "Dit is de primaire zone voor Su-bepaling. "
@@ -180,6 +189,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 32.0,
             "S_ratio": None,
             "m_factor": None,
+            "Nkt": None,
             "beschrijving": "Zandig dijksmateriaal. Geen Su-berekening (gedraineerd materiaal).",
         },
         {
@@ -194,7 +204,8 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 30.0,
             "S_ratio": 0.38,
             "m_factor": 0.80,
-            "beschrijving": "Diepe kleilaag. Sterkteparameters zijn aannames.",
+            "Nkt": 20.0,
+            "beschrijving": "Diepe kleilaag. Nkt is default waarde uit schematiseringshandleiding.",
         },
         {
             "naam": "9_Zand",
@@ -208,6 +219,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 32.5,
             "S_ratio": None,
             "m_factor": None,
+            "Nkt": None,
             "beschrijving": "Draagkrachtig Pleistoceen zand. Geen Su-berekening (gedraineerd).",
         },
     ],
@@ -218,40 +230,9 @@ DEFAULT_UITGANGSPUNTEN = {
                        "Waarde is afhankelijk van het conustype en moet worden gecontroleerd in het GEF-bestand.",
     },
     "nkt_factoren": {
-        "klei_nc": {
-            "naam": "Klei (normaal geconsolideerd)",
-            "Nkt": 15,
-            "range_min": 12,
-            "range_max": 18,
-            "bron": "Lunne et al. (1997), Robertson (2009)",
-            "toelichting": "Voor normaal geconsolideerde klei in dijklichamen. "
-                          "Nkt hangt af van plasticiteit en gevoeligheid van de klei.",
-        },
-        "klei_oc": {
-            "naam": "Klei (overgeconsolideerd)",
-            "Nkt": 17,
-            "range_min": 15,
-            "range_max": 20,
-            "bron": "Lunne et al. (1997)",
-            "toelichting": "Voor overgeconsolideerde klei, hogere Nkt door hogere stijfheid.",
-        },
-        "veen": {
-            "naam": "Veen / organisch materiaal",
-            "Nkt": 12,
-            "range_min": 8,
-            "range_max": 15,
-            "bron": "Den Haan & Kruse (2007), Zwanenburg et al. (2012)",
-            "toelichting": "Veen heeft een lagere Nkt vanwege het hoge vochtgehalte en lage sterkte. "
-                          "Grote spreiding afhankelijk van veensoort (riet, bos, broekveen).",
-        },
-        "silt": {
-            "naam": "Silt / kleiig silt",
-            "Nkt": 14,
-            "range_min": 10,
-            "range_max": 18,
-            "bron": "Lunne et al. (1997)",
-            "toelichting": "Tussenwaarde voor silt en siltig klei mengsel.",
-        },
+        "bron": "Tabel 71 — NKT factoren traject 14-1",
+        "toelichting": "Nkt-waarden zijn per grondlaag bepaald. Lagen met * zijn default waarden "
+                      "uit de schematiseringshandleiding (onvoldoende proeven beschikbaar).",
     },
     "su_berekening": {
         "formule": "Su = q_net / Nkt",
@@ -310,11 +291,12 @@ def maak_dijkprofiel_figuur(lagen: list) -> go.Figure:
 
 
 def render():
-    st.title("📋 Uitgangspunten")
     st.markdown("""
-    **Doel:** Alle projectuitgangspunten op één plek verzameld. Deze parameters worden 
-    gebruikt als standaardwaarden in de andere modules. Pas aan indien nodig voor jouw situatie.
-    """)
+    <div class="hero-container">
+        <h1>📋 Uitgangspunten</h1>
+        <p>Alle projectparameters op één plek — dijkopbouw, sterkteparameters, Nkt-factoren</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Initialiseer uitgangspunten in session state
     if "uitgangspunten" not in st.session_state:
@@ -455,6 +437,7 @@ def render():
                 "φ [°]": laag.get("phi", "—") if laag.get("phi") is not None else "—",
                 "S [-]": laag.get("S_ratio", "—") if laag.get("S_ratio") is not None else "—",
                 "m [-]": laag.get("m_factor", "—") if laag.get("m_factor") is not None else "—",
+                "Nkt [-]": laag.get("Nkt", "—") if laag.get("Nkt") is not None else "—",
             }
             tabel_data.append(row)
         
@@ -588,69 +571,86 @@ def render():
         
         up["conustype"] = conus
     
-    # ─── TAB 3: NKT-FACTOREN ───
+    # ─── TAB 3: NKT-FACTOREN PER GRONDLAAG (TABEL 71) ───
     with tab4:
-        st.subheader("Nkt-factoren per Grondtype")
+        st.subheader("Nkt-factoren per Grondlaag — Tabel 71")
         st.markdown("""
-        **Waarom is Nkt belangrijk?**  
+        <div class="section-header">
+            <h3>Waarom is Nkt belangrijk?</h3>
+        </div>
+        """, unsafe_allow_html=True)
         
+        st.markdown("""
         De Nkt-factor is de sleutelparameter in de Su-berekening: $S_u = q_{net} / N_{kt}$
         
-        Een **hogere Nkt** geeft een **lagere Su** (conservatiever voor sterkte).  
-        Een **lagere Nkt** geeft een **hogere Su** (optimistischer).
+        - Een **hogere Nkt** geeft een **lagere Su** (conservatiever)  
+        - Een **lagere Nkt** geeft een **hogere Su** (optimistischer)
         
-        De juiste Nkt hangt af van:
-        - **Grondtype** (klei, veen, silt)
-        - **Plasticiteit** en **gevoeligheid** van de klei
-        - **Lokale ervaring** en kalibratie met labproeven
-        
-        **Aanbeveling:** Start met literatuurwaarden en kalibreer met beschikbare 
-        laboratoriumproeven (triaxiaal, DSS).
+        De Nkt-waarden zijn **per grondlaag** bepaald op basis van het project (Tabel 71).  
+        Lagen met \\* gebruiken default waarden uit de schematiseringshandleiding.
         """)
         
-        nkt = up.get("nkt_factoren", DEFAULT_UITGANGSPUNTEN["nkt_factoren"])
+        lagen = up.get("lagen", DEFAULT_UITGANGSPUNTEN["lagen"])
         
-        for key, nkt_info in nkt.items():
-            with st.expander(f"📌 {nkt_info['naam']} — Nkt = {nkt_info['Nkt']}", expanded=False):
-                st.markdown(f"*{nkt_info['toelichting']}*")
-                st.caption(f"Bron: {nkt_info['bron']}")
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    nkt_info["Nkt"] = st.number_input(
-                        "Nkt waarde", 
-                        value=float(nkt_info["Nkt"]),
-                        min_value=5.0, max_value=30.0, step=0.5,
-                        key=f"nkt_{key}"
-                    )
-                with col2:
-                    nkt_info["range_min"] = st.number_input(
-                        "Range min", value=float(nkt_info["range_min"]),
-                        min_value=5.0, max_value=25.0, step=0.5,
-                        key=f"nkt_min_{key}"
-                    )
-                with col3:
-                    nkt_info["range_max"] = st.number_input(
-                        "Range max", value=float(nkt_info["range_max"]),
-                        min_value=5.0, max_value=30.0, step=0.5,
-                        key=f"nkt_max_{key}"
+        # Nkt overzichtstabel
+        nkt_data = []
+        for laag in lagen:
+            nkt_val = laag.get("Nkt")
+            if nkt_val is not None:
+                is_default = "default*" if laag["naam"] in ["3_Basisveen", "6_Klei_zandig", "8_Klei_diep"] else ""
+                nkt_data.append({
+                    "Grondlaag": laag["naam"],
+                    "Nkt [-]": nkt_val,
+                    "Type": is_default if is_default else "bepaald",
+                })
+        
+        if nkt_data:
+            nkt_df = pd.DataFrame(nkt_data)
+            st.dataframe(nkt_df, use_container_width=True, hide_index=True)
+        
+        # Aanpasbare Nkt per laag
+        st.markdown("---")
+        st.markdown("**Nkt-waarden aanpassen:**")
+        
+        cols = st.columns(3)
+        for i, laag in enumerate(lagen):
+            if laag.get("Nkt") is not None:
+                with cols[i % 3]:
+                    lagen[i]["Nkt"] = st.number_input(
+                        f"{laag['naam']}",
+                        value=float(laag["Nkt"]),
+                        min_value=5.0, max_value=30.0, step=0.1,
+                        key=f"nkt_laag_{i}",
                     )
         
-        up["nkt_factoren"] = nkt
+        up["lagen"] = lagen
         
         # Visueel overzicht
         st.markdown("---")
-        st.markdown("**Overzicht Nkt-waarden:**")
+        nkt_lagen = [l for l in lagen if l.get("Nkt") is not None]
         
-        nkt_overview = []
-        for key, info in nkt.items():
-            nkt_overview.append({
-                "Grondtype": info["naam"],
-                "Nkt": info["Nkt"],
-                "Range": f"{info['range_min']} – {info['range_max']}",
-                "Bron": info["bron"],
-            })
-        st.dataframe(pd.DataFrame(nkt_overview), use_container_width=True, hide_index=True)
+        if nkt_lagen:
+            fig_nkt = go.Figure()
+            namen = [l["naam"].replace("_", " ") for l in nkt_lagen]
+            nkt_vals = [l["Nkt"] for l in nkt_lagen]
+            kleuren = [l["kleur"] for l in nkt_lagen]
+            
+            fig_nkt.add_trace(go.Bar(
+                x=namen, y=nkt_vals,
+                marker_color=kleuren,
+                text=[f"{v:.1f}" for v in nkt_vals],
+                textposition="outside",
+                textfont=dict(size=13, color="#0f172a"),
+            ))
+            fig_nkt.update_layout(
+                title="Nkt per grondlaag (Tabel 71)",
+                yaxis=dict(title="Nkt [-]", range=[0, max(nkt_vals) * 1.2]),
+                xaxis=dict(tickangle=45),
+                height=450,
+                template="plotly_white",
+                margin=dict(b=120),
+            )
+            st.plotly_chart(fig_nkt, use_container_width=True)
     
     # ─── TAB 4: FORMULES & METHODE ───
     with tab5:
@@ -748,9 +748,11 @@ def render():
         st.markdown(f"- **a-factor:** {up['conustype']['a_factor']}")
         
         # Nkt
-        st.markdown("#### 🔢 Nkt-factoren")
-        for key, info in up["nkt_factoren"].items():
-            st.markdown(f"- **{info['naam']}:** Nkt = {info['Nkt']} (range {info['range_min']} – {info['range_max']})")
+        st.markdown("#### 🔢 Nkt-factoren (Tabel 71)")
+        for laag in up["lagen"]:
+            nkt_val = laag.get("Nkt")
+            if nkt_val is not None:
+                st.markdown(f"- **{laag['naam']}:** Nkt = {nkt_val}")
         
         st.markdown("---")
         st.caption("Deze uitgangspunten worden automatisch gebruikt in alle modules. "

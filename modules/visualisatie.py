@@ -13,9 +13,13 @@ import io
 
 
 def render():
-    st.title("📈 Module 6: Visualisatie & Rapportage")
     st.markdown("""
-    ### Wat doen we hier?
+    <div class="hero-container">
+        <h1>📈 Rapportage & Export</h1>
+        <p>Totaaloverzicht Su-profielen — trends, afwijkingen & Excel/CSV export</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("""
     We visualiseren **alle Su-profielen samen** om:
     
     - **Trends** te herkennen (neemt Su toe/af met diepte?)

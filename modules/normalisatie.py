@@ -73,9 +73,13 @@ def bereken_sigma_v0(diepte: pd.Series, gamma: float = 18.0, gwl: float = 0.0) -
 
 
 def render():
-    st.title("📐 Module 2: Normalisatie (Qt)")
     st.markdown("""
-    ### Wat doen we hier?
+    <div class="hero-container">
+        <h1>📐 Normalisatie</h1>
+        <p>Poriedrukcorrectie qt, spanningen σv0, afgeleide parameters Rf & Bq</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("""
     In deze stap corrigeren we de **gemeten conusweerstand** ($q_c$) voor het effect van 
     **poriedruk** ($u_2$). Dit is nodig omdat de poriedruk werkt op het verschiloppervlak 
     achter de conuspunt, waardoor de gemeten waarde lager is dan de werkelijke weerstand.
@@ -133,7 +137,7 @@ def render():
     # --- Verwerk per sondering ---
     st.markdown("---")
     
-    if st.button("🔄 Bereken Qt en afgeleide parameters voor alle sonderingen"):
+    if st.button("Bereken Qt en afgeleide parameters", type="primary", use_container_width=True):
         progress = st.progress(0)
         sonderingen = st.session_state.sonderingen
         total = len(sonderingen)
