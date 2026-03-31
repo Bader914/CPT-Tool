@@ -9,6 +9,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from .normalisatie import bereken_sigma_v0_met_robertson
 
 
 # Robertson 1990 classificatie zones (vereenvoudigd)
@@ -141,6 +142,20 @@ def render():
             df["robertson_zone"] = classificeer_robertson(df["Qt"], df["Rf"])
             df["grondsoort"] = df["robertson_zone"].map(lambda z: ROBERTSON_ZONES.get(z, {}).get("naam", "Onbekend"))
             df["materiaal_type"] = df["robertson_zone"].map(lambda z: ROBERTSON_ZONES.get(z, {}).get("type", "onbekend"))
+            
+            # Herbereken σv0 met volumegewicht uit Robertson classificatie
+            params = st.session_state.sonderingen[name].get("parameters", {})
+            kruin = params.get("kruinniveau", up.get("dijkopbouw", {}).get("kruinniveau", 4.0))
+            gwl_val = params.get("gwl", up.get("dijkopbouw", {}).get("gwl", 0.0))
+            
+            sigma_v0_new, sigma_v0_eff_new, u0_new = bereken_sigma_v0_met_robertson(
+                df[cm["diepte"]], df["robertson_zone"], lagen, kruin, gwl_val
+            )
+            df["sigma_v0"] = sigma_v0_new / 1000  # kPa → MPa
+            df["sigma_v0_eff"] = sigma_v0_eff_new / 1000
+            df["u0"] = u0_new / 1000
+            df["q_net"] = df["qt"] - df["sigma_v0"]
+            df["Qt"] = df["q_net"] / df["sigma_v0_eff"].replace(0, np.nan)
             
             st.session_state.sonderingen[name]["df"] = df
             st.session_state.sonderingen[name]["geclassificeerd"] = True

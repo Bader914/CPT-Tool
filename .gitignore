@@ -16,6 +16,9 @@ env/
 .DS_Store
 Thumbs.db
 
+# Streamlit secrets (niet uploaden naar GitHub)
+.streamlit/secrets.toml
+
 # Data bestanden (niet uploaden naar GitHub)
 *.gef
 *.csv

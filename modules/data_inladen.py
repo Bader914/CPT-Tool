@@ -155,6 +155,7 @@ def detect_columns(df: pd.DataFrame) -> dict:
     quantity_info = df.attrs.get("gef_quantity_info", {})
     column_info = df.attrs.get("gef_column_info", {})
     
+    qc_quantity = None
     if quantity_info:
         # Prioriteit: gecorrigeerde diepte (11) boven sondeerlengte (1)
         for col_nr, qty_nr in sorted(quantity_info.items(), key=lambda x: x[1], reverse=True):
@@ -165,6 +166,11 @@ def detect_columns(df: pd.DataFrame) -> dict:
                     # Gecorrigeerde waarden krijgen prioriteit (hogere qty nrs)
                     if mapping[param] is None or qty_nr in (11, 14):
                         mapping[param] = col_name
+                        if param == "qc":
+                            qc_quantity = qty_nr
+    
+    # Flag: conusweerstand al gecorrigeerd voor conus area ratio (quantity 14 = qt)?
+    df.attrs["is_qt_corrected"] = (qc_quantity == 14)
     
     # ── Methode 2: Kolom naam matching (uitgebreid) ──
     common_names = {
@@ -252,6 +258,12 @@ def check_poriedruk_correctie(df: pd.DataFrame, col_mapping: dict) -> dict:
         result["message"] = "⚠️ Geen conusweerstand (qc) kolom gevonden."
         return result
     
+    # Check of data al gecorrigeerd is (GEF quantity 14 = gecorrigeerde conusweerstand)
+    if df.attrs.get("is_qt_corrected", False):
+        result["message"] = "ℹ️ Conusweerstand is al gecorrigeerd voor conus area (quantity 14 / qt). Poriedrukcorrectie wordt overgeslagen in Stap 2."
+        result["needs_correction"] = False
+        return result
+    
     if not result["has_u2"]:
         result["message"] = "⚠️ Geen poriedruk (u2) kolom gevonden. Kan correctie niet controleren."
         result["needs_correction"] = True
@@ -321,6 +333,7 @@ def render():
                     "df": df,
                     "col_mapping": col_mapping,
                     "poriedruk_check": poriedruk_check,
+                    "is_qt_corrected": df.attrs.get("is_qt_corrected", False),
                 }
                 
                 if has_diepte and has_qc:

@@ -114,6 +114,73 @@ def bereken_sigma_v0_per_laag(diepte: pd.Series, lagen: list, kruinniveau: float
     )
 
 
+# ── Default volumegewicht per Robertson zone (kN/m³) ──
+ROBERTSON_GAMMA_DEFAULTS = {
+    1: 16.0,   # Gevoelig fijnkorrelig
+    2: 10.5,   # Organisch (veen)
+    3: 15.0,   # Klei (slap)
+    4: 14.0,   # Klei tot silt (humeus)
+    5: 17.0,   # Silt tot zandige klei
+    6: 18.0,   # Zand tot kleiig zand
+    7: 19.0,   # Zand tot zandig gravel
+    8: 20.0,   # Zand (dicht)
+    9: 18.5,   # Stijf fijnkorrelig
+}
+
+# Robertson zone → zoekpatroon in uitgangspunten lagennaam
+ROBERTSON_LAAG_MAPPING = {
+    1: "Klei_diep",
+    2: "Veen",
+    3: "Dijksmateriaal klei",
+    4: "Klei_humeus",
+    5: "Klei_siltig",
+    6: "Klei_zandig",
+    7: "zand",
+    8: "zand",
+    9: "Klei_diep",
+}
+
+
+def robertson_zone_naar_gamma(zone: int, lagen: list) -> float:
+    """Koppel Robertson zone aan volumegewicht uit uitgangspunten lagen."""
+    pattern = ROBERTSON_LAAG_MAPPING.get(zone, "")
+    if pattern:
+        for laag in lagen:
+            if pattern.lower() in laag["naam"].lower():
+                return laag.get("gamma_nat", ROBERTSON_GAMMA_DEFAULTS.get(zone, 18.0))
+    return ROBERTSON_GAMMA_DEFAULTS.get(zone, 18.0)
+
+
+def bereken_sigma_v0_met_robertson(
+    diepte: pd.Series, robertson_zones: pd.Series,
+    lagen: list, kruinniveau: float, gwl_nap: float
+) -> tuple:
+    """
+    Herbereken σv0 met volumegewicht per meetpunt afgeleid uit Robertson classificatie.
+    Gebruikt uitgangspunten-lagen om gamma per Robertson zone te bepalen.
+    """
+    gamma_w = 9.81
+    gwl_depth = kruinniveau - gwl_nap
+
+    d = diepte.values.astype(float)
+    zones = robertson_zones.values.astype(int)
+
+    gamma_profile = np.array([robertson_zone_naar_gamma(int(z), lagen) for z in zones])
+
+    dz = np.diff(d, prepend=0.0)
+    dz[0] = d[0]
+    sigma_v0 = np.cumsum(gamma_profile * dz)
+
+    u0 = np.maximum(0.0, (d - gwl_depth)) * gamma_w
+    sigma_v0_eff = np.maximum(0.0, sigma_v0 - u0)
+
+    return (
+        pd.Series(sigma_v0, index=diepte.index),
+        pd.Series(sigma_v0_eff, index=diepte.index),
+        pd.Series(u0, index=diepte.index),
+    )
+
+
 def render():
     st.caption("Stap 2 — Poriedrukcorrectie qt, spanningen σv0, Rf & Bq")
     
@@ -235,8 +302,15 @@ def render():
                 df["sigma_v0_eff"] = sigma_v0_eff / 1000
                 df["u0"] = u0 / 1000
                 
-                # Qt correctie
-                if cm.get("u2") and cm["u2"] in df.columns:
+                # Qt correctie — check of data al gecorrigeerd is
+                is_qt_corrected = st.session_state.sonderingen[name].get("is_qt_corrected", False)
+                
+                if is_qt_corrected:
+                    df["qt"] = qc  # Data bevat al qt (quantity 14), geen dubbele correctie
+                    if cm.get("u2") and cm["u2"] in df.columns:
+                        df["Bq"] = bereken_Bq(df[cm["u2"]], df["u0"], df["qt"], df["sigma_v0"])
+                    resultaten.append({"Sondering": name, "Status": "✅ Verwerkt", "qt correctie": "Al gecorrigeerd (qty 14)", "Metingen": len(df)})
+                elif cm.get("u2") and cm["u2"] in df.columns:
                     u2 = df[cm["u2"]]
                     df["qt"] = bereken_qt(qc, u2, a_factor)
                     df["Bq"] = bereken_Bq(u2, df["u0"], df["qt"], df["sigma_v0"])
