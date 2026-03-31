@@ -29,18 +29,18 @@ body, p, label, h1, h2, h3, h4, h5, h6, div, input, button, select, textarea, td
     content: "\\203A" !important;
     font-size: 1.4rem !important;
     font-family: 'Inter', sans-serif !important;
-    color: #94a3b8 !important;
+    color: #78909c !important;
     line-height: 1 !important;
 }
 
-/* === DARK THEME === */
-[data-testid="stAppViewContainer"] { background: #0a0e1a; color: #e2e8f0; }
+/* === DARK BLUE/BLACK THEME === */
+[data-testid="stAppViewContainer"] { background: #04080f; color: #e3f2fd; }
 [data-testid="stAppViewContainer"] p, [data-testid="stAppViewContainer"] li,
 [data-testid="stAppViewContainer"] span:not([data-testid="stExpanderToggleIcon"]),
-[data-testid="stAppViewContainer"] label { color: #cbd5e1 !important; }
+[data-testid="stAppViewContainer"] label { color: #bbdefb !important; }
 [data-testid="stAppViewContainer"] h1, [data-testid="stAppViewContainer"] h2,
-[data-testid="stAppViewContainer"] h3, [data-testid="stAppViewContainer"] h4 { color: #f1f5f9 !important; }
-[data-testid="stHeader"] { background: rgba(10, 14, 26, 0.9) !important; backdrop-filter: blur(10px); }
+[data-testid="stAppViewContainer"] h3, [data-testid="stAppViewContainer"] h4 { color: #e3f2fd !important; }
+[data-testid="stHeader"] { background: rgba(4, 8, 15, 0.92) !important; backdrop-filter: blur(10px); }
 
 /* Hide sidebar */
 [data-testid="stSidebar"] { display: none !important; }
@@ -52,23 +52,23 @@ body, p, label, h1, h2, h3, h4, h5, h6, div, input, button, select, textarea, td
 /* === HORIZONTAL RADIO as pill nav === */
 [data-testid="stRadio"] > div { gap: 0 !important; }
 [data-testid="stRadio"] [role="radiogroup"] {
-    gap: 3px !important; background: rgba(15, 23, 42, 0.8);
-    border-radius: 12px; padding: 3px; border: 1px solid rgba(99, 102, 241, 0.12);
+    gap: 3px !important; background: rgba(6, 17, 38, 0.85);
+    border-radius: 12px; padding: 3px; border: 1px solid rgba(30, 136, 229, 0.15);
     backdrop-filter: blur(12px);
 }
 [data-testid="stRadio"] [role="radiogroup"] label {
     border-radius: 9px !important; padding: 6px 12px !important;
     margin: 0 !important; font-size: 0.78rem !important; font-weight: 500;
-    color: #64748b !important; transition: all 0.2s ease;
+    color: #546e7a !important; transition: all 0.2s ease;
     white-space: nowrap;
 }
 [data-testid="stRadio"] [role="radiogroup"] label:hover {
-    background: rgba(99, 102, 241, 0.1) !important; color: #a5b4fc !important;
+    background: rgba(30, 136, 229, 0.12) !important; color: #90caf9 !important;
 }
 [data-testid="stRadio"] [role="radiogroup"] label[data-checked="true"],
 [data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
-    color: white !important; box-shadow: 0 2px 10px rgba(99, 102, 241, 0.3);
+    background: linear-gradient(135deg, #0d47a1, #1e88e5) !important;
+    color: white !important; box-shadow: 0 2px 10px rgba(30, 136, 229, 0.35);
 }
 /* Hide radio circles */
 [data-testid="stRadio"] [role="radiogroup"] label > div:first-child { display: none !important; }
@@ -76,13 +76,13 @@ body, p, label, h1, h2, h3, h4, h5, h6, div, input, button, select, textarea, td
 
 /* === WHY CARD === */
 .why-card {
-    background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(99, 102, 241, 0.15);
+    background: rgba(8, 22, 48, 0.6); border: 1px solid rgba(30, 136, 229, 0.18);
     border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 1rem;
-    border-left: 3px solid #6366f1;
+    border-left: 3px solid #1e88e5;
 }
-.why-card h4 { color: #818cf8 !important; font-size: 0.82rem; font-weight: 700;
+.why-card h4 { color: #64b5f6 !important; font-size: 0.82rem; font-weight: 700;
     margin: 0 0 0.4rem 0; text-transform: uppercase; letter-spacing: 0.05em; }
-.why-card p { color: #cbd5e1 !important; font-size: 0.85rem; line-height: 1.5; margin: 0 0 0.3rem 0; }
+.why-card p { color: #bbdefb !important; font-size: 0.85rem; line-height: 1.5; margin: 0 0 0.3rem 0; }
 
 /* === NEXT-STEP === */
 .next-step {
@@ -96,75 +96,75 @@ body, p, label, h1, h2, h3, h4, h5, h6, div, input, button, select, textarea, td
 
 /* === METRIC CARDS === */
 [data-testid="stMetric"] {
-    background: rgba(30, 41, 59, 0.5) !important;
-    border: 1px solid rgba(99, 102, 241, 0.15); border-radius: 12px;
-    padding: 14px 18px; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+    background: rgba(8, 22, 48, 0.55) !important;
+    border: 1px solid rgba(30, 136, 229, 0.18); border-radius: 12px;
+    padding: 14px 18px; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
 }
-[data-testid="stMetric"] label { color: #818cf8 !important; font-size: 0.7rem !important;
+[data-testid="stMetric"] label { color: #64b5f6 !important; font-size: 0.7rem !important;
     font-weight: 600 !important; text-transform: uppercase; letter-spacing: 0.08em; }
-[data-testid="stMetric"] [data-testid="stMetricValue"] { color: #f1f5f9 !important;
+[data-testid="stMetric"] [data-testid="stMetricValue"] { color: #e3f2fd !important;
     font-weight: 800 !important; font-size: 1.4rem !important; }
 
 /* === TABS === */
 [data-testid="stTabs"] [data-baseweb="tab-list"] {
-    gap: 2px; background: rgba(30, 41, 59, 0.4); border-radius: 12px;
-    padding: 3px; border: 1px solid rgba(99, 102, 241, 0.12);
+    gap: 2px; background: rgba(8, 22, 48, 0.45); border-radius: 12px;
+    padding: 3px; border: 1px solid rgba(30, 136, 229, 0.15);
 }
 [data-testid="stTabs"] [data-baseweb="tab"] { border-radius: 9px !important;
-    font-weight: 500; padding: 8px 16px; color: #94a3b8 !important; font-size: 0.85rem; }
+    font-weight: 500; padding: 8px 16px; color: #78909c !important; font-size: 0.85rem; }
 [data-testid="stTabs"] [aria-selected="true"] {
-    background: rgba(99, 102, 241, 0.18) !important; color: #c7d2fe !important; }
+    background: rgba(30, 136, 229, 0.2) !important; color: #90caf9 !important; }
 
 /* === EXPANDERS === */
-[data-testid="stExpander"] { background: rgba(30, 41, 59, 0.35) !important;
-    border: 1px solid rgba(99, 102, 241, 0.12) !important; border-radius: 12px !important; }
-[data-testid="stExpander"] summary { font-weight: 600; color: #c7d2fe !important; }
-[data-testid="stExpander"] summary > span:not([data-testid="stExpanderToggleIcon"]) { color: #c7d2fe !important; }
+[data-testid="stExpander"] { background: rgba(8, 22, 48, 0.4) !important;
+    border: 1px solid rgba(30, 136, 229, 0.15) !important; border-radius: 12px !important; }
+[data-testid="stExpander"] summary { font-weight: 600; color: #90caf9 !important; }
+[data-testid="stExpander"] summary > span:not([data-testid="stExpanderToggleIcon"]) { color: #90caf9 !important; }
 
 /* === BUTTONS === */
 .stButton > button { border-radius: 10px !important; font-weight: 600;
     padding: 0.55rem 1.5rem; transition: all 0.2s ease; border: none !important; }
 .stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
-    color: white !important; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3); }
+    background: linear-gradient(135deg, #0d47a1 0%, #1e88e5 100%) !important;
+    color: white !important; box-shadow: 0 4px 15px rgba(30, 136, 229, 0.35); }
 .stButton > button:hover { transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35) !important; }
+    box-shadow: 0 6px 20px rgba(30, 136, 229, 0.4) !important; }
 
 /* === DATAFRAMES === */
 [data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden;
-    border: 1px solid rgba(99, 102, 241, 0.12); }
+    border: 1px solid rgba(30, 136, 229, 0.15); }
 
 /* === FILE UPLOADER === */
-[data-testid="stFileUploader"] { background: rgba(30, 41, 59, 0.25);
-    border: 2px dashed rgba(99, 102, 241, 0.25) !important; border-radius: 12px; padding: 0.8rem; }
-[data-testid="stFileUploader"]:hover { border-color: rgba(99, 102, 241, 0.5) !important; }
+[data-testid="stFileUploader"] { background: rgba(8, 22, 48, 0.3);
+    border: 2px dashed rgba(30, 136, 229, 0.28) !important; border-radius: 12px; padding: 0.8rem; }
+[data-testid="stFileUploader"]:hover { border-color: rgba(30, 136, 229, 0.55) !important; }
 
 /* === INPUTS === */
 [data-testid="stSelectbox"] > div > div, [data-testid="stNumberInput"] > div > div > input,
 [data-testid="stTextInput"] > div > div > input {
-    background: rgba(30, 41, 59, 0.5) !important; border: 1px solid rgba(99, 102, 241, 0.15) !important;
-    border-radius: 8px !important; color: #e2e8f0 !important; }
+    background: rgba(8, 22, 48, 0.55) !important; border: 1px solid rgba(30, 136, 229, 0.18) !important;
+    border-radius: 8px !important; color: #e3f2fd !important; }
 [data-testid="stNumberInput"] label, [data-testid="stSelectbox"] label,
 [data-testid="stTextInput"] label, [data-testid="stFileUploader"] label {
-    color: #a5b4fc !important; font-weight: 500; font-size: 0.85rem; }
+    color: #90caf9 !important; font-weight: 500; font-size: 0.85rem; }
 
 /* === ALERTS === */
 [data-testid="stAlert"] { border-radius: 10px !important; border: none !important; }
 
 /* === TABLES === */
-[data-testid="stAppViewContainer"] table { background: rgba(30, 41, 59, 0.35);
+[data-testid="stAppViewContainer"] table { background: rgba(8, 22, 48, 0.4);
     border-radius: 10px; overflow: hidden; border-collapse: collapse; width: 100%; }
-[data-testid="stAppViewContainer"] th { background: rgba(99, 102, 241, 0.12) !important;
-    color: #c7d2fe !important; padding: 8px 12px; font-weight: 600; font-size: 0.82rem;
-    border-bottom: 1px solid rgba(99, 102, 241, 0.15); }
-[data-testid="stAppViewContainer"] td { color: #cbd5e1 !important; padding: 7px 12px;
-    border-bottom: 1px solid rgba(99, 102, 241, 0.06); font-size: 0.85rem; }
+[data-testid="stAppViewContainer"] th { background: rgba(30, 136, 229, 0.14) !important;
+    color: #90caf9 !important; padding: 8px 12px; font-weight: 600; font-size: 0.82rem;
+    border-bottom: 1px solid rgba(30, 136, 229, 0.18); }
+[data-testid="stAppViewContainer"] td { color: #bbdefb !important; padding: 7px 12px;
+    border-bottom: 1px solid rgba(30, 136, 229, 0.08); font-size: 0.85rem; }
 
 /* === DIVIDERS & SCROLLBAR === */
-[data-testid="stAppViewContainer"] hr { border-color: rgba(99, 102, 241, 0.1) !important; margin: 0.8rem 0; }
+[data-testid="stAppViewContainer"] hr { border-color: rgba(30, 136, 229, 0.12) !important; margin: 0.8rem 0; }
 ::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: #0a0e1a; }
-::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+::-webkit-scrollbar-track { background: #04080f; }
+::-webkit-scrollbar-thumb { background: #1a3a5c; border-radius: 3px; }
 
 /* Reduce subheader margins */
 [data-testid="stAppViewContainer"] h2 { margin-top: 0.5rem !important; margin-bottom: 0.3rem !important; font-size: 1.1rem !important; }
@@ -185,14 +185,14 @@ if not st.session_state.authenticated:
         st.markdown("""
         <div style="text-align: center; margin-bottom: 2rem;">
             <div style="font-size: 4rem; margin-bottom: 0.5rem; 
-                 filter: drop-shadow(0 0 20px rgba(99, 102, 241, 0.5));">🔬</div>
+                 filter: drop-shadow(0 0 20px rgba(30, 136, 229, 0.5));">🔬</div>
             <h1 style="font-size: 2rem; font-weight: 800; 
-                 background: linear-gradient(135deg, #c7d2fe, #818cf8);
+                 background: linear-gradient(135deg, #90caf9, #1e88e5);
                  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
                  margin-bottom: 0.3rem;">
                 CPT Su Tool
             </h1>
-            <p style="color: #64748b; font-size: 0.95rem;">
+            <p style="color: #546e7a; font-size: 0.95rem;">
                 HHSK Dijkversterking — Traject 14-1
             </p>
         </div>
@@ -264,9 +264,9 @@ nav_left, nav_mid, nav_right = st.columns([1.5, 8, 1.5])
 with nav_left:
     st.markdown(f"""
     <div style="display:flex; align-items:center; gap:8px; padding:4px 0;">
-        <span style="font-size:1.3rem; filter:drop-shadow(0 0 8px rgba(99,102,241,0.5));">🔬</span>
+        <span style="font-size:1.3rem; filter:drop-shadow(0 0 8px rgba(30,136,229,0.5));">🔬</span>
         <span style="font-weight:800; font-size:0.9rem;
-            background:linear-gradient(135deg,#c7d2fe,#818cf8);
+            background:linear-gradient(135deg,#90caf9,#1e88e5);
             -webkit-background-clip:text; -webkit-text-fill-color:transparent;">CPT Su Tool</span>
     </div>
     """, unsafe_allow_html=True)
@@ -285,12 +285,12 @@ with nav_right:
     st.markdown(f"""
     <div style="display:flex; gap:16px; justify-content:flex-end; padding:6px 0;">
         <div style="text-align:center;">
-            <div style="font-size:1.1rem; font-weight:800; color:#c7d2fe;">{n_sond}</div>
-            <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase; letter-spacing:0.08em;">CPT's</div>
+            <div style="font-size:1.1rem; font-weight:800; color:#90caf9;">{n_sond}</div>
+            <div style="font-size:0.55rem; color:#546e7a; text-transform:uppercase; letter-spacing:0.08em;">CPT's</div>
         </div>
         <div style="text-align:center;">
-            <div style="font-size:1.1rem; font-weight:800; color:#c7d2fe;">{su_count}</div>
-            <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase; letter-spacing:0.08em;">Su</div>
+            <div style="font-size:1.1rem; font-weight:800; color:#90caf9;">{su_count}</div>
+            <div style="font-size:0.55rem; color:#546e7a; text-transform:uppercase; letter-spacing:0.08em;">Su</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
