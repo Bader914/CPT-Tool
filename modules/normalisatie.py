@@ -424,9 +424,10 @@ def render():
             # Voeg GWS lijn toe
             params = data.get("parameters", {})
             gwl_val = params.get("gwl", default_gwl)
-            for col_idx in [1, 2, 3]:
-                fig.add_hline(y=gwl_val, line=dict(color="cyan", dash="dash", width=1), 
-                             annotation_text="GWS" if col_idx == 1 else None, row=1, col=col_idx)
+            fig.add_hline(y=gwl_val, line=dict(color="cyan", dash="dash", width=1), 
+                         annotation_text="GWS", row=1, col=1)
+            for col_idx in [2, 3]:
+                fig.add_hline(y=gwl_val, line=dict(color="cyan", dash="dash", width=1), row=1, col=col_idx)
             
             st.plotly_chart(fig, use_container_width=True)
             
