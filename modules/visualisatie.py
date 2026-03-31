@@ -49,18 +49,18 @@ def render():
             for name, data in su_berekend.items():
                 df = data["df"]
                 cm = data["col_mapping"]
-                diepte = df[cm["diepte"]]
+                diepte_nap = df["diepte_nap"] if "diepte_nap" in df.columns else df[cm["diepte"]]
                 su_valid = df["Su"].notna()
                 
                 if su_valid.any():
                     fig.add_trace(go.Scatter(
-                        x=df.loc[su_valid, "Su"], y=diepte[su_valid],
+                        x=df.loc[su_valid, "Su"], y=diepte_nap[su_valid],
                         mode="lines", name=name, opacity=0.6
                     ))
                     
                     for _, row in df.loc[su_valid].iterrows():
                         all_su_data.append({
-                            "diepte": row[cm["diepte"]],
+                            "diepte_nap": row["diepte_nap"] if "diepte_nap" in row.index else row[cm["diepte"]],
                             "Su": row["Su"],
                             "sondering": name
                         })
@@ -68,14 +68,14 @@ def render():
             # Gemiddelde en bandbreedte
             if all_su_data and (show_mean or show_envelope):
                 all_df = pd.DataFrame(all_su_data)
-                # Bin op diepte
-                all_df["diepte_bin"] = (all_df["diepte"] * 2).round() / 2  # 0.5m bins
-                stats = all_df.groupby("diepte_bin")["Su"].agg(["mean", "std", "count"]).reset_index()
+                # Bin op NAP-niveau
+                all_df["nap_bin"] = (all_df["diepte_nap"] * 2).round() / 2  # 0.5m bins
+                stats = all_df.groupby("nap_bin")["Su"].agg(["mean", "std", "count"]).reset_index()
                 stats = stats[stats["count"] >= 2]  # Minimaal 2 sonderingen
                 
                 if show_mean and not stats.empty:
                     fig.add_trace(go.Scatter(
-                        x=stats["mean"], y=stats["diepte_bin"],
+                        x=stats["mean"], y=stats["nap_bin"],
                         name="Gemiddelde Su",
                         line=dict(color="black", width=3)
                     ))
@@ -85,11 +85,11 @@ def render():
                     su_lower = (stats["mean"] - stats["std"]).clip(lower=0)
                     
                     fig.add_trace(go.Scatter(
-                        x=su_upper, y=stats["diepte_bin"],
+                        x=su_upper, y=stats["nap_bin"],
                         name="+1σ", line=dict(color="gray", dash="dot"), showlegend=False
                     ))
                     fig.add_trace(go.Scatter(
-                        x=su_lower, y=stats["diepte_bin"],
+                        x=su_lower, y=stats["nap_bin"],
                         name="-1σ", line=dict(color="gray", dash="dot"),
                         fill="tonextx", fillcolor="rgba(128,128,128,0.1)", showlegend=False
                     ))
@@ -107,7 +107,7 @@ def render():
             
             fig.update_layout(
                 title="Su Profielen — Totaaloverzicht",
-                yaxis=dict(autorange="reversed", title="Diepte [m]"),
+                yaxis=dict(title="Niveau [m NAP]"),
                 xaxis=dict(title="Su [kPa]"),
                 height=800,
                 template="plotly_white",
@@ -190,6 +190,8 @@ def render():
             export_cols["Sondering"] = name
             if cm.get("diepte") and cm["diepte"] in df.columns:
                 export_cols["Diepte [m]"] = df[cm["diepte"]]
+            if "diepte_nap" in df.columns:
+                export_cols["Niveau [m NAP]"] = df["diepte_nap"]
             if cm.get("qc") and cm["qc"] in df.columns:
                 export_cols["qc [MPa]"] = df[cm["qc"]]
             if "qt" in df.columns:

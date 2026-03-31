@@ -145,12 +145,14 @@ def render():
             
             # Herbereken σv0 met volumegewicht uit Robertson classificatie
             params = st.session_state.sonderingen[name].get("parameters", {})
-            kruin = params.get("kruinniveau", up.get("dijkopbouw", {}).get("kruinniveau", 4.0))
+            mv_nap = params.get("maaiveld_nap", st.session_state.sonderingen[name].get("maaiveld_nap", up.get("dijkopbouw", {}).get("kruinniveau", 4.0)))
             gwl_val = params.get("gwl", up.get("dijkopbouw", {}).get("gwl", 0.0))
             
             sigma_v0_new, sigma_v0_eff_new, u0_new = bereken_sigma_v0_met_robertson(
-                df[cm["diepte"]], df["robertson_zone"], lagen, kruin, gwl_val
+                df[cm["diepte"]], df["robertson_zone"], lagen, mv_nap, gwl_val
             )
+            # Update diepte_nap na herberekening
+            df["diepte_nap"] = mv_nap - df[cm["diepte"]]
             df["sigma_v0"] = sigma_v0_new / 1000  # kPa → MPa
             df["sigma_v0_eff"] = sigma_v0_eff_new / 1000
             df["u0"] = u0_new / 1000
@@ -204,7 +206,7 @@ def render():
         data = geclassificeerd[selected]
         df = data["df"]
         cm = data["col_mapping"]
-        diepte = df[cm["diepte"]]
+        diepte_nap = df["diepte_nap"] if "diepte_nap" in df.columns else df[cm["diepte"]]
         
         col1, col2 = st.columns([2, 1])
         
@@ -217,7 +219,7 @@ def render():
                 if mask.any():
                     fig.add_trace(go.Scatter(
                         x=df.loc[mask, "qt"],
-                        y=diepte[mask],
+                        y=diepte_nap[mask],
                         mode="markers",
                         name=zone_info["naam"],
                         marker=dict(color=zone_info["kleur"], size=4),
@@ -225,7 +227,7 @@ def render():
             
             fig.update_layout(
                 title=f"Classificatie: {selected}",
-                yaxis=dict(autorange="reversed", title="Diepte [m]"),
+                yaxis=dict(title="Niveau [m NAP]"),
                 xaxis=dict(title="qt [MPa]"),
                 height=700,
                 template="plotly_white",
@@ -326,7 +328,7 @@ def render():
                 continue
             
             df_dijk = df[mask]
-            diepte = df_dijk[diepte_col]
+            diepte = df_dijk["diepte_nap"] if "diepte_nap" in df_dijk.columns else df_dijk[diepte_col]
             
             if param_col.startswith("Qt") and "Qt" in df_dijk.columns:
                 x_vals = df_dijk["Qt"]
@@ -350,7 +352,7 @@ def render():
         
         fig.update_layout(
             title="Overzicht Dijktraject — Dijkmateriaal",
-            yaxis=dict(autorange="reversed", title="Diepte [m NAP]"),
+            yaxis=dict(title="Niveau [m NAP]"),
             xaxis=dict(title=x_title if 'x_title' in dir() else "qt [MPa]"),
             height=700,
             template="plotly_white",

@@ -25,11 +25,21 @@ def parse_gef(file_content: str) -> pd.DataFrame:
     data_start = 0
     column_separator = None
     gef_type = None
+    zid_value = None        # Maaiveldniveau [m NAP] uit #ZID
     
     for i, line in enumerate(lines):
         line = line.strip()
         
-        if line.startswith("#COLUMNINFO"):
+        if line.startswith("#ZID"):
+            # Format: #ZID = ref_system, z_value  (z_value = maaiveld in m NAP)
+            parts = line.split("=", 1)[1].strip().split(",")
+            if len(parts) >= 2:
+                try:
+                    zid_value = float(parts[1].strip())
+                except (ValueError, IndexError):
+                    pass
+        
+        elif line.startswith("#COLUMNINFO"):
             # Format: #COLUMNINFO = col_nr, unit, name, quantity_nr
             parts = line.split("=", 1)[1].strip().split(",")
             if len(parts) >= 3:
@@ -112,6 +122,7 @@ def parse_gef(file_content: str) -> pd.DataFrame:
     df.attrs["gef_column_info"] = column_info
     df.attrs["gef_column_units"] = column_units
     df.attrs["gef_type"] = gef_type
+    df.attrs["maaiveld_nap"] = zid_value  # None als niet gevonden
     
     return df
 
@@ -329,11 +340,14 @@ def render():
                 has_diepte = col_mapping["diepte"] is not None
                 has_qc = col_mapping["qc"] is not None
                 
+                maaiveld_nap = df.attrs.get("maaiveld_nap", None)
+                
                 st.session_state.sonderingen[f.name] = {
                     "df": df,
                     "col_mapping": col_mapping,
                     "poriedruk_check": poriedruk_check,
                     "is_qt_corrected": df.attrs.get("is_qt_corrected", False),
+                    "maaiveld_nap": maaiveld_nap,
                 }
                 
                 if has_diepte and has_qc:
@@ -404,9 +418,13 @@ def render():
             
             status = "✅ Gereed" if (cm["diepte"] and cm["qc"]) else "⚠️ Kolom mapping nodig"
             
+            mv_nap = data.get("maaiveld_nap")
+            mv_str = f"NAP {mv_nap:+.2f}m" if mv_nap is not None else "⚠️ Onbekend"
+            
             overview_data.append({
                 "Sondering": name,
                 "Status": status,
+                "Maaiveld": mv_str,
                 "Metingen": len(df),
                 "Dieptebereik": depth_range,
                 "qc": f"✅ {cm['qc']}" if cm["qc"] else "❌ Niet gevonden",
@@ -436,11 +454,40 @@ def render():
                     f"Selecteer de juiste kolommen hieronder bij 'Kolom Mapping'."
                 )
             
-            tab1, tab2 = st.tabs(["📋 Data Preview", "🔧 Kolom Mapping"])
+            tab1, tab2, tab3 = st.tabs(["📋 Data Preview", "🔧 Kolom Mapping", "📏 Referentieniveau"])
             
             with tab1:
                 st.caption(f"Eerste 30 rijen van {len(df)} totaal — Kolommen: {list(df.columns)}")
                 st.dataframe(df.head(30), use_container_width=True)
+            
+            with tab3:
+                st.markdown("""
+                **Maaiveldniveau (m NAP)** — het niveau waarop de sondering is gestart.  
+                Dit wordt uit de GEF-header (`#ZID`) gelezen. Controleer en pas aan indien nodig.  
+                Het maaiveldniveau is cruciaal voor de juiste σv0-berekening en laagkoppeling.
+                """)
+                
+                current_mv = data.get("maaiveld_nap")
+                gef_mv = df.attrs.get("maaiveld_nap", None) if hasattr(df, 'attrs') else None
+                
+                if gef_mv is not None:
+                    st.info(f"ℹ️ Uit GEF-header: maaiveld = NAP {gef_mv:+.2f}m")
+                else:
+                    st.warning("⚠️ Geen maaiveldniveau gevonden in GEF-header (#ZID). Vul handmatig in.")
+                
+                new_mv = st.number_input(
+                    "Maaiveld [m NAP]",
+                    min_value=-10.0, max_value=20.0,
+                    value=float(current_mv) if current_mv is not None else 0.0,
+                    step=0.01, format="%.2f",
+                    key=f"mv_{selected}",
+                    help="Het hoogte-niveau (m NAP) waar de sondering start. Sondeerlengte 0m = dit niveau."
+                )
+                
+                if st.button("💾 Maaiveld opslaan", key=f"save_mv_{selected}", type="primary"):
+                    st.session_state.sonderingen[selected]["maaiveld_nap"] = new_mv
+                    st.success(f"✅ Maaiveld voor **{selected}** ingesteld op NAP {new_mv:+.2f}m")
+                    st.rerun()
             
             with tab2:
                 st.markdown("""

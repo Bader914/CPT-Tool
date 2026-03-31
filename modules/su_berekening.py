@@ -134,9 +134,8 @@ def render():
             
             # Dijksmateriaal klei: onderscheid boven/onder GWS → Nkt 7a / 7b
             gwl = up.get("dijkopbouw", {}).get("gwl", 0.0)
-            diepte_col = cm.get("diepte")
-            if diepte_col and diepte_col in df.columns:
-                diepte_su = df[diepte_col]
+            nap_col = "diepte_nap" if "diepte_nap" in df.columns else None
+            if nap_col:
                 dijkmat_flag = df.get("is_dijkmateriaal", pd.Series([False]*len(df), index=df.index))
                 if isinstance(dijkmat_flag, pd.Series):
                     dijkmat_flag = dijkmat_flag.fillna(False).astype(bool)
@@ -144,8 +143,8 @@ def render():
                 niet_veen = df.get("robertson_zone", pd.Series(dtype=int)) != 2
                 klei_dijkmat = dijkmat_flag & niet_veen
                 if klei_dijkmat.any():
-                    df.loc[klei_dijkmat & (diepte_su > gwl), "Nkt_gebruikt"] = nkt_dijkmat_boven   # 7a
-                    df.loc[klei_dijkmat & (diepte_su <= gwl), "Nkt_gebruikt"] = nkt_dijkmat_onder  # 7b
+                    df.loc[klei_dijkmat & (df[nap_col] > gwl), "Nkt_gebruikt"] = nkt_dijkmat_boven   # 7a boven GWS
+                    df.loc[klei_dijkmat & (df[nap_col] <= gwl), "Nkt_gebruikt"] = nkt_dijkmat_onder  # 7b onder GWS
             
             # Bereken Su alleen voor dijkmateriaal (fijnkorrelig)
             dijkmat_mask = df.get("is_dijkmateriaal", pd.Series([True] * len(df), index=df.index))
@@ -183,7 +182,7 @@ def render():
             data = su_berekend[selected]
             df = data["df"]
             cm = data["col_mapping"]
-            diepte = df[cm["diepte"]]
+            diepte_nap = df["diepte_nap"] if "diepte_nap" in df.columns else df[cm["diepte"]]
             
             # Statistieken bovenaan
             su_data = df["Su"].dropna()
@@ -201,25 +200,23 @@ def render():
                 horizontal_spacing=0.06,
             )
             
-            fig.add_trace(go.Scatter(x=df["qt"], y=diepte, name="qt", 
+            fig.add_trace(go.Scatter(x=df["qt"], y=diepte_nap, name="qt", 
                                      line=dict(color="#3b82f6", width=1.5)), row=1, col=1)
             
             su_valid = df["Su"].notna()
             fig.add_trace(go.Scatter(
-                x=df.loc[su_valid, "Su"], y=diepte[su_valid], 
+                x=df.loc[su_valid, "Su"], y=diepte_nap[su_valid], 
                 name="Su", line=dict(color="#ef4444", width=2.5)
             ), row=1, col=2)
             
             if "Nkt_gebruikt" in df.columns:
                 nkt_valid = df["Nkt_gebruikt"].notna()
                 fig.add_trace(go.Scatter(
-                    x=df.loc[nkt_valid, "Nkt_gebruikt"], y=diepte[nkt_valid],
+                    x=df.loc[nkt_valid, "Nkt_gebruikt"], y=diepte_nap[nkt_valid],
                     name="Nkt", line=dict(color="#64748b", width=1), mode="lines"
                 ), row=1, col=3)
             
-            for col_idx in [1, 2, 3]:
-                fig.update_yaxes(autorange="reversed", row=1, col=col_idx)
-            fig.update_yaxes(title_text="Diepte [m]", row=1, col=1)
+            fig.update_yaxes(title_text="Niveau [m NAP]", row=1, col=1)
             fig.update_layout(
                 height=700, template="plotly_white", 
                 title=f"Su Profiel — {selected}",
@@ -245,19 +242,19 @@ def render():
         for i, (name, data) in enumerate(su_berekend.items()):
             df = data["df"]
             cm = data["col_mapping"]
-            diepte = df[cm["diepte"]]
+            diepte_nap = df["diepte_nap"] if "diepte_nap" in df.columns else df[cm["diepte"]]
             su_valid = df["Su"].notna()
             
             if su_valid.any():
                 fig.add_trace(go.Scatter(
-                    x=df.loc[su_valid, "Su"], y=diepte[su_valid],
+                    x=df.loc[su_valid, "Su"], y=diepte_nap[su_valid],
                     mode="lines", name=name,
                     line=dict(color=colors[i % len(colors)], width=2)
                 ))
         
         fig.update_layout(
             title="Su Profielen — Alle Sonderingen",
-            yaxis=dict(autorange="reversed", title="Diepte [m]"),
+            yaxis=dict(title="Niveau [m NAP]"),
             xaxis=dict(title="Su [kPa]"),
             height=700,
             template="plotly_white",

@@ -49,15 +49,15 @@ def bereken_Bq(u2: pd.Series, u0: pd.Series, qt: pd.Series, sigma_v0: pd.Series)
     return (u2 - u0) / q_net.replace(0, np.nan)
 
 
-def bereken_sigma_v0_per_laag(diepte: pd.Series, lagen: list, kruinniveau: float, gwl_nap: float) -> tuple:
+def bereken_sigma_v0_per_laag(diepte: pd.Series, lagen: list, maaiveld_nap: float, gwl_nap: float) -> tuple:
     """
     Bereken σv0, σ'v0 en u0 met per-laag volumegewicht uit uitgangspunten.
     Gebruikt gamma_droog boven GWS, gamma_nat onder GWS per grondlaag.
     
     Parameters:
-        diepte: sondeerlengte [m] (positief naar beneden, t.o.v. maaiveld/kruin)
+        diepte: sondeerlengte [m] (positief naar beneden, t.o.v. maaiveld)
         lagen: grondlagen uit uitgangspunten (top_nap, onder_nap, gamma_nat, gamma_droog)
-        kruinniveau: bovenkant dijk [m NAP]
+        maaiveld_nap: maaiveldniveau van de sondering [m NAP]
         gwl_nap: grondwaterstand [m NAP]
     
     Returns:
@@ -66,7 +66,7 @@ def bereken_sigma_v0_per_laag(diepte: pd.Series, lagen: list, kruinniveau: float
         u0: hydrostatische waterspanning [kPa]
     """
     gamma_w = 9.81  # kN/m³
-    gwl_depth = kruinniveau - gwl_nap  # GWS diepte t.o.v. maaiveld [m]
+    gwl_depth = maaiveld_nap - gwl_nap  # GWS diepte t.o.v. maaiveld [m]
     
     # Bouw lagen profiel: converteer NAP → diepte t.o.v. maaiveld
     defined_layers = []
@@ -75,8 +75,8 @@ def bereken_sigma_v0_per_laag(diepte: pd.Series, lagen: list, kruinniveau: float
         onder_nap = laag.get("onder_nap")
         if top_nap is not None and onder_nap is not None:
             defined_layers.append({
-                "top": max(0.0, kruinniveau - top_nap),
-                "bottom": kruinniveau - onder_nap,
+                "top": max(0.0, maaiveld_nap - top_nap),
+                "bottom": maaiveld_nap - onder_nap,
                 "gamma_droog": laag.get("gamma_droog", laag.get("gamma_nat", 18.0)),
                 "gamma_nat": laag.get("gamma_nat", 18.0),
             })
@@ -153,14 +153,14 @@ def robertson_zone_naar_gamma(zone: int, lagen: list) -> float:
 
 def bereken_sigma_v0_met_robertson(
     diepte: pd.Series, robertson_zones: pd.Series,
-    lagen: list, kruinniveau: float, gwl_nap: float
+    lagen: list, maaiveld_nap: float, gwl_nap: float
 ) -> tuple:
     """
     Herbereken σv0 met volumegewicht per meetpunt afgeleid uit Robertson classificatie.
     Gebruikt uitgangspunten-lagen om gamma per Robertson zone te bepalen.
     """
     gamma_w = 9.81
-    gwl_depth = kruinniveau - gwl_nap
+    gwl_depth = maaiveld_nap - gwl_nap
 
     d = diepte.values.astype(float)
     zones = robertson_zones.values.astype(int)
@@ -273,7 +273,7 @@ def render():
                     "Laag": laag["naam"], "γ_droog": laag.get("gamma_droog", "—"),
                     "γ_nat": laag["gamma_nat"], "Positie": pos
                 })
-        st.caption(f"σv0 berekend met per-laag γ uit Uitgangspunten · GWS = NAP {default_gwl:+.1f}m · Kruin = NAP {default_kruin:+.1f}m")
+        st.caption(f"σv0 berekend met per-laag γ uit Uitgangspunten · GWS = NAP {default_gwl:+.1f}m · Maaiveld per sondering (uit GEF of handmatig)")
         st.dataframe(pd.DataFrame(gamma_info), use_container_width=True, hide_index=True, height=200)
     
     # --- Verwerk per sondering ---
@@ -294,9 +294,17 @@ def render():
                 diepte = df[cm["diepte"]]
                 qc = df[cm["qc"]]
                 
-                # Spanningsberekening — per-laag gamma uit uitgangspunten
+                # Maaiveldniveau per sondering (uit GEF of handmatig ingesteld)
+                mv_nap = st.session_state.sonderingen[name].get("maaiveld_nap")
+                if mv_nap is None:
+                    mv_nap = default_kruin  # Fallback naar kruinniveau uit uitgangspunten
+                
+                # Bereken NAP-niveau per meetpunt
+                df["diepte_nap"] = mv_nap - diepte
+                
+                # Spanningsberekening — per-laag gamma, met maaiveld per sondering
                 sigma_v0, sigma_v0_eff, u0 = bereken_sigma_v0_per_laag(
-                    diepte, lagen, default_kruin, gwl
+                    diepte, lagen, mv_nap, gwl
                 )
                 df["sigma_v0"] = sigma_v0 / 1000  # kPa → MPa
                 df["sigma_v0_eff"] = sigma_v0_eff / 1000
@@ -332,7 +340,7 @@ def render():
                 st.session_state.sonderingen[name]["df"] = df
                 st.session_state.sonderingen[name]["genormaliseerd"] = True
                 st.session_state.sonderingen[name]["parameters"] = {
-                    "a": a_factor, "gwl": gwl, "kruinniveau": default_kruin,
+                    "a": a_factor, "gwl": gwl, "maaiveld_nap": mv_nap,
                     "gamma_methode": "per-laag uit uitgangspunten"
                 }
                 
@@ -394,25 +402,31 @@ def render():
             )
             
             diepte = df[cm["diepte"]]
+            diepte_nap = df["diepte_nap"] if "diepte_nap" in df.columns else diepte
             
             # qt
             if "qt" in df.columns:
-                fig.add_trace(go.Scatter(x=df["qt"], y=diepte, name="qt", line=dict(color="#3b82f6", width=1.5)), row=1, col=1)
+                fig.add_trace(go.Scatter(x=df["qt"], y=diepte_nap, name="qt", line=dict(color="#3b82f6", width=1.5)), row=1, col=1)
                 if cm.get("qc"):
-                    fig.add_trace(go.Scatter(x=df[cm["qc"]], y=diepte, name="qc", line=dict(color="#93c5fd", dash="dot", width=1)), row=1, col=1)
+                    fig.add_trace(go.Scatter(x=df[cm["qc"]], y=diepte_nap, name="qc", line=dict(color="#93c5fd", dash="dot", width=1)), row=1, col=1)
             
             # Qt (genormaliseerd)
             if "Qt" in df.columns:
-                fig.add_trace(go.Scatter(x=df["Qt"], y=diepte, name="Qt", line=dict(color="#8b5cf6", width=1.5)), row=1, col=2)
+                fig.add_trace(go.Scatter(x=df["Qt"], y=diepte_nap, name="Qt", line=dict(color="#8b5cf6", width=1.5)), row=1, col=2)
             
             # Rf
             if "Rf" in df.columns:
-                fig.add_trace(go.Scatter(x=df["Rf"], y=diepte, name="Rf", line=dict(color="#ef4444", width=1.5)), row=1, col=3)
+                fig.add_trace(go.Scatter(x=df["Rf"], y=diepte_nap, name="Rf", line=dict(color="#ef4444", width=1.5)), row=1, col=3)
             
-            fig.update_yaxes(autorange="reversed", title_text="Diepte [m]", row=1, col=1)
-            fig.update_yaxes(autorange="reversed", row=1, col=2)
-            fig.update_yaxes(autorange="reversed", row=1, col=3)
+            fig.update_yaxes(title_text="Niveau [m NAP]", row=1, col=1)
             fig.update_layout(height=600, template="plotly_white", showlegend=True)
+            
+            # Voeg GWS lijn toe
+            params = data.get("parameters", {})
+            gwl_val = params.get("gwl", default_gwl)
+            for col_idx in [1, 2, 3]:
+                fig.add_hline(y=gwl_val, line=dict(color="cyan", dash="dash", width=1), 
+                             annotation_text="GWS" if col_idx == 1 else None, row=1, col=col_idx)
             
             st.plotly_chart(fig, use_container_width=True)
             
