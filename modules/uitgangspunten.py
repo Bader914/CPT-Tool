@@ -233,6 +233,14 @@ DEFAULT_UITGANGSPUNTEN = {
         "beschrijving": "Nettoquotient conus (a). Standaard 0.80 voor gangbare elektrische conussen. "
                        "Waarde is afhankelijk van het conustype en moet worden gecontroleerd in het GEF-bestand.",
     },
+    "waterdruk": {
+        "watervoerend_knik_nap": -12.0,
+        "u_top_watervoerend_kpa": 30.0,
+        "gamma_w": 9.81,
+        "toelichting": "u0-verloop heeft een knikpunt bij overgang klei -> watervoerend zandpakket. "
+                       "Boven knik: hydrostatisch vanaf GWS. Onder knik: start bij piezometrische druk "
+                       "van het pakket (u_top_watervoerend), stijgt vervolgens met gamma_w.",
+    },
     "nkt_factoren": {
         "bron": "Tabel 71 — NKT factoren traject 14-1",
         "toelichting": "Nkt-waarden zijn per grondlaag bepaald. Lagen met * zijn default waarden "
@@ -303,12 +311,17 @@ def render():
     
     up = st.session_state.uitgangspunten
     
+    # Migratie: voeg waterdruk-defaults toe als ze ontbreken (oude sessies)
+    if "waterdruk" not in up:
+        up["waterdruk"] = DEFAULT_UITGANGSPUNTEN["waterdruk"].copy()
+
     # === TABS ===
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "🏗️ Dijkopbouw", 
+    tab1, tab2, tab3, tab4, tab_water, tab5, tab6 = st.tabs([
+        "🏗️ Dijkopbouw",
         "💪 Sterkteparameters (Tabel 91)",
         "📐 Conustype & Correctie",
-        "🔢 Nkt-factoren", 
+        "🔢 Nkt-factoren",
+        "💧 Waterdruk (u₀)",
         "📊 Formules & Methode",
         "📝 Samenvatting"
     ])
@@ -610,6 +623,98 @@ def render():
             )
             st.plotly_chart(fig_nkt, use_container_width=True)
     
+    # ─── TAB WATERDRUK: u₀-verloop met knikpunt ───
+    with tab_water:
+        st.caption("u₀ = theoretisch waterdrukverloop, met knikpunt bij watervoerend zandpakket")
+
+        water = up.get("waterdruk", DEFAULT_UITGANGSPUNTEN["waterdruk"])
+
+        col_w1, col_w2 = st.columns([1, 1])
+
+        with col_w1:
+            water["watervoerend_knik_nap"] = st.number_input(
+                "Knikpunt — top watervoerend pakket [m NAP]",
+                value=float(water.get("watervoerend_knik_nap", -12.0)),
+                min_value=-30.0, max_value=5.0, step=0.5,
+                help="NAP-niveau waar de klei overgaat in het watervoerende zandpakket. "
+                     "Boven dit niveau: hydrostatisch u₀. Onder dit niveau: u₀ start bij "
+                     "u_top_watervoerend en stijgt met γ_w."
+            )
+            water["u_top_watervoerend_kpa"] = st.number_input(
+                "Poriedruk bovenin watervoerend pakket [kPa]",
+                value=float(water.get("u_top_watervoerend_kpa", 30.0)),
+                min_value=0.0, max_value=500.0, step=1.0,
+                help="Piezometrische druk van het watervoerend pakket bovenin de zandlaag. "
+                     "Kan lager zijn dan hydrostatisch (wegzakkende druk) of hoger (kwel)."
+            )
+            water["gamma_w"] = st.number_input(
+                "γ_w (water) [kN/m³]",
+                value=float(water.get("gamma_w", 9.81)),
+                min_value=9.0, max_value=10.5, step=0.01,
+                help="Volumegewicht water. Standaard 9.81 kN/m³."
+            )
+
+        with col_w2:
+            # Visualisatie van u0-verloop
+            import numpy as np
+            gwl_nap = up.get("dijkopbouw", {}).get("gwl", 0.0)
+            knik = water["watervoerend_knik_nap"]
+            u_top = water["u_top_watervoerend_kpa"]
+            gamma_w = water["gamma_w"]
+            kruin = up.get("dijkopbouw", {}).get("kruinniveau", 4.0)
+
+            z = np.linspace(kruin, knik - 6.0, 200)
+            u0 = np.where(
+                z > gwl_nap,
+                0.0,
+                np.where(
+                    z > knik,
+                    gamma_w * (gwl_nap - z),
+                    u_top + gamma_w * (knik - z),
+                ),
+            )
+
+            fig_u = go.Figure()
+            fig_u.add_trace(go.Scatter(
+                x=u0, y=z, mode="lines",
+                line=dict(color="#1e88e5", width=2.5),
+                name="u₀ (theoretisch)"
+            ))
+            fig_u.add_hline(y=gwl_nap, line_dash="dot", line_color="#64b5f6",
+                            annotation_text=f"GWS NAP {gwl_nap:+.1f}m",
+                            annotation_position="top right")
+            fig_u.add_hline(y=knik, line_dash="dash", line_color="#ff9800",
+                            annotation_text=f"Knik NAP {knik:+.1f}m",
+                            annotation_position="bottom right")
+            fig_u.update_layout(
+                title="Waterdrukverloop u₀",
+                xaxis=dict(title="u₀ [kPa]"),
+                yaxis=dict(title="Niveau [m NAP]"),
+                height=400,
+                template="plotly_white",
+                showlegend=False,
+            )
+            st.plotly_chart(fig_u, use_container_width=True)
+
+        up["waterdruk"] = water
+
+        st.markdown("---")
+        st.markdown("""
+        **Belangrijk — u₀ is NIET hetzelfde als u₂:**
+
+        - **u₀** = theoretisch waterdrukverloop op basis van GWS, knikpunt en pakketdruk.
+          Wordt gebruikt voor effectieve spanning σ'ᵥ₀ = σᵥ₀ − u₀.
+        - **u₂** = gemeten poriedruk tijdens sondering. Wijkt af in klei
+          (excess pore pressure dissipeert niet binnen meettijd).
+
+        Voor de Su-berekening gebruiken we **altijd u₀**, niet u₂.
+        u₂ wordt alleen gebruikt voor de qt-correctie: qt = qc + (1−a)·u₂.
+
+        **Lokale override per sondering:** in de Classificatie- of Normalisatie-stap kun
+        je per sondering een afwijkend knikpunt-NAP of u_top instellen als de zandlaag
+        of pakketdruk lokaal verschilt.
+        """)
+
     # ─── TAB 4: FORMULES & METHODE ───
     with tab5:
         col_f1, col_f2 = st.columns(2)
@@ -631,6 +736,18 @@ def render():
             | Su | $S_u = q_{net} / N_{kt}$ |
             | SHANSEP | $S_u = S \\cdot \\sigma'_{v0} \\cdot OCR^m$ |
             """)
+
+        st.markdown("---")
+        st.markdown("**u₀-verloop (drie segmenten):**")
+        st.markdown("""
+        | Zone | Formule |
+        |---|---|
+        | boven GWS | $u_0 = 0$ |
+        | GWS → knikpunt (klei) | $u_0 = \\gamma_w \\cdot (z_{GWS} - z_{NAP})$ |
+        | onder knikpunt (zand) | $u_0 = u_{top,watervoerend} + \\gamma_w \\cdot (z_{knik} - z_{NAP})$ |
+
+        **u₀ ≠ u₂**: u₀ is theoretisch (voor σ'), u₂ is gemeten (voor qt-correctie).
+        """)
     
     # ─── TAB 5: SAMENVATTING ───
     with tab6:

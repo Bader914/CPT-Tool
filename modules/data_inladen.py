@@ -454,7 +454,10 @@ def render():
                     f"Selecteer de juiste kolommen hieronder bij 'Kolom Mapping'."
                 )
             
-            tab1, tab2, tab3 = st.tabs(["📋 Data Preview", "🔧 Kolom Mapping", "📏 Referentieniveau"])
+            tab1, tab2, tab3, tab4 = st.tabs([
+                "📋 Data Preview", "🔧 Kolom Mapping",
+                "📏 Referentieniveau", "🪨 Voorboring & Fundering"
+            ])
             
             with tab1:
                 st.caption(f"Eerste 30 rijen van {len(df)} totaal — Kolommen: {list(df.columns)}")
@@ -541,7 +544,79 @@ def render():
                     )
                     st.success("✅ Kolom mapping opgeslagen! Herlaad de pagina om het overzicht bij te werken.")
                     st.rerun()
-        
+
+            with tab4:
+                st.markdown("""
+                **Voorboring & funderingslaag** — bovenste meters van een sondering zijn vaak
+                niet representatief (door wegfundering of vooraf-geboord). Geef hier aan welk
+                deel overgeslagen wordt en welke laag eroverheen ligt.
+                """)
+
+                voorb = st.session_state.sonderingen[selected].get("voorboring", {}) or {}
+                fund = st.session_state.sonderingen[selected].get("funderingslaag", {}) or {}
+
+                col_vb, col_fd = st.columns(2)
+
+                with col_vb:
+                    st.markdown("**🕳️ Voorboring**")
+                    voorboring_actief = st.checkbox(
+                        "Voorboring toepassen",
+                        value=voorb.get("actief", False),
+                        key=f"vb_actief_{selected}",
+                        help="Als ingeschakeld wordt de sondeerdata in het opgegeven dieptebereik genegeerd."
+                    )
+                    voorboring_diepte = st.number_input(
+                        "Voorboring tot [m onder maaiveld]",
+                        value=float(voorb.get("diepte", 0.5)),
+                        min_value=0.0, max_value=10.0, step=0.1,
+                        key=f"vb_diepte_{selected}",
+                        disabled=not voorboring_actief,
+                        help="Sondeerdata van 0 tot deze diepte wordt niet gebruikt voor Su."
+                    )
+
+                with col_fd:
+                    st.markdown("**🧱 Funderingslaag**")
+                    fund_actief = st.checkbox(
+                        "Funderingslaag toepassen",
+                        value=fund.get("actief", False),
+                        key=f"fd_actief_{selected}",
+                        help="Als ingeschakeld wordt deze laag toegevoegd als bovenste laag voor de σᵥ₀-berekening."
+                    )
+                    fund_dikte = st.number_input(
+                        "Dikte [m]",
+                        value=float(fund.get("dikte", 1.5)),
+                        min_value=0.0, max_value=5.0, step=0.1,
+                        key=f"fd_dikte_{selected}",
+                        disabled=not fund_actief,
+                    )
+                    fund_gamma = st.number_input(
+                        "γ [kN/m³]",
+                        value=float(fund.get("gamma", 21.0)),
+                        min_value=10.0, max_value=25.0, step=0.5,
+                        key=f"fd_gamma_{selected}",
+                        disabled=not fund_actief,
+                    )
+                    fund_materiaal = st.text_input(
+                        "Materiaal",
+                        value=fund.get("materiaal", "Puin en zand"),
+                        key=f"fd_mat_{selected}",
+                        disabled=not fund_actief,
+                    )
+
+                if st.button("💾 Voorboring & fundering opslaan", key=f"save_vb_{selected}", type="primary"):
+                    st.session_state.sonderingen[selected]["voorboring"] = {
+                        "actief": voorboring_actief,
+                        "diepte": voorboring_diepte,
+                    }
+                    st.session_state.sonderingen[selected]["funderingslaag"] = {
+                        "actief": fund_actief,
+                        "dikte": fund_dikte,
+                        "gamma": fund_gamma,
+                        "materiaal": fund_materiaal,
+                    }
+                    st.success(f"✅ Voorboring/fundering voor **{selected}** opgeslagen.")
+                    st.rerun()
+
         # --- Verwijder sonderingen ---
         st.markdown("---")
         if st.button("🗑️ Alle sonderingen wissen", type="secondary"):

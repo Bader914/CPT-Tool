@@ -1,18 +1,18 @@
 """
-Module 3: Classificatie & Dijkmateriaal Selectie
-- Robertson classificatie op basis van Qt, Rf, Bq
-- Bepaal grondsoort per laag
-- Selecteer dijkmateriaal zones
-- Koppel eventueel boringinformatie
+Module 3: Classificatie & Handmatige Laagindeling (SHZ-werkwijze)
+- Per sondering laaggrenzen aanwijzen op basis van SHZ-grondlagen
+- Robertson 1990 blijft beschikbaar als visuele achtergrondhint
+- Output: df["grondlaag"] (SHZ-laagnaam) per meetpunt
 """
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from .normalisatie import bereken_sigma_v0_met_robertson
 
 
-# Robertson 1990 classificatie zones (vereenvoudigd)
+# ───────────────────────────────────────────────────────────────
+# Robertson 1990 zones (alleen voor achtergrondhint)
+# ───────────────────────────────────────────────────────────────
 ROBERTSON_ZONES = {
     1: {"naam": "Gevoelige fijnkorrelige grond", "kleur": "#FF6B6B", "type": "fijnkorrelig"},
     2: {"naam": "Organisch materiaal (veen)", "kleur": "#8B4513", "type": "organisch"},
@@ -29,50 +29,90 @@ ROBERTSON_ZONES = {
 def classificeer_robertson(Qt: pd.Series, Rf: pd.Series) -> pd.Series:
     """
     Robertson 1990 classificatie op basis van Qt (genormaliseerd) en Rf.
-    Gebruikt Qt = q_net / σ'v0 (effectieve spanning) zoals berekend in normalisatie.
-    
-    Returns:
-        Series met zone nummers (1-9)
+    Behouden voor compatibiliteit en gebruikt als achtergrondhint als Qt al beschikbaar is.
     """
     zones = pd.Series(index=Qt.index, dtype=int)
-    
-    # Vereenvoudigde classificatie op basis van Qt en Rf
-    zones[(Qt <= 1)] = 2                                    # Organisch/veen
-    zones[(Qt > 1) & (Qt <= 10) & (Rf > 3)] = 3           # Klei (slap)
-    zones[(Qt > 1) & (Qt <= 10) & (Rf <= 3) & (Rf > 1)] = 4  # Klei tot silt
-    zones[(Qt > 10) & (Qt <= 30) & (Rf > 1)] = 5          # Silt tot zandige klei
-    zones[(Qt > 10) & (Qt <= 30) & (Rf <= 1)] = 6         # Zand tot kleiig zand
-    zones[(Qt > 30) & (Qt <= 100) & (Rf <= 1)] = 7        # Zand
-    zones[(Qt > 100)] = 8                                   # Zand (dicht)
-    zones[(Qt > 1) & (Qt <= 10) & (Rf <= 1)] = 1          # Gevoelig
-    zones[(Qt > 30) & (Rf > 1)] = 9                        # Stijf fijnkorrelig
-    
-    zones = zones.fillna(3)  # Default naar klei
-    
+    zones[(Qt <= 1)] = 2
+    zones[(Qt > 1) & (Qt <= 10) & (Rf > 3)] = 3
+    zones[(Qt > 1) & (Qt <= 10) & (Rf <= 3) & (Rf > 1)] = 4
+    zones[(Qt > 10) & (Qt <= 30) & (Rf > 1)] = 5
+    zones[(Qt > 10) & (Qt <= 30) & (Rf <= 1)] = 6
+    zones[(Qt > 30) & (Qt <= 100) & (Rf <= 1)] = 7
+    zones[(Qt > 100)] = 8
+    zones[(Qt > 1) & (Qt <= 10) & (Rf <= 1)] = 1
+    zones[(Qt > 30) & (Rf > 1)] = 9
+    zones = zones.fillna(3)
     return zones.astype(int)
 
 
+def classificeer_simple(qc: pd.Series, Rf: pd.Series) -> pd.Series:
+    """
+    Vereenvoudigde Robertson-achtige zone-bepaling zonder normalisatie.
+    Gebruikt qc [MPa] en Rf [%] direct - geschikt voor achtergrondhint
+    vóór de normalisatie-stap (waar Qt nog niet bestaat).
+    """
+    zones = pd.Series(index=qc.index, dtype="Int64")
+    zones[qc < 0.5] = 2
+    zones[(qc >= 0.5) & (qc < 2.0) & (Rf > 3)] = 3
+    zones[(qc >= 0.5) & (qc < 2.0) & (Rf <= 3) & (Rf > 1)] = 4
+    zones[(qc >= 0.5) & (qc < 2.0) & (Rf <= 1)] = 1
+    zones[(qc >= 2.0) & (qc < 5.0) & (Rf > 1)] = 5
+    zones[(qc >= 2.0) & (qc < 5.0) & (Rf <= 1)] = 6
+    zones[(qc >= 5.0) & (qc < 15.0) & (Rf <= 1)] = 7
+    zones[(qc >= 5.0) & (qc < 15.0) & (Rf > 1)] = 9
+    zones[qc >= 15.0] = 8
+    return zones.fillna(3).astype(int)
+
+
+# ───────────────────────────────────────────────────────────────
+# Handmatige laagtoewijzing
+# ───────────────────────────────────────────────────────────────
+def toewijs_grondlaag(diepte_nap: pd.Series, laaggrenzen: dict) -> pd.Series:
+    """
+    Wijs SHZ-grondlaagnaam toe per meting op basis van NAP-niveau.
+
+    laaggrenzen: dict {laag_naam: {"top_nap": float, "onder_nap": float, ...}}
+    Een meting hoort bij laag X als onder_nap < diepte_nap <= top_nap.
+    """
+    grondlaag = pd.Series("Onbekend", index=diepte_nap.index, dtype=object)
+    # Sorteer op top_nap (hoog → laag); eerste match wint
+    items = [(n, g) for n, g in laaggrenzen.items()
+             if g.get("top_nap") is not None and g.get("onder_nap") is not None]
+    items.sort(key=lambda kv: -kv[1]["top_nap"])
+    for naam, grens in items:
+        mask = (diepte_nap <= grens["top_nap"]) & (diepte_nap > grens["onder_nap"])
+        # Alleen toewijzen waar nog "Onbekend"
+        grondlaag[mask & (grondlaag == "Onbekend")] = naam
+    return grondlaag
+
+
+def default_laaggrenzen(lagen: list) -> dict:
+    """
+    Bouw default laaggrenzen-dict uit uitgangspunten-lagen.
+    Voor lagen zonder vaste NAP-grenzen ("variabel per locatie") wordt geen default
+    gezet — de gebruiker moet die handmatig invullen.
+    """
+    grenzen = {}
+    for laag in lagen:
+        grenzen[laag["naam"]] = {
+            "top_nap": laag.get("top_nap"),
+            "onder_nap": laag.get("onder_nap"),
+            "kleur": laag.get("kleur", "#888888"),
+            "is_dijkmateriaal": laag.get("is_dijkmateriaal", False),
+        }
+    return grenzen
+
+
+# ───────────────────────────────────────────────────────────────
+# UI
+# ───────────────────────────────────────────────────────────────
 def render():
-    st.caption("Stap 3 — Robertson 1990 classificatie, grondsoort & dijkmateriaal")
-    
-    # Toon verwachte dijkopbouw in expander
+    st.caption("Stap 3 — Handmatige laagindeling per sondering (Robertson als hint op achtergrond)")
+
     up = st.session_state.get("uitgangspunten", {})
     lagen = up.get("lagen", [])
-    
-    if lagen:
-        with st.expander("Verwachte dijkopbouw (uit Uitgangspunten)", expanded=False):
-            for laag in lagen:
-                dijk_tag = " **[Su]**" if laag.get("is_dijkmateriaal") else ""
-                top = laag.get("top_nap")
-                onder = laag.get("onder_nap")
-                positie = f"NAP {top:+.1f}m tot {onder:+.1f}m" if top is not None and onder is not None else "variabel"
-                st.markdown(
-                    f"- **{laag['naam']}**: {positie} — {laag['materiaal']}{dijk_tag}"
-                )
-    
-    # --- Check stappen status ---
     sonderingen = st.session_state.get("sonderingen", {})
-    
+
     if not sonderingen:
         st.markdown("""
         <div class="why-card">
@@ -81,315 +121,226 @@ def render():
         </div>
         """, unsafe_allow_html=True)
         return
-    
-    # Check genormaliseerd status per sondering
-    genormaliseerd = {k: v for k, v in sonderingen.items() if v.get("genormaliseerd")}
-    niet_genormaliseerd = {k: v for k, v in sonderingen.items() if not v.get("genormaliseerd")}
-    
+
+    if not lagen:
+        st.error("❌ **Geen grondlagen gevonden.** Ga eerst naar Stap 0 — Uitgangspunten.")
+        return
+
+    # Filter sonderingen die bruikbaar zijn (diepte + qc kolommen)
+    gereed = {k: v for k, v in sonderingen.items()
+              if v.get("col_mapping", {}).get("diepte") and v.get("col_mapping", {}).get("qc")}
+    niet_gereed = {k: v for k, v in sonderingen.items() if k not in gereed}
+
     # Status overzicht
     col_s1, col_s2, col_s3 = st.columns(3)
     with col_s1:
         st.metric("Totaal sonderingen", f"{len(sonderingen)}")
     with col_s2:
-        st.metric("Genormaliseerd (Stap 2)", f"{len(genormaliseerd)} ✅")
+        st.metric("Bruikbaar (diepte+qc)", f"{len(gereed)} ✅")
     with col_s3:
-        already_classified = sum(1 for v in sonderingen.values() if v.get("geclassificeerd"))
-        st.metric("Al geclassificeerd", f"{already_classified} 🔄")
-    
-    if niet_genormaliseerd:
-        with st.expander(f"⚠️ {len(niet_genormaliseerd)} sondering(en) nog niet genormaliseerd", expanded=False):
-            for name in niet_genormaliseerd:
-                cm = niet_genormaliseerd[name].get("col_mapping", {})
-                has_cols = cm.get("diepte") and cm.get("qc")
-                if has_cols:
-                    st.markdown(f"- **{name}**: Kolommen gevonden, maar Stap 2 nog niet uitgevoerd")
-                else:
-                    missing = [k for k in ["diepte", "qc"] if not cm.get(k)]
-                    st.markdown(f"- **{name}**: Kolom(men) `{', '.join(missing)}` ontbreken — eerst Stap 1 afronden")
-    
-    if not genormaliseerd:
-        st.markdown("""
-        <div class="why-card">
-            <h4>❌ Geen genormaliseerde sonderingen</h4>
-            <p>Dit kan twee oorzaken hebben:</p>
-            <p><b>1.</b> De kolommen (diepte, qc) zijn niet herkend → ga naar <b>Stap 1</b> en stel de kolom mapping in</p>
-            <p><b>2.</b> De normalisatie is nog niet uitgevoerd → ga naar <b>Stap 2</b> en klik op "Bereken Qt"</p>
-        </div>
-        """, unsafe_allow_html=True)
+        already = sum(1 for v in sonderingen.values() if v.get("geclassificeerd"))
+        st.metric("Geclassificeerd", f"{already} 🔄")
+
+    if niet_gereed:
+        with st.expander(f"⚠️ {len(niet_gereed)} sondering(en) missen verplichte kolommen", expanded=False):
+            for name in niet_gereed:
+                cm = niet_gereed[name].get("col_mapping", {})
+                missing = [k for k in ["diepte", "qc"] if not cm.get(k)]
+                st.markdown(f"- **{name}**: kolom(men) `{', '.join(missing)}` ontbreken — terug naar Stap 1")
+
+    if not gereed:
+        st.error("❌ Geen bruikbare sonderingen. Stel eerst de kolom mapping in (Stap 1).")
         return
-    
-    st.success(f"✅ **{len(genormaliseerd)} sondering(en)** gereed voor classificatie")
-    
-    # --- Classificatie uitvoeren ---
-    st.subheader("Robertson Classificatie")
-    
-    if st.button("▶️ Classificeer alle sonderingen", type="primary", use_container_width=True):
-        succes_count = 0
-        fout_count = 0
-        resultaten = []
-        
-        for name, data in genormaliseerd.items():
-            df = data["df"]
-            cm = data["col_mapping"]
-            
-            if "Qt" not in df.columns or "Rf" not in df.columns:
-                fout_count += 1
-                missing = [c for c in ["Qt", "Rf"] if c not in df.columns]
-                resultaten.append({"Sondering": name, "Status": f"⚠️ Ontbreekt: {', '.join(missing)}", "Zones": "—"})
-                continue
-            
-            # Classificatie — gebruikt Qt (=q_net/σ'v0) uit normalisatie
-            df["robertson_zone"] = classificeer_robertson(df["Qt"], df["Rf"])
-            df["grondsoort"] = df["robertson_zone"].map(lambda z: ROBERTSON_ZONES.get(z, {}).get("naam", "Onbekend"))
-            df["materiaal_type"] = df["robertson_zone"].map(lambda z: ROBERTSON_ZONES.get(z, {}).get("type", "onbekend"))
-            
-            # Herbereken σv0 met volumegewicht uit Robertson classificatie
-            params = st.session_state.sonderingen[name].get("parameters", {})
-            mv_nap = params.get("maaiveld_nap", st.session_state.sonderingen[name].get("maaiveld_nap", up.get("dijkopbouw", {}).get("kruinniveau", 4.0)))
-            gwl_val = params.get("gwl", up.get("dijkopbouw", {}).get("gwl", 0.0))
-            
-            sigma_v0_new, sigma_v0_eff_new, u0_new = bereken_sigma_v0_met_robertson(
-                df[cm["diepte"]], df["robertson_zone"], lagen, mv_nap, gwl_val
-            )
-            # Update diepte_nap na herberekening
-            df["diepte_nap"] = mv_nap - df[cm["diepte"]]
-            df["sigma_v0"] = sigma_v0_new / 1000  # kPa → MPa
-            df["sigma_v0_eff"] = sigma_v0_eff_new / 1000
-            df["u0"] = u0_new / 1000
-            df["q_net"] = df["qt"] - df["sigma_v0"]
-            df["Qt"] = df["q_net"] / df["sigma_v0_eff"].replace(0, np.nan)
-            
-            st.session_state.sonderingen[name]["df"] = df
-            st.session_state.sonderingen[name]["geclassificeerd"] = True
-            
-            # Samenvatting zones
-            zone_counts = df["robertson_zone"].value_counts()
-            top_zones = ", ".join([f"Zone {z}" for z in zone_counts.head(3).index])
-            
-            succes_count += 1
-            resultaten.append({"Sondering": name, "Status": "✅ Geclassificeerd", "Zones": top_zones})
-        
-        # Resultaat
-        st.markdown("---")
-        st.markdown("### Resultaat")
-        
-        if succes_count > 0 and fout_count == 0:
-            st.success(f"✅ **{succes_count} sondering(en)** succesvol geclassificeerd!")
-        elif succes_count > 0:
-            st.warning(f"⚠️ {succes_count} succesvol, {fout_count} mislukt")
-        else:
-            st.error("❌ Geen enkele sondering kon worden geclassificeerd")
-        
-        if resultaten:
-            st.dataframe(pd.DataFrame(resultaten), use_container_width=True, hide_index=True)
-        
-        if succes_count > 0:
-            st.markdown("""
-            <div class="next-step">
-                <span class="arrow">➡</span>
-                <p>Ga naar <b>Stap 4 — Su Berekening</b> in het zijmenu 
-                om de ongedraineerde schuifsterkte te berekenen voor de fijnkorrelige lagen.</p>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    # --- Resultaten tonen ---
-    geclassificeerd = {k: v for k, v in st.session_state.get("sonderingen", {}).items() 
-                       if v.get("geclassificeerd")}
-    
-    if not geclassificeerd:
-        return
-    
+
+    # Toon SHZ-lagen overzicht
+    with st.expander("📚 SHZ-grondlagen (uit Uitgangspunten)", expanded=False):
+        for laag in lagen:
+            tag = " **[Su]**" if laag.get("is_dijkmateriaal") else ""
+            top = laag.get("top_nap")
+            onder = laag.get("onder_nap")
+            pos = f"default NAP {top:+.1f} → {onder:+.1f}m" if top is not None and onder is not None else "variabel per locatie"
+            st.markdown(f"- **{laag['naam']}**: {pos} — {laag['materiaal']}{tag}")
+
+    # Pas defaults toe op alle sonderingen die nog niet geclassificeerd zijn
     st.markdown("---")
+    st.subheader("Snel-classificatie (defaults toepassen)")
+
+    if st.button("▶️ Pas standaard laaggrenzen toe op alle sonderingen", type="primary", use_container_width=True):
+        succes = 0
+        for name, data in gereed.items():
+            df = data["df"].copy()
+            cm = data["col_mapping"]
+            mv_nap = data.get("maaiveld_nap") or up.get("dijkopbouw", {}).get("kruinniveau", 4.0)
+
+            # Bereken diepte_nap (zonder normalisatie)
+            df["diepte_nap"] = mv_nap - df[cm["diepte"]]
+
+            # Bereken Rf voor Robertson-hint
+            if cm.get("fs") and cm["fs"] in df.columns:
+                df["Rf"] = (df[cm["fs"]] / df[cm["qc"]].replace(0, np.nan)) * 100
+            else:
+                df["Rf"] = np.nan
+
+            # Robertson achtergrondhint
+            rf_for_hint = df["Rf"].fillna(2.0)
+            df["robertson_zone"] = classificeer_simple(df[cm["qc"]], rf_for_hint)
+            df["grondsoort"] = df["robertson_zone"].map(
+                lambda z: ROBERTSON_ZONES.get(z, {}).get("naam", "Onbekend")
+            )
+
+            # Laaggrenzen uit defaults
+            grenzen = data.get("laaggrenzen") or default_laaggrenzen(lagen)
+            df["grondlaag"] = toewijs_grondlaag(df["diepte_nap"], grenzen)
+
+            # Markeer dijkmateriaal op basis van SHZ-laag (niet Robertson)
+            dijkmat_lagen = {laag["naam"] for laag in lagen if laag.get("is_dijkmateriaal")}
+            df["is_dijkmateriaal"] = df["grondlaag"].isin(dijkmat_lagen)
+
+            st.session_state.sonderingen[name]["df"] = df
+            st.session_state.sonderingen[name]["laaggrenzen"] = grenzen
+            st.session_state.sonderingen[name]["geclassificeerd"] = True
+            succes += 1
+
+        st.success(f"✅ {succes} sondering(en) geclassificeerd met defaults. Pas hieronder per sondering aan.")
+        st.rerun()
+
+    # Per-sondering editor
+    geclassificeerd = {k: v for k, v in sonderingen.items() if v.get("geclassificeerd")}
+
+    if not geclassificeerd:
+        st.info("👆 Klik op de knop hierboven om defaults toe te passen, of bewerk hieronder per sondering.")
+        return
+
+    st.markdown("---")
+    st.subheader("Laaggrenzen aanpassen per sondering")
+
     selected = st.selectbox("Selecteer sondering", list(geclassificeerd.keys()), key="class_select")
-    
-    if selected:
-        data = geclassificeerd[selected]
-        df = data["df"]
-        cm = data["col_mapping"]
-        diepte_nap = df["diepte_nap"] if "diepte_nap" in df.columns else df[cm["diepte"]]
-        
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            # Classificatie profiel
-            fig = go.Figure()
-            
-            for zone_nr, zone_info in ROBERTSON_ZONES.items():
+
+    if not selected:
+        return
+
+    data = geclassificeerd[selected]
+    df = data["df"]
+    cm = data["col_mapping"]
+    grenzen = data.get("laaggrenzen") or default_laaggrenzen(lagen)
+    mv_nap = data.get("maaiveld_nap") or up.get("dijkopbouw", {}).get("kruinniveau", 4.0)
+
+    col_edit, col_plot = st.columns([1, 1.4])
+
+    with col_edit:
+        st.markdown("**Top/onder per laag [m NAP]:**")
+        st.caption(f"Maaiveld: NAP {mv_nap:+.2f}m · Sondeerbereik: NAP {df['diepte_nap'].max():+.2f} → {df['diepte_nap'].min():+.2f}m")
+
+        nieuwe_grenzen = {}
+        for laag in lagen:
+            naam = laag["naam"]
+            huidig = grenzen.get(naam, {})
+            top_default = huidig.get("top_nap") if huidig.get("top_nap") is not None else laag.get("top_nap")
+            onder_default = huidig.get("onder_nap") if huidig.get("onder_nap") is not None else laag.get("onder_nap")
+
+            with st.expander(f"{naam}", expanded=False):
+                c1, c2, c3 = st.columns([1, 1, 0.6])
+                with c1:
+                    top_val = st.number_input(
+                        "Top [m NAP]",
+                        value=float(top_default) if top_default is not None else 0.0,
+                        step=0.1, format="%.2f",
+                        key=f"top_{selected}_{naam}",
+                    )
+                with c2:
+                    onder_val = st.number_input(
+                        "Onder [m NAP]",
+                        value=float(onder_default) if onder_default is not None else -1.0,
+                        step=0.1, format="%.2f",
+                        key=f"onder_{selected}_{naam}",
+                    )
+                with c3:
+                    actief = st.checkbox(
+                        "Aanwezig",
+                        value=top_default is not None and onder_default is not None,
+                        key=f"act_{selected}_{naam}",
+                        help="Uitschakelen als deze laag op deze locatie niet voorkomt."
+                    )
+
+                nieuwe_grenzen[naam] = {
+                    "top_nap": top_val if actief else None,
+                    "onder_nap": onder_val if actief else None,
+                    "kleur": laag.get("kleur", "#888888"),
+                    "is_dijkmateriaal": laag.get("is_dijkmateriaal", False),
+                }
+
+        if st.button("💾 Laaggrenzen opslaan", key=f"save_grenzen_{selected}", type="primary"):
+            st.session_state.sonderingen[selected]["laaggrenzen"] = nieuwe_grenzen
+            df_new = df.copy()
+            df_new["grondlaag"] = toewijs_grondlaag(df_new["diepte_nap"], nieuwe_grenzen)
+            dijkmat_lagen = {n for n, g in nieuwe_grenzen.items() if g.get("is_dijkmateriaal")}
+            df_new["is_dijkmateriaal"] = df_new["grondlaag"].isin(dijkmat_lagen)
+            st.session_state.sonderingen[selected]["df"] = df_new
+            st.success(f"✅ Laaggrenzen voor **{selected}** opgeslagen.")
+            st.rerun()
+
+    with col_plot:
+        toon_robertson = st.checkbox("Toon Robertson-zones (achtergrondhint)", value=False,
+                                      key=f"rob_hint_{selected}")
+        toon_lagen_band = st.checkbox("Toon SHZ-lagen als achtergrondband", value=True,
+                                       key=f"lagen_band_{selected}")
+
+        fig = go.Figure()
+
+        # SHZ-lagen als achtergrondband
+        if toon_lagen_band:
+            for naam, g in grenzen.items():
+                if g.get("top_nap") is None or g.get("onder_nap") is None:
+                    continue
+                fig.add_hrect(
+                    y0=g["onder_nap"], y1=g["top_nap"],
+                    fillcolor=g.get("kleur", "#888888"),
+                    opacity=0.18, line_width=0,
+                    annotation_text=naam, annotation_position="left",
+                    annotation_font_size=9,
+                )
+
+        # qt of qc lijn
+        x_col = "qt" if "qt" in df.columns else cm["qc"]
+        fig.add_trace(go.Scatter(
+            x=df[x_col], y=df["diepte_nap"],
+            mode="lines", name=x_col,
+            line=dict(color="#0d47a1", width=1.5),
+        ))
+
+        # Robertson-zones als kleurpunten (optioneel)
+        if toon_robertson and "robertson_zone" in df.columns:
+            for zone_nr, info in ROBERTSON_ZONES.items():
                 mask = df["robertson_zone"] == zone_nr
                 if mask.any():
                     fig.add_trace(go.Scatter(
-                        x=df.loc[mask, "qt"],
-                        y=diepte_nap[mask],
-                        mode="markers",
-                        name=zone_info["naam"],
-                        marker=dict(color=zone_info["kleur"], size=4),
+                        x=df.loc[mask, x_col], y=df.loc[mask, "diepte_nap"],
+                        mode="markers", name=f"R{zone_nr} — {info['naam']}",
+                        marker=dict(color=info["kleur"], size=3, opacity=0.5),
                     ))
-            
-            fig.update_layout(
-                title=f"Classificatie: {selected}",
-                yaxis=dict(title="Niveau [m NAP]"),
-                xaxis=dict(title="qt [MPa]"),
-                height=700,
-                template="plotly_white",
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            # Legenda / samenvatting
-            st.markdown("**Laagverdeling:**")
-            
-            for zone_nr in sorted(df["robertson_zone"].unique()):
-                zone_info = ROBERTSON_ZONES.get(zone_nr, {})
-                mask = df["robertson_zone"] == zone_nr
-                pct = mask.sum() / len(df) * 100
-                st.markdown(f"🔹 **{zone_info.get('naam', '?')}**: {pct:.0f}%")
-            
-            st.markdown("---")
-            st.markdown("**Dijkmateriaal selectie:**")
-            
-            # Selecteer welke zones als dijkmateriaal tellen
-            dijkmat_zones = st.multiselect(
-                "Selecteer dijkmateriaal zones",
-                options=[(z, info["naam"]) for z, info in ROBERTSON_ZONES.items()],
-                format_func=lambda x: x[1],
-                default=[(z, info["naam"]) for z, info in ROBERTSON_ZONES.items() if info["type"] == "fijnkorrelig"],
-                key=f"dijkmat_{selected}"
-            )
-            
-            if dijkmat_zones:
-                selected_zone_nrs = [z[0] for z in dijkmat_zones]
-                mask = df["robertson_zone"].isin(selected_zone_nrs)
-                df["is_dijkmateriaal"] = mask
-                st.session_state.sonderingen[selected]["df"] = df
-                
-                st.info(f"📌 {mask.sum()} van {len(df)} metingen geselecteerd als dijkmateriaal ({mask.sum()/len(df)*100:.0f}%)")
-        
-        # --- Boringinformatie (optioneel) ---
-        with st.expander("📂 Boringinformatie uploaden (optioneel)", expanded=False):
-            boring_file = st.file_uploader(
-                "Upload boring (CSV/Excel) om classificatie te valideren",
-                type=["csv", "xlsx"],
-                key=f"boring_{selected}"
-            )
-            
-            if boring_file:
-                try:
-                    if boring_file.name.endswith(".csv"):
-                        boring_df = pd.read_csv(boring_file, sep=None, engine="python")
-                    else:
-                        boring_df = pd.read_excel(boring_file)
-                    
-                    st.session_state.sonderingen[selected]["boring"] = boring_df
-                    st.success(f"✅ Boring geladen: {len(boring_df)} lagen")
-                    st.dataframe(boring_df, use_container_width=True)
-                except Exception as e:
-                    st.error(f"Fout bij inlezen boring: {e}")
-    
-    # ═══════════════════════════════════════════════════════════════
-    # FIGUUR 1 — OVERZICHT DIJKTRAJECT
-    # Alle sonderingen met dijkmateriaal, qt over diepte
-    # ═══════════════════════════════════════════════════════════════
-    all_classified = {k: v for k, v in st.session_state.get("sonderingen", {}).items()
-                      if v.get("geclassificeerd")}
-    
-    if len(all_classified) >= 1:
-        st.markdown("---")
-        st.subheader("Figuur 1 — Overzicht Sonderingen Dijktraject")
-        st.caption("Alle geclassificeerde sonderingen — alleen dijkmateriaal (fijnkorrelig) — qt over diepte")
-        
-        # Keuze welke parameter
-        param_col = st.radio(
-            "Parameter", ["qt [MPa]", "Qt [-] (genormaliseerd)"],
-            horizontal=True, key="fig1_param"
-        )
-        
-        fig = go.Figure()
-        colors = ["#ef4444", "#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6", 
-                  "#ec4899", "#14b8a6", "#f97316", "#06b6d4", "#84cc16",
-                  "#e11d48", "#7c3aed", "#0891b2", "#65a30d"]
-        
-        for i, (name, data) in enumerate(all_classified.items()):
-            df = data["df"]
-            cm = data["col_mapping"]
-            diepte_col = cm.get("diepte")
-            
-            if not diepte_col or diepte_col not in df.columns:
-                continue
-            
-            # Filter op dijkmateriaal als kolom beschikbaar is
-            if "is_dijkmateriaal" in df.columns:
-                mask = df["is_dijkmateriaal"] == True
-            elif "materiaal_type" in df.columns:
-                mask = df["materiaal_type"].isin(["fijnkorrelig", "organisch"])
-            else:
-                mask = pd.Series([True] * len(df), index=df.index)
-            
-            if not mask.any():
-                continue
-            
-            df_dijk = df[mask]
-            diepte = df_dijk["diepte_nap"] if "diepte_nap" in df_dijk.columns else df_dijk[diepte_col]
-            
-            if param_col.startswith("Qt") and "Qt" in df_dijk.columns:
-                x_vals = df_dijk["Qt"]
-                x_title = "Qt [-]"
-            elif "qt" in df_dijk.columns:
-                x_vals = df_dijk["qt"]
-                x_title = "qt [MPa]"
-            else:
-                continue
-            
-            fig.add_trace(go.Scatter(
-                x=x_vals, y=diepte,
-                mode="lines", name=name,
-                line=dict(color=colors[i % len(colors)], width=1.5),
-                opacity=0.8,
-            ))
-        
-        # GWS lijn
-        up = st.session_state.get("uitgangspunten", {})
-        gwl = up.get("dijkopbouw", {}).get("gwl", 0.0)
-        
+
         fig.update_layout(
-            title="Overzicht Dijktraject — Dijkmateriaal",
+            title=f"{selected}",
+            xaxis=dict(title=f"{x_col} [MPa]"),
             yaxis=dict(title="Niveau [m NAP]"),
-            xaxis=dict(title=x_title if 'x_title' in dir() else "qt [MPa]"),
             height=700,
             template="plotly_white",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, font=dict(size=10)),
-            font=dict(family="Inter"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, font=dict(size=9)),
         )
-        
         st.plotly_chart(fig, use_container_width=True)
-        
-        # Samenvattingstabel
-        with st.expander("📊 Samenvatting per sondering", expanded=False):
-            summary_data = []
-            for name, data in all_classified.items():
-                df = data["df"]
-                cm = data["col_mapping"]
-                
-                # Dijkmateriaal percentage
-                if "is_dijkmateriaal" in df.columns:
-                    dijk_pct = df["is_dijkmateriaal"].sum() / len(df) * 100
-                elif "materiaal_type" in df.columns:
-                    dijk_pct = df["materiaal_type"].isin(["fijnkorrelig", "organisch"]).sum() / len(df) * 100
-                else:
-                    dijk_pct = 0
-                
-                # Dieptebereik
-                d_col = cm.get("diepte")
-                d_range = f"{df[d_col].min():.1f} — {df[d_col].max():.1f}" if d_col and d_col in df.columns else "—"
-                
-                # qt statistieken voor dijkmateriaal
-                qt_mean = df.loc[df.get("is_dijkmateriaal", pd.Series([True]*len(df))).fillna(False), "qt"].mean() if "qt" in df.columns else None
-                
-                summary_data.append({
-                    "Sondering": name,
-                    "Diepte [m]": d_range,
-                    "Dijkmateriaal [%]": f"{dijk_pct:.0f}%",
-                    "qt gem. [MPa]": f"{qt_mean:.2f}" if qt_mean and not np.isnan(qt_mean) else "—",
-                    "Metingen": len(df),
-                })
-            
-            st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
+
+        # Samenvatting verdeling
+        st.markdown("**Verdeling meetpunten per SHZ-laag:**")
+        verdeling = df["grondlaag"].value_counts().reset_index()
+        verdeling.columns = ["Grondlaag", "Aantal meetpunten"]
+        verdeling["Aandeel"] = (verdeling["Aantal meetpunten"] / len(df) * 100).round(1).astype(str) + "%"
+        st.dataframe(verdeling, use_container_width=True, hide_index=True)
+
+    # Doorloop-suggestie
+    st.markdown("""
+    <div class="next-step">
+        <span class="arrow">➡</span>
+        <p>Wanneer alle sonderingen een goede laagindeling hebben, ga naar
+        <b>Stap 4 — Normalisatie</b> voor qt-correctie en σ-spanningen.</p>
+    </div>
+    """, unsafe_allow_html=True)

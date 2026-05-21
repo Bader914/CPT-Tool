@@ -223,8 +223,8 @@ from modules import uitgangspunten, data_inladen, normalisatie, classificatie, s
 STEPS = [
     {"module": uitgangspunten, "icon": "⚙️", "label": "Parameters", "full": "Uitgangspunten"},
     {"module": data_inladen, "icon": "📁", "label": "Upload", "full": "Data Inladen"},
-    {"module": normalisatie, "icon": "📐", "label": "Normalisatie", "full": "Normalisatie"},
     {"module": classificatie, "icon": "🧱", "label": "Classificatie", "full": "Classificatie"},
+    {"module": normalisatie, "icon": "📐", "label": "Normalisatie", "full": "Normalisatie"},
     {"module": su_berekening, "icon": "📊", "label": "Su", "full": "Su Berekening"},
     {"module": validatie, "icon": "✅", "label": "Validatie", "full": "Validatie"},
     {"module": visualisatie, "icon": "📈", "label": "Rapportage", "full": "Rapportage"},
@@ -240,13 +240,13 @@ has_class = any(v.get("geclassificeerd") for v in st.session_state.get("sonderin
 has_su = any(v.get("su_berekend") for v in st.session_state.get("sonderingen", {}).values())
 
 step_done = [
-    "uitgangspunten" in st.session_state,   # 0
-    n_sond > 0,                              # 1
-    has_norm,                                # 2
-    has_class,                               # 3
-    has_su,                                  # 4
-    False,                                   # 5
-    False,                                   # 6
+    "uitgangspunten" in st.session_state,   # 0 Uitgangspunten
+    n_sond > 0,                              # 1 Data Inladen
+    has_class,                               # 2 Classificatie
+    has_norm,                                # 3 Normalisatie
+    has_su,                                  # 4 Su
+    False,                                   # 5 Validatie
+    False,                                   # 6 Rapportage
 ]
 
 su_count = sum(1 for v in st.session_state.get("sonderingen", {}).values() if v.get("su_berekend"))
