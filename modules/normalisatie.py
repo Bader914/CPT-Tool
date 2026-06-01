@@ -10,6 +10,8 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from modules.classificatie import toewijs_grondlaag
+
 
 # ───────────────────────────────────────────────────────────────
 # Basis-formules (ongewijzigd)
@@ -38,30 +40,61 @@ def bereken_Bq(u2: pd.Series, u0: pd.Series, qt: pd.Series, sigma_v0: pd.Series)
 # ───────────────────────────────────────────────────────────────
 # u0-verloop met knikpunt (watervoerend pakket)
 # ───────────────────────────────────────────────────────────────
-def bereken_u0_met_knik(
+def bereken_u0_interpolatie(
     diepte_nap: pd.Series,
     gwl_nap: float,
     knik_nap: float,
-    u_top_watervoerend_kpa: float,
+    stijghoogte_nap: float,
+    top_zand_nap: float,
+    indringing: float = 0.0,
     gamma_w: float = 9.81,
 ) -> pd.Series:
     """
-    Theoretisch waterdrukverloop met knikpunt bij overgang klei → watervoerend zandpakket.
+    Theoretisch waterdrukverloop u0 [kPa] — 4-zone-model met lineaire overgang.
 
-    Drie segmenten (z_NAP = diepte_nap):
-      boven GWS (z > gwl_nap):           u0 = 0
-      GWS → knik (klei):                 u0 = gamma_w * (gwl_nap - z_NAP)
-      onder knik (zand):                 u0 = u_top_watervoerend_kpa
-                                              + gamma_w * (knik_nap - z_NAP)
+    Implementatie van 'waterdrukverloop berekening.xlsx' (cel D31–D38), exact
+    gevalideerd in CPT_kern_berekeningen.py. Het verloop is OVERAL CONTINU.
+
+    Invoer (alle niveaus in m NAP, positief omhoog):
+      gwl_nap          grondwaterstand (GWS)
+      knik_nap         knikpunt: einde zuiver hydrostatisch verloop vanaf GWS
+      stijghoogte_nap  stijghoogte (piëzometrisch niveau, P) van het 1e zandpakket
+      top_zand_nap     NAP-niveau van de top van het 1e zandpakket
+      indringing       indringingslengte i [m]: zandzone start bij top_zand_nap + i
+
+    Vier zones (z = diepte in m NAP):
+      z > gwl                     u0 = 0
+      knik < z ≤ gwl  (klei)      u0 = γ_w·(gwl − z)                 [hydrostatisch vanaf GWS]
+      (top_zand+i) < z ≤ knik     u0 = lineaire interpolatie tussen de twee ankerpunten
+      z ≤ (top_zand+i) (zand)     u0 = γ_w·(stijghoogte − z)         [hydrostatisch vanaf stijghoogte]
+
+    Ankerpunten van de overgangszone:
+      boven: (knik_nap,         γ_w·(gwl − knik))
+      onder: (top_zand_nap + i, γ_w·(stijghoogte − (top_zand+i)))
     """
     z = diepte_nap.values.astype(float)
+
+    # Ankerpunten overgangszone (Excel C22/D22 en C23/D23).
+    z_top_interp = knik_nap
+    u_top_interp = (gwl_nap - knik_nap) * gamma_w
+    z_bot_interp = top_zand_nap + indringing
+    u_bot_interp = (stijghoogte_nap - z_bot_interp) * gamma_w
+
+    # Scalaire helling → veilig af te schermen tegen deling door 0.
+    denom = z_bot_interp - z_top_interp
+    slope = (u_bot_interp - u_top_interp) / denom if denom != 0 else 0.0
+
     u0 = np.where(
         z > gwl_nap,
         0.0,
         np.where(
             z > knik_nap,
-            gamma_w * (gwl_nap - z),
-            u_top_watervoerend_kpa + gamma_w * (knik_nap - z),
+            (gwl_nap - z) * gamma_w,
+            np.where(
+                z > z_bot_interp,
+                slope * (z - z_top_interp) + u_top_interp,
+                (stijghoogte_nap - z) * gamma_w,
+            ),
         ),
     )
     return pd.Series(u0, index=diepte_nap.index)
@@ -198,16 +231,32 @@ def render():
             min_value=-10.0, max_value=10.0,
             value=up.get("dijkopbouw", {}).get("gwl", 0.0), step=0.1,
         )
-    with col_p2:
         knik_nap = st.number_input(
-            "Knikpunt watervoerend pakket [m NAP]",
+            "Knikpunt drukverloop [m NAP]",
             min_value=-30.0, max_value=5.0,
-            value=waterdruk.get("watervoerend_knik_nap", -12.0), step=0.5,
+            value=waterdruk.get("knik_nap", -5.0), step=0.5,
+            help="Einde van het zuiver hydrostatische verloop vanaf GWS; "
+                 "begin van de overgangszone naar het zandpakket.",
         )
-        u_top_kpa = st.number_input(
-            "u_top watervoerend pakket [kPa]",
-            min_value=0.0, max_value=500.0,
-            value=waterdruk.get("u_top_watervoerend_kpa", 30.0), step=1.0,
+    with col_p2:
+        stijghoogte_nap = st.number_input(
+            "Stijghoogte 1e zandpakket [m NAP]",
+            min_value=-30.0, max_value=10.0,
+            value=waterdruk.get("stijghoogte_nap", -2.0), step=0.5,
+            help="Piëzometrisch niveau (P) van het watervoerende zandpakket.",
+        )
+        top_zand_nap = st.number_input(
+            "Top 1e zandpakket [m NAP]",
+            min_value=-40.0, max_value=5.0,
+            value=waterdruk.get("top_zand_nap", -12.0), step=0.5,
+            help="NAP-niveau van de bovenkant van het 1e watervoerende zandpakket.",
+        )
+        indringing_m = st.number_input(
+            "Indringingslengte [m]",
+            min_value=0.0, max_value=5.0,
+            value=waterdruk.get("indringing", 0.0), step=0.1,
+            help="Tot hoever boven het zand de pakketdruk al gevoeld wordt; "
+                 "zandzone start bij (top zand + indringing). Vaak < 1 m.",
         )
 
     gamma_w = waterdruk.get("gamma_w", 9.81)
@@ -227,30 +276,40 @@ def render():
             fund = data.get("funderingslaag")
             voorboring = data.get("voorboring")
 
-            # Lokale waterdruk-override
+            # Lokale waterdruk-override (lege override = globale waarden)
             lokaal = data.get("waterdruk_lokaal") or {}
+            gwl_local = lokaal.get("gwl", gwl_nap)
             knik_local = lokaal.get("knik_nap", knik_nap)
-            u_top_local = lokaal.get("u_top", u_top_kpa)
+            stijghoogte_local = lokaal.get("stijghoogte_nap", stijghoogte_nap)
+            top_zand_local = lokaal.get("top_zand_nap", top_zand_nap)
+            indringing_local = lokaal.get("indringing", indringing_m)
 
             try:
-                # Zorg dat diepte_nap bestaat
-                if "diepte_nap" not in df.columns:
-                    df["diepte_nap"] = mv_nap - df[cm["diepte"]]
+                # diepte_nap ALTIJD vers afleiden uit het actuele maaiveld, zodat een
+                # maaiveldwijziging nooit stil verouderde data oplevert.
+                df["diepte_nap"] = mv_nap - df[cm["diepte"]]
+
+                # grondlaag + is_dijkmateriaal opnieuw toewijzen op basis van de
+                # (absolute NAP-)laaggrenzen en de verse diepte_nap. De laaggrenzen
+                # staan in NAP en zijn dus onafhankelijk van het maaiveld.
+                if grenzen:
+                    df["grondlaag"] = toewijs_grondlaag(df["diepte_nap"], grenzen)
+                    dijkmat_lagen = {n for n, g in grenzen.items() if g.get("is_dijkmateriaal")}
+                    df["is_dijkmateriaal"] = df["grondlaag"].isin(dijkmat_lagen)
+                elif "grondlaag" not in df.columns:
+                    resultaten.append({"Sondering": name, "Status": "❌ Geen laaggrenzen — herclassificeer"})
+                    continue
 
                 qc = df[cm["qc"]]
 
-                # u0 met knikpunt
-                df["u0"] = bereken_u0_met_knik(
-                    df["diepte_nap"], gwl_nap, knik_local, u_top_local, gamma_w
+                # u0 — 4-zone-model met lineaire overgang (zie Excel waterdrukverloop)
+                df["u0"] = bereken_u0_interpolatie(
+                    df["diepte_nap"], gwl_local, knik_local,
+                    stijghoogte_local, top_zand_local, indringing_local, gamma_w,
                 ) / 1000.0  # kPa → MPa
 
-                # σv0 op handmatige laagindeling
-                if "grondlaag" not in df.columns:
-                    resultaten.append({"Sondering": name, "Status": "❌ Geen grondlaag — herclassificeer"})
-                    continue
-
                 sigma_v0_kpa = bereken_sigma_v0_met_grondlaag(
-                    df["diepte_nap"], df["grondlaag"], lagen, mv_nap, gwl_nap, fund
+                    df["diepte_nap"], df["grondlaag"], lagen, mv_nap, gwl_local, fund
                 )
                 df["sigma_v0"] = sigma_v0_kpa / 1000.0  # kPa → MPa
                 df["sigma_v0_eff"] = (sigma_v0_kpa - df["u0"] * 1000.0).clip(lower=0) / 1000.0
@@ -284,8 +343,9 @@ def render():
                 st.session_state.sonderingen[name]["df"] = df
                 st.session_state.sonderingen[name]["genormaliseerd"] = True
                 st.session_state.sonderingen[name]["parameters"] = {
-                    "a": a_factor, "gwl": gwl_nap, "maaiveld_nap": mv_nap,
-                    "knik_nap": knik_local, "u_top_kpa": u_top_local,
+                    "a": a_factor, "gwl": gwl_local, "maaiveld_nap": mv_nap,
+                    "knik_nap": knik_local, "stijghoogte_nap": stijghoogte_local,
+                    "top_zand_nap": top_zand_local, "indringing": indringing_local,
                 }
                 resultaten.append({"Sondering": name, "Status": "✅", "qt": qt_note, "Metingen": len(df)})
 
@@ -380,6 +440,11 @@ def render():
     for col in (1, 2, 3, 4):
         fig.add_hline(y=knik_val, line=dict(color="#ff9800", dash="dash", width=1), row=1, col=col)
 
+    # Top zandpakket lijn (onderkant overgangszone)
+    top_zand_val = data.get("parameters", {}).get("top_zand_nap", top_zand_nap)
+    for col in (1, 2, 3, 4):
+        fig.add_hline(y=top_zand_val, line=dict(color="#fbc02d", dash="dot", width=1), row=1, col=col)
+
     fig.update_yaxes(title_text="Niveau [m NAP]", row=1, col=1)
     fig.update_layout(height=650, template="plotly_white",
                        legend=dict(orientation="h", yanchor="bottom", y=1.04, font=dict(size=10)))
@@ -387,27 +452,51 @@ def render():
     st.plotly_chart(fig, use_container_width=True)
 
     # Per-sondering waterdruk override
-    with st.expander("💧 Lokale waterdruk-override (deze sondering)", expanded=False):
-        st.caption("Default = waarden uit Uitgangspunten. Pas alleen aan als de zandlaag of "
-                   "pakketdruk lokaal afwijkt.")
+    with st.expander("💧 Lokale waterstand- & waterdruk-override (deze sondering)", expanded=False):
+        st.caption("Default = waarden uit Uitgangspunten. Laat staan als het overal gelijk is; "
+                   "pas alleen aan als de grondwaterstand, zandlaag of pakketdruk lokaal afwijkt.")
         lokaal = data.get("waterdruk_lokaal") or {}
-        new_knik = st.number_input(
-            "Knikpunt [m NAP]",
-            value=float(lokaal.get("knik_nap", knik_nap)),
-            min_value=-30.0, max_value=5.0, step=0.5,
-            key=f"knik_local_{selected}",
+        new_gwl = st.number_input(
+            "Grondwaterstand (GWS) [m NAP]",
+            value=float(lokaal.get("gwl", gwl_nap)),
+            min_value=-10.0, max_value=10.0, step=0.1,
+            key=f"gwl_local_{selected}",
+            help="Lokale freatische waterstand voor deze sondering. "
+                 "Beïnvloedt σv0 (γ_droog/γ_nat-splitsing) en u₀.",
         )
-        new_utop = st.number_input(
-            "u_top [kPa]",
-            value=float(lokaal.get("u_top", u_top_kpa)),
-            min_value=0.0, max_value=500.0, step=1.0,
-            key=f"utop_local_{selected}",
-        )
+        col_o1, col_o2 = st.columns(2)
+        with col_o1:
+            new_knik = st.number_input(
+                "Knikpunt [m NAP]",
+                value=float(lokaal.get("knik_nap", knik_nap)),
+                min_value=-30.0, max_value=5.0, step=0.5,
+                key=f"knik_local_{selected}",
+            )
+            new_stijg = st.number_input(
+                "Stijghoogte 1e zandpakket [m NAP]",
+                value=float(lokaal.get("stijghoogte_nap", stijghoogte_nap)),
+                min_value=-30.0, max_value=10.0, step=0.5,
+                key=f"stijg_local_{selected}",
+            )
+        with col_o2:
+            new_top_zand = st.number_input(
+                "Top 1e zandpakket [m NAP]",
+                value=float(lokaal.get("top_zand_nap", top_zand_nap)),
+                min_value=-40.0, max_value=5.0, step=0.5,
+                key=f"topzand_local_{selected}",
+            )
+            new_indringing = st.number_input(
+                "Indringingslengte [m]",
+                value=float(lokaal.get("indringing", indringing_m)),
+                min_value=0.0, max_value=5.0, step=0.1,
+                key=f"indringing_local_{selected}",
+            )
         col_b1, col_b2 = st.columns(2)
         with col_b1:
             if st.button("💾 Override opslaan", key=f"save_water_{selected}"):
                 st.session_state.sonderingen[selected]["waterdruk_lokaal"] = {
-                    "knik_nap": new_knik, "u_top": new_utop
+                    "gwl": new_gwl, "knik_nap": new_knik, "stijghoogte_nap": new_stijg,
+                    "top_zand_nap": new_top_zand, "indringing": new_indringing,
                 }
                 st.success("Opgeslagen. Klik nogmaals op ‘Bereken’ bovenaan om door te rekenen.")
         with col_b2:
