@@ -438,9 +438,16 @@ def render():
 
         st.caption(f"Onderste laag loopt door tot de sondeerbasis (NAP {basis_nap:+.2f}m).")
 
+        # LIVE preview: leid de laaggrenzen direct af uit de huidige tabel, zodat
+        # de grafiek en verdeling rechts altijd de tabel weerspiegelen (ook vóór
+        # 'opslaan'). Valt terug op de opgeslagen grenzen als de tabel leeg is.
+        preview_lagen = bouw_lagen_uit_grondopbouw(edited.to_dict("records"), bibliotheek, basis_nap)
+        preview_grenzen = grenzen_uit_lagen(preview_lagen) if preview_lagen else grenzen
+        preview_grondlaag = toewijs_grondlaag(df["diepte_nap"], preview_grenzen)
+
         # Waarschuw voor lagen die (deels) buiten het meetbereik vallen — niet wegfilteren.
         buiten = []
-        for naam, g in grenzen.items():
+        for naam, g in preview_grenzen.items():
             top, onder = g.get("top_nap"), g.get("onder_nap")
             if top is None or onder is None:
                 continue
@@ -479,9 +486,9 @@ def render():
 
         fig = go.Figure()
 
-        # SHZ-lagen als achtergrondband
+        # SHZ-lagen als achtergrondband (live uit de tabel)
         if toon_lagen_band:
-            for naam, g in grenzen.items():
+            for naam, g in preview_grenzen.items():
                 if g.get("top_nap") is None or g.get("onder_nap") is None:
                     continue
                 fig.add_hrect(
@@ -492,8 +499,8 @@ def render():
                     annotation_font_size=9,
                 )
 
-        # Laaggrens-markers: horizontale lijn op elke bovenkant
-        for naam, g in grenzen.items():
+        # Laaggrens-markers: horizontale lijn op elke bovenkant (live uit de tabel)
+        for naam, g in preview_grenzen.items():
             if g.get("top_nap") is None:
                 continue
             fig.add_hline(
@@ -531,9 +538,9 @@ def render():
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # Samenvatting verdeling
+        # Samenvatting verdeling (live uit de tabel)
         st.markdown("**Verdeling meetpunten per SHZ-laag:**")
-        verdeling = df["grondlaag"].value_counts().reset_index()
+        verdeling = preview_grondlaag.value_counts().reset_index()
         verdeling.columns = ["Grondlaag", "Aantal meetpunten"]
         verdeling["Aandeel"] = (verdeling["Aantal meetpunten"] / len(df) * 100).round(1).astype(str) + "%"
         st.dataframe(verdeling, use_container_width=True, hide_index=True)

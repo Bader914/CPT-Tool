@@ -275,9 +275,11 @@ def bouw_lagen_uit_grondopbouw(rows: list, bibliotheek: list, onderkant_diepste_
     """
     biblio = {l["naam"]: l for l in bibliotheek}
 
-    geldig = [r for r in rows
-              if r.get("bovenkant") is not None and str(r.get("bovenkant")) != ""
-              and r.get("laagtype")]
+    def _geldig(r):
+        bk, lt = r.get("bovenkant"), r.get("laagtype")
+        return pd.notna(bk) and pd.notna(lt) and str(lt).strip() != ""
+
+    geldig = [r for r in rows if _geldig(r)]
     # Sorteer aflopend op bovenkant (van boven naar beneden).
     geldig.sort(key=lambda r: -float(r["bovenkant"]))
 
