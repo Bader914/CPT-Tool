@@ -88,22 +88,24 @@ def suggereer_grondopbouw(df: pd.DataFrame, cm: dict, bibliotheek: list,
     if n == 0:
         return []
 
-    # Rolling-mode gladstrijken over een venster ~ min_dikte.
+    # Lichte ruisonderdrukking met een KLEIN, VAST venster (los van min_dikte),
+    # om losse meetpunt-uitschieters te dempen zonder echte lagen weg te poetsen.
     groepen = ["veen", "klei", "zand"]
     code = {gname: i for i, gname in enumerate(groepen)}
     inv = {i: gname for gname, i in code.items()}
     c = d["g"].map(code).astype(float)
     dz = float(np.median(np.abs(np.diff(d["z"].values)))) if n > 1 else 0.02
-    win = max(1, int(round(min_dikte / max(dz, 1e-6))))
-    if win > 1:
+    denoise_m = min(0.2, max(min_dikte * 0.5, 0.04))   # max 0,2 m, en ≤ ½·min_dikte
+    denoise_win = max(1, int(round(denoise_m / max(dz, 1e-6))))
+    if denoise_win > 1 and n > denoise_win:
         from collections import Counter
-        c = c.rolling(win, center=True, min_periods=1).apply(
+        c = c.rolling(denoise_win, center=True, min_periods=1).apply(
             lambda w: Counter(w.astype(int)).most_common(1)[0][0], raw=True)
     g = c.round().astype(int).map(inv).values
     z = d["z"].values
 
-    # Segmenteer in aaneengesloten groepen.
-    segs = []  # [top_nap, onder_nap, groep]
+    # Segmenteer in aaneengesloten groepen: [top_nap, onder_nap, groep].
+    segs = []
     start = 0
     for i in range(1, n + 1):
         if i == n or g[i] != g[start]:
@@ -112,17 +114,30 @@ def suggereer_grondopbouw(df: pd.DataFrame, cm: dict, bibliotheek: list,
             segs.append([top, onder, g[start]])
             start = i
 
-    # Dunne lagen samenvoegen in de bovenliggende laag.
-    merged = []
-    for s in segs:
-        if merged and (s[0] - s[1]) < min_dikte:
-            merged[-1][1] = s[1]
+    # Iteratief: voeg telkens de DUNSTE laag < min_dikte samen met de dikkere
+    # buurlaag (die groep wint). Werkt voor boven-, midden- en onderlagen.
+    def dikte(s):
+        return s[0] - s[1]
+
+    while len(segs) > 1:
+        idx = min(range(len(segs)), key=lambda k: dikte(segs[k]))
+        if dikte(segs[idx]) >= min_dikte:
+            break
+        if idx == 0:
+            j = 1
+        elif idx == len(segs) - 1:
+            j = idx - 1
         else:
-            merged.append(s)
+            j = idx - 1 if dikte(segs[idx - 1]) >= dikte(segs[idx + 1]) else idx + 1
+        lo, hi = min(idx, j), max(idx, j)
+        nieuw = [max(segs[lo][0], segs[hi][0]),
+                 min(segs[lo][1], segs[hi][1]),
+                 segs[j][2]]
+        segs[lo:hi + 1] = [nieuw]
 
     # Aangrenzende lagen van dezelfde groep samenvoegen.
     samengevoegd = []
-    for s in merged:
+    for s in segs:
         if samengevoegd and samengevoegd[-1][2] == s[2]:
             samengevoegd[-1][1] = s[1]
         else:
