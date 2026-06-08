@@ -26,10 +26,11 @@ def parse_gef(file_content: str) -> pd.DataFrame:
     column_separator = None
     gef_type = None
     zid_value = None        # Maaiveldniveau [m NAP] uit #ZID
-    
+    a_factor_gef = None     # Netto-oppervlakteverhouding conus (a) uit #MEASUREMENTVAR
+
     for i, line in enumerate(lines):
         line = line.strip()
-        
+
         if line.startswith("#ZID"):
             # Format: #ZID = ref_system, z_value  (z_value = maaiveld in m NAP)
             parts = line.split("=", 1)[1].strip().split(",")
@@ -68,6 +69,22 @@ def parse_gef(file_content: str) -> pd.DataFrame:
                 except (ValueError, IndexError):
                     pass
         
+        elif line.startswith("#MEASUREMENTVAR"):
+            # Format: #MEASUREMENTVAR = var_nr, value, unit, description
+            # Zoek conservatief naar de netto-oppervlakteverhouding (a / alpha):
+            # waarde in [0.5, 1.0] én een beschrijving die erop wijst.
+            parts = line.split("=", 1)[1].strip().split(",")
+            if len(parts) >= 2:
+                try:
+                    val = float(parts[1].strip())
+                    descr = ",".join(parts[3:]).lower() if len(parts) >= 4 else ""
+                    keywords = ("area ratio", "oppervlakteverhouding", "oppervlakte verhouding",
+                                "alpha", "netto", "a-factor", "net area", "conusfactor")
+                    if 0.5 <= val <= 1.0 and any(k in descr for k in keywords):
+                        a_factor_gef = val
+                except (ValueError, IndexError):
+                    pass
+
         elif line.startswith("#COLUMNSEPARATOR"):
             column_separator = line.split("=", 1)[1].strip()
         
@@ -123,8 +140,31 @@ def parse_gef(file_content: str) -> pd.DataFrame:
     df.attrs["gef_column_units"] = column_units
     df.attrs["gef_type"] = gef_type
     df.attrs["maaiveld_nap"] = zid_value  # None als niet gevonden
-    
+    df.attrs["a_factor_gef"] = a_factor_gef  # None als niet gevonden
+
     return df
+
+
+def check_u2_eenheid(df: pd.DataFrame, col_mapping: dict) -> str | None:
+    """Waarschuw als u₂ vermoedelijk in kPa staat i.p.v. MPa.
+
+    qc/fs/u₂ horen in MPa te staan. u₂ ligt fysisch typisch in de orde 0–2 MPa;
+    een mediane |u₂| > 5 MPa (of max > 20) wijst sterk op kPa-eenheden, wat de
+    qt-correctie zou laten ontsporen. We rekenen NIET stil om — alleen waarschuwen.
+    """
+    u2col = col_mapping.get("u2")
+    if not u2col or u2col not in df.columns:
+        return None
+    u2 = pd.to_numeric(df[u2col], errors="coerce").dropna()
+    if u2.empty:
+        return None
+    med = u2.abs().median()
+    mx = u2.abs().max()
+    if med > 5 or mx > 20:
+        return (f"u₂ lijkt in **kPa** te staan (mediaan {med:.0f}, max {mx:.0f}); "
+                f"verwacht MPa (orde 0–2). Controleer de GEF-eenheid — anders ontspoort "
+                f"de qt-correctie. Deel de kolom evt. door 1000.")
+    return None
 
 
 # GEF Quantity Numbers (NEN-EN-ISO 22476-1 / GEF-CPT standaard)
@@ -341,15 +381,24 @@ def render():
                 has_qc = col_mapping["qc"] is not None
                 
                 maaiveld_nap = df.attrs.get("maaiveld_nap", None)
-                
+                a_factor_gef = df.attrs.get("a_factor_gef", None)
+
                 st.session_state.sonderingen[f.name] = {
                     "df": df,
                     "col_mapping": col_mapping,
                     "poriedruk_check": poriedruk_check,
                     "is_qt_corrected": df.attrs.get("is_qt_corrected", False),
                     "maaiveld_nap": maaiveld_nap,
+                    "a_factor_gef": a_factor_gef,
                 }
-                
+
+                # u₂-eenheidcontrole (kPa i.p.v. MPa?)
+                u2_warn = check_u2_eenheid(df, col_mapping)
+                if u2_warn:
+                    st.warning(f"⚠️ **{f.name}**: {u2_warn}")
+                if a_factor_gef is not None:
+                    st.info(f"ℹ️ **{f.name}**: a-factor uit GEF gelezen: {a_factor_gef:.2f}")
+
                 if has_diepte and has_qc:
                     cols_found = []
                     for k, v in col_mapping.items():
@@ -582,6 +631,9 @@ def render():
                         key=f"fd_actief_{selected}",
                         help="Als ingeschakeld wordt deze laag toegevoegd als bovenste laag voor de σᵥ₀-berekening."
                     )
+                    if fund_actief:
+                        st.caption("⚠️ Gebruik dit niet samen met een aparte funderingslaag in de "
+                                   "Grondopbouw — anders telt de bovenlaag dubbel mee in σᵥ₀.")
                     fund_dikte = st.number_input(
                         "Dikte [m]",
                         value=float(fund.get("dikte", 1.5)),

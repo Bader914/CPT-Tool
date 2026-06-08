@@ -316,15 +316,17 @@ def render():
                 df["sigma_v0"] = sigma_v0_kpa / 1000.0  # kPa → MPa
                 df["sigma_v0_eff"] = (sigma_v0_kpa - df["u0"] * 1000.0).clip(lower=0) / 1000.0
 
-                # qt-correctie
+                # qt-correctie — gebruik de a-factor uit de GEF indien beschikbaar,
+                # anders de globaal ingestelde waarde.
+                a_local = data.get("a_factor_gef") or a_factor
                 is_qt_corrected = data.get("is_qt_corrected", False)
                 if is_qt_corrected:
                     df["qt"] = qc
                     qt_note = "al gecorrigeerd (qty 14)"
                 elif cm.get("u2") and cm["u2"] in df.columns:
-                    df["qt"] = bereken_qt(qc, df[cm["u2"]], a_factor)
+                    df["qt"] = bereken_qt(qc, df[cm["u2"]], a_local)
                     df["Bq"] = bereken_Bq(df[cm["u2"]], df["u0"], df["qt"], df["sigma_v0"])
-                    qt_note = "met u₂-correctie"
+                    qt_note = f"u₂-correctie (a={a_local:.2f})"
                 else:
                     df["qt"] = qc
                     qt_note = "geen u₂ (qt = qc)"

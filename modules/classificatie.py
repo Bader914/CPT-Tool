@@ -164,25 +164,6 @@ ROBERTSON_ZONES = {
 }
 
 
-def classificeer_robertson(Qt: pd.Series, Rf: pd.Series) -> pd.Series:
-    """
-    Robertson 1990 classificatie op basis van Qt (genormaliseerd) en Rf.
-    Behouden voor compatibiliteit en gebruikt als achtergrondhint als Qt al beschikbaar is.
-    """
-    zones = pd.Series(index=Qt.index, dtype=int)
-    zones[(Qt <= 1)] = 2
-    zones[(Qt > 1) & (Qt <= 10) & (Rf > 3)] = 3
-    zones[(Qt > 1) & (Qt <= 10) & (Rf <= 3) & (Rf > 1)] = 4
-    zones[(Qt > 10) & (Qt <= 30) & (Rf > 1)] = 5
-    zones[(Qt > 10) & (Qt <= 30) & (Rf <= 1)] = 6
-    zones[(Qt > 30) & (Qt <= 100) & (Rf <= 1)] = 7
-    zones[(Qt > 100)] = 8
-    zones[(Qt > 1) & (Qt <= 10) & (Rf <= 1)] = 1
-    zones[(Qt > 30) & (Rf > 1)] = 9
-    zones = zones.fillna(3)
-    return zones.astype(int)
-
-
 # Atmosferische referentiedruk [MPa] (≈ 100 kPa) voor de Robertson ISBT-index.
 PA_MPA = 0.1
 
