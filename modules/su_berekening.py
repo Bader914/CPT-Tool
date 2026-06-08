@@ -69,8 +69,10 @@ def render():
                 resultaten.append({"Sondering": name, "Status": "❌ grondlaag ontbreekt"})
                 continue
 
-            # Nkt direct uit grondlaag
-            df["Nkt_gebruikt"] = df["grondlaag"].map(nkt_per_grondlaag)
+            # Nkt per grondlaag — per-sondering lagen indien aanwezig, anders globaal
+            lagen_eff = data.get("lagen_lokaal") or lagen
+            nkt_map = {l["naam"]: l["Nkt"] for l in lagen_eff if l.get("Nkt") is not None}
+            df["Nkt_gebruikt"] = df["grondlaag"].map(nkt_map)
 
             # Su alleen voor dijkmateriaal (uit classificatie) + Nkt aanwezig + voorboring geldig
             geldig = df.get("is_dijkmateriaal", pd.Series([True] * len(df), index=df.index))

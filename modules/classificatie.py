@@ -9,6 +9,27 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
+from modules.uitgangspunten import bouw_lagen_uit_grondopbouw, get_lagen_bibliotheek
+
+
+def grenzen_uit_lagen(lagen_lokaal: list) -> dict:
+    """Maak een laaggrenzen-dict (naam → top/onder/kleur/dijk) uit een lagen-lijst."""
+    return {
+        l["naam"]: {
+            "top_nap": l.get("top_nap"),
+            "onder_nap": l.get("onder_nap"),
+            "kleur": l.get("kleur", "#888888"),
+            "is_dijkmateriaal": l.get("is_dijkmateriaal", False),
+        }
+        for l in lagen_lokaal
+    }
+
+
+def rows_uit_lagen(lagen: list) -> list:
+    """Maak grondopbouw-rijen (bovenkant + laagtype) uit lagen met bekende top_nap."""
+    return [{"bovenkant": l["top_nap"], "laagtype": l["naam"]}
+            for l in lagen if l.get("top_nap") is not None]
+
 
 # ───────────────────────────────────────────────────────────────
 # Robertson 1990 zones (alleen voor achtergrondhint)
@@ -165,6 +186,10 @@ def render():
     st.markdown("---")
     st.subheader("Snel-classificatie (defaults toepassen)")
 
+    bibliotheek = get_lagen_bibliotheek(up)
+    # Projectdefault als grondopbouw-rijen: globale grondopbouw-tab, anders uit lagen.
+    default_rows = up.get("grondopbouw") or rows_uit_lagen(lagen)
+
     if st.button("▶️ Pas standaard laaggrenzen toe op alle sonderingen", type="primary", use_container_width=True):
         succes = 0
         for name, data in gereed.items():
@@ -188,20 +213,24 @@ def render():
                 lambda z: ROBERTSON_ZONES.get(z, {}).get("naam", "Onbekend")
             )
 
-            # Laaggrenzen uit defaults
-            grenzen = data.get("laaggrenzen") or default_laaggrenzen(lagen)
-            df["grondlaag"] = toewijs_grondlaag(df["diepte_nap"], grenzen)
+            # Per-sondering grondopbouw: bestaande lokale, anders projectdefault.
+            rows = data.get("grondopbouw_lokaal") or [dict(r) for r in default_rows]
+            basis_nap = float(df["diepte_nap"].min())
+            lagen_lokaal = bouw_lagen_uit_grondopbouw(rows, bibliotheek, basis_nap)
+            grenzen = grenzen_uit_lagen(lagen_lokaal) if lagen_lokaal else default_laaggrenzen(lagen)
 
-            # Markeer dijkmateriaal op basis van SHZ-laag (niet Robertson)
-            dijkmat_lagen = {laag["naam"] for laag in lagen if laag.get("is_dijkmateriaal")}
+            df["grondlaag"] = toewijs_grondlaag(df["diepte_nap"], grenzen)
+            dijkmat_lagen = {n for n, g in grenzen.items() if g.get("is_dijkmateriaal")}
             df["is_dijkmateriaal"] = df["grondlaag"].isin(dijkmat_lagen)
 
             st.session_state.sonderingen[name]["df"] = df
+            st.session_state.sonderingen[name]["grondopbouw_lokaal"] = rows
+            st.session_state.sonderingen[name]["lagen_lokaal"] = lagen_lokaal
             st.session_state.sonderingen[name]["laaggrenzen"] = grenzen
             st.session_state.sonderingen[name]["geclassificeerd"] = True
             succes += 1
 
-        st.success(f"✅ {succes} sondering(en) geclassificeerd met defaults. Pas hieronder per sondering aan.")
+        st.success(f"✅ {succes} sondering(en) geclassificeerd met de projectdefault. Pas hieronder per sondering aan.")
         st.rerun()
 
     # Per-sondering editor
@@ -225,59 +254,62 @@ def render():
     grenzen = data.get("laaggrenzen") or default_laaggrenzen(lagen)
     mv_nap = data.get("maaiveld_nap") or up.get("dijkopbouw", {}).get("kruinniveau", 4.0)
 
+    type_namen = [l["naam"] for l in bibliotheek]
+    basis_nap = float(df["diepte_nap"].min())
+
     col_edit, col_plot = st.columns([1, 1.4])
 
     with col_edit:
-        st.markdown("**Top/onder per laag [m NAP]:**")
-        st.caption(f"Maaiveld: NAP {mv_nap:+.2f}m · Sondeerbereik: NAP {df['diepte_nap'].max():+.2f} → {df['diepte_nap'].min():+.2f}m")
+        st.markdown("**Grondopbouw (bovenkant per laag, m NAP):**")
+        st.caption(f"Maaiveld: NAP {mv_nap:+.2f}m · Sondeerbereik: NAP {df['diepte_nap'].max():+.2f} → "
+                   f"{df['diepte_nap'].min():+.2f}m · Default uit de Grondopbouw-tab; pas hier per sondering aan.")
 
-        nieuwe_grenzen = {}
-        for laag in lagen:
-            naam = laag["naam"]
-            huidig = grenzen.get(naam, {})
-            top_default = huidig.get("top_nap") if huidig.get("top_nap") is not None else laag.get("top_nap")
-            onder_default = huidig.get("onder_nap") if huidig.get("onder_nap") is not None else laag.get("onder_nap")
+        # Seed: lokale grondopbouw → projectdefault → uit huidige grenzen.
+        if data.get("grondopbouw_lokaal"):
+            seed_rows = data["grondopbouw_lokaal"]
+        elif default_rows:
+            seed_rows = [dict(r) for r in default_rows]
+        else:
+            seed_rows = [{"bovenkant": g["top_nap"], "laagtype": n}
+                         for n, g in grenzen.items() if g.get("top_nap") is not None]
 
-            with st.expander(f"{naam}", expanded=False):
-                c1, c2, c3 = st.columns([1, 1, 0.6])
-                with c1:
-                    top_val = st.number_input(
-                        "Top [m NAP]",
-                        value=float(top_default) if top_default is not None else 0.0,
-                        step=0.1, format="%.2f",
-                        key=f"top_{selected}_{naam}",
-                    )
-                with c2:
-                    onder_val = st.number_input(
-                        "Onder [m NAP]",
-                        value=float(onder_default) if onder_default is not None else -1.0,
-                        step=0.1, format="%.2f",
-                        key=f"onder_{selected}_{naam}",
-                    )
-                with c3:
-                    actief = st.checkbox(
-                        "Aanwezig",
-                        value=top_default is not None and onder_default is not None,
-                        key=f"act_{selected}_{naam}",
-                        help="Uitschakelen als deze laag op deze locatie niet voorkomt."
-                    )
+        seed_df = pd.DataFrame(seed_rows, columns=["bovenkant", "laagtype"])
 
-                nieuwe_grenzen[naam] = {
-                    "top_nap": top_val if actief else None,
-                    "onder_nap": onder_val if actief else None,
-                    "kleur": laag.get("kleur", "#888888"),
-                    "is_dijkmateriaal": laag.get("is_dijkmateriaal", False),
-                }
+        edited = st.data_editor(
+            seed_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            key=f"grondopbouw_editor_{selected}",
+            column_config={
+                "bovenkant": st.column_config.NumberColumn(
+                    "Bovenkant [m NAP]", format="%.2f", step=0.1,
+                    help="Diepte (m NAP) van de bovenkant van de laag. Onderkant = volgende rij."),
+                "laagtype": st.column_config.SelectboxColumn(
+                    "Laagtype", options=type_namen, required=False,
+                    help="Kies een laagtype uit de bibliotheek (γ/Nkt komen automatisch mee)."),
+            },
+        )
+
+        st.caption(f"Onderste laag loopt door tot de sondeerbasis (NAP {basis_nap:+.2f}m).")
 
         if st.button("💾 Laaggrenzen opslaan", key=f"save_grenzen_{selected}", type="primary"):
-            st.session_state.sonderingen[selected]["laaggrenzen"] = nieuwe_grenzen
-            df_new = df.copy()
-            df_new["grondlaag"] = toewijs_grondlaag(df_new["diepte_nap"], nieuwe_grenzen)
-            dijkmat_lagen = {n for n, g in nieuwe_grenzen.items() if g.get("is_dijkmateriaal")}
-            df_new["is_dijkmateriaal"] = df_new["grondlaag"].isin(dijkmat_lagen)
-            st.session_state.sonderingen[selected]["df"] = df_new
-            st.success(f"✅ Laaggrenzen voor **{selected}** opgeslagen.")
-            st.rerun()
+            rows = edited.to_dict("records")
+            lagen_lokaal = bouw_lagen_uit_grondopbouw(rows, bibliotheek, basis_nap)
+            if not lagen_lokaal:
+                st.warning("⚠️ Geen geldige rijen (vul bovenkant én laagtype in).")
+            else:
+                nieuwe_grenzen = grenzen_uit_lagen(lagen_lokaal)
+                df_new = df.copy()
+                df_new["grondlaag"] = toewijs_grondlaag(df_new["diepte_nap"], nieuwe_grenzen)
+                dijkmat_lagen = {n for n, g in nieuwe_grenzen.items() if g.get("is_dijkmateriaal")}
+                df_new["is_dijkmateriaal"] = df_new["grondlaag"].isin(dijkmat_lagen)
+                st.session_state.sonderingen[selected]["df"] = df_new
+                st.session_state.sonderingen[selected]["grondopbouw_lokaal"] = rows
+                st.session_state.sonderingen[selected]["lagen_lokaal"] = lagen_lokaal
+                st.session_state.sonderingen[selected]["laaggrenzen"] = nieuwe_grenzen
+                st.success(f"✅ Laaggrenzen voor **{selected}** opgeslagen.")
+                st.rerun()
 
     with col_plot:
         toon_robertson = st.checkbox("Toon Robertson-zones (achtergrondhint)", value=False,
@@ -299,6 +331,16 @@ def render():
                     annotation_text=naam, annotation_position="left",
                     annotation_font_size=9,
                 )
+
+        # Laaggrens-markers: horizontale lijn op elke bovenkant
+        for naam, g in grenzen.items():
+            if g.get("top_nap") is None:
+                continue
+            fig.add_hline(
+                y=g["top_nap"], line=dict(color="#455a64", dash="dash", width=1),
+                annotation_text=f"{g['top_nap']:+.2f}", annotation_position="right",
+                annotation_font_size=8,
+            )
 
         # qt of qc lijn
         x_col = "qt" if "qt" in df.columns else cm["qc"]

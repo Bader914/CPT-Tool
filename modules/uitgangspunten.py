@@ -307,12 +307,27 @@ def bouw_lagen_uit_grondopbouw(rows: list, bibliotheek: list, onderkant_diepste_
         nkt = r.get("Nkt")
         laag["Nkt"] = float(nkt) if nkt not in (None, "", 0, 0.0) else basis.get("Nkt")
 
-        laag["is_dijkmateriaal"] = bool(r.get("is_dijkmateriaal"))
+        # is_dijkmateriaal: gebruik de rijwaarde als die er is, anders de bibliotheek.
+        # Zo werkt ook een minimale per-sondering rij (alleen bovenkant + laagtype).
+        laag["is_dijkmateriaal"] = bool(r.get("is_dijkmateriaal", basis.get("is_dijkmateriaal", False)))
         laag.setdefault("kleur", "#888888")
         laag.setdefault("materiaal", type_naam)
         lagen.append(laag)
 
     return lagen
+
+
+def get_lagen_bibliotheek(up: dict) -> list:
+    """Geef de stabiele laag-bibliotheek (catalogus van laagtypes met parameters).
+
+    Wordt één keer gesnapshot uit de huidige lagen (of de defaults) en daarna NIET
+    meer overschreven door 'Grondopbouw toepassen', zodat dropdowns altijd alle
+    laagtypes blijven tonen. Gedeeld door de Grondopbouw-tab en de per-sondering
+    interpretatie in Classificatie.
+    """
+    if "lagen_bibliotheek" not in up:
+        up["lagen_bibliotheek"] = [dict(l) for l in up.get("lagen", DEFAULT_UITGANGSPUNTEN["lagen"])]
+    return up["lagen_bibliotheek"]
 
 
 def maak_dijkprofiel_figuur(lagen: list) -> go.Figure:
@@ -498,12 +513,8 @@ def render():
                    "De onderkant van een laag = de bovenkant van de volgende rij; de diepste "
                    "laag loopt door tot de opgegeven basis.")
 
-        # Stabiele laag-bibliotheek (catalogus van laagtypes met parameters).
-        # Wordt één keer gesnapshot en NIET overschreven door 'Grondopbouw toepassen',
-        # zodat de dropdown altijd alle laagtypes blijft tonen.
-        if "lagen_bibliotheek" not in up:
-            up["lagen_bibliotheek"] = [dict(l) for l in up.get("lagen", DEFAULT_UITGANGSPUNTEN["lagen"])]
-        lagen_biblio = up["lagen_bibliotheek"]
+        # Stabiele laag-bibliotheek (gedeeld met de per-sondering interpretatie).
+        lagen_biblio = get_lagen_bibliotheek(up)
         type_namen = [l["naam"] for l in lagen_biblio]
 
         # Seed de tabel: uit eerder opgeslagen grondopbouw, anders uit de huidige lagen

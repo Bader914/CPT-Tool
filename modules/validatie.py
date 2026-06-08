@@ -99,7 +99,8 @@ def render():
     df_cpt = data["df"]
     laaggrenzen = data.get("laaggrenzen", {})
     up = st.session_state.get("uitgangspunten", {})
-    lagen = up.get("lagen", [])
+    # Per-sondering lagen (γ/Nkt) indien aanwezig, anders de globale lagen.
+    lagen = data.get("lagen_lokaal") or up.get("lagen", [])
 
     # Filter lab op nuttige rijen
     lab = lab_df[[l_nap, l_su] + ([l_type] if l_type != "(geen)" else [])].copy()
@@ -242,11 +243,17 @@ def render():
         )
         st.plotly_chart(fig2, use_container_width=True)
 
-    if st.button(f"💾 Nkt = {nieuw_nkt:.1f} opslaan voor {kal_laag} (Uitgangspunten)", type="primary"):
+    heeft_lokaal = bool(data.get("lagen_lokaal"))
+    doel = "deze sondering" if heeft_lokaal else "Uitgangspunten (globaal)"
+    if st.button(f"💾 Nkt = {nieuw_nkt:.1f} opslaan voor {kal_laag} ({doel})", type="primary"):
         for l in lagen:
             if l["naam"] == kal_laag:
                 l["Nkt"] = nieuw_nkt
                 break
-        st.session_state.uitgangspunten["lagen"] = lagen
+        if heeft_lokaal:
+            # Schrijf terug naar de per-sondering lagen, niet naar de globale lijst.
+            st.session_state.sonderingen[selected]["lagen_lokaal"] = lagen
+        else:
+            st.session_state.uitgangspunten["lagen"] = lagen
         st.success(f"✅ Nkt voor {kal_laag} bijgewerkt naar {nieuw_nkt:.1f}. "
                     "Klik op 'Bereken Su' in Stap 5 om door te rekenen.")

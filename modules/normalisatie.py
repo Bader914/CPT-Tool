@@ -275,6 +275,8 @@ def render():
             grenzen = data.get("laaggrenzen", {})
             fund = data.get("funderingslaag")
             voorboring = data.get("voorboring")
+            # Per-sondering lagen (γ/Nkt) indien aanwezig, anders de globale lagen.
+            lagen_eff = data.get("lagen_lokaal") or lagen
 
             # Lokale waterdruk-override (lege override = globale waarden)
             lokaal = data.get("waterdruk_lokaal") or {}
@@ -309,7 +311,7 @@ def render():
                 ) / 1000.0  # kPa → MPa
 
                 sigma_v0_kpa = bereken_sigma_v0_met_grondlaag(
-                    df["diepte_nap"], df["grondlaag"], lagen, mv_nap, gwl_local, fund
+                    df["diepte_nap"], df["grondlaag"], lagen_eff, mv_nap, gwl_local, fund
                 )
                 df["sigma_v0"] = sigma_v0_kpa / 1000.0  # kPa → MPa
                 df["sigma_v0_eff"] = (sigma_v0_kpa - df["u0"] * 1000.0).clip(lower=0) / 1000.0
