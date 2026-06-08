@@ -31,9 +31,10 @@ def rows_uit_lagen(lagen: list) -> list:
             for l in lagen if l.get("top_nap") is not None]
 
 
-# Robertson-zone → grove grondgroep (voor de suggestie-hint)
+# Robertson-zone → grove grondgroep (voor de suggestie-hint).
+# Scheiding zand/klei op de gedrags-index ISBT = 2.60 (zone 5 = zand-achtig).
 ROBERTSON_GROEP = {1: "klei", 2: "veen", 3: "klei", 4: "klei",
-                   5: "klei", 6: "zand", 7: "zand", 8: "zand", 9: "klei"}
+                   5: "zand", 6: "zand", 7: "zand", 8: "zand", 9: "klei"}
 
 
 def _representatief_laagtype(groep: str, bibliotheek: list) -> str:
@@ -167,22 +168,48 @@ def classificeer_robertson(Qt: pd.Series, Rf: pd.Series) -> pd.Series:
     return zones.astype(int)
 
 
+# Atmosferische referentiedruk [MPa] (≈ 100 kPa) voor de Robertson ISBT-index.
+PA_MPA = 0.1
+
+
+def bereken_isbt(qc: pd.Series, Rf: pd.Series) -> pd.Series:
+    """Niet-genormaliseerde Robertson SBT-index ISBT (Robertson 2010).
+
+        ISBT = √[(3.47 − log₁₀(qc/pₐ))² + (log₁₀(Rf) + 1.22)²]
+
+    qc in MPa, Rf in %. Geschikt vóór de normalisatie-stap; vrijwel gelijk aan de
+    genormaliseerde Ic bij σ'v0 ≈ 50–150 kPa (ondiepe dijklagen). Rf wordt
+    begrensd op 0,1–10 % zoals in de Deltares-implementatie (geolib-plus).
+    """
+    qc_pa = (qc / PA_MPA).clip(lower=1e-3)        # voorkom log10(0)
+    rf = Rf.clip(lower=0.1, upper=10.0)
+    return np.sqrt((3.47 - np.log10(qc_pa)) ** 2 + (np.log10(rf) + 1.22) ** 2)
+
+
 def classificeer_simple(qc: pd.Series, Rf: pd.Series) -> pd.Series:
+    """Robertson SBT-zone (2–7) op basis van de niet-genormaliseerde ISBT-index.
+
+    Officiële Robertson (2010) grenswaarden — dezelfde als de genormaliseerde Ic:
+
+        ISBT ≥ 3.60          → zone 2  organisch / veen
+        2.95 ≤ ISBT < 3.60   → zone 3  klei
+        2.60 ≤ ISBT < 2.95   → zone 4  siltmengsel (klei-achtig)
+        2.05 ≤ ISBT < 2.60   → zone 5  zandmengsel (zand-achtig)
+        1.31 ≤ ISBT < 2.05   → zone 6  zand
+        ISBT < 1.31          → zone 7  dicht / grindig zand
+
+    De gedrags-scheiding zand/klei ligt op ISBT = 2.60. Zones 1, 8 en 9
+    (gevoelig / sterk overgeconsolideerd) vereisen genormaliseerde data en
+    worden hier niet onderscheiden.
     """
-    Vereenvoudigde Robertson-achtige zone-bepaling zonder normalisatie.
-    Gebruikt qc [MPa] en Rf [%] direct - geschikt voor achtergrondhint
-    vóór de normalisatie-stap (waar Qt nog niet bestaat).
-    """
+    isbt = bereken_isbt(qc, Rf)
     zones = pd.Series(index=qc.index, dtype="Int64")
-    zones[qc < 0.5] = 2
-    zones[(qc >= 0.5) & (qc < 2.0) & (Rf > 3)] = 3
-    zones[(qc >= 0.5) & (qc < 2.0) & (Rf <= 3) & (Rf > 1)] = 4
-    zones[(qc >= 0.5) & (qc < 2.0) & (Rf <= 1)] = 1
-    zones[(qc >= 2.0) & (qc < 5.0) & (Rf > 1)] = 5
-    zones[(qc >= 2.0) & (qc < 5.0) & (Rf <= 1)] = 6
-    zones[(qc >= 5.0) & (qc < 15.0) & (Rf <= 1)] = 7
-    zones[(qc >= 5.0) & (qc < 15.0) & (Rf > 1)] = 9
-    zones[qc >= 15.0] = 8
+    zones[isbt >= 3.60] = 2
+    zones[(isbt >= 2.95) & (isbt < 3.60)] = 3
+    zones[(isbt >= 2.60) & (isbt < 2.95)] = 4
+    zones[(isbt >= 2.05) & (isbt < 2.60)] = 5
+    zones[(isbt >= 1.31) & (isbt < 2.05)] = 6
+    zones[isbt < 1.31] = 7
     return zones.fillna(3).astype(int)
 
 
@@ -500,7 +527,7 @@ def render():
 
         fig.update_layout(
             title=f"{selected}",
-            xaxis=dict(title=f"{x_col} [MPa]"),
+            xaxis=dict(title=("qt [MPa]" if x_col == "qt" else "qc [MPa]")),
             yaxis=dict(title="Niveau [m NAP]"),
             height=700,
             template="plotly_white",
