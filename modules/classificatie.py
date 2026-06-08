@@ -31,6 +31,107 @@ def rows_uit_lagen(lagen: list) -> list:
             for l in lagen if l.get("top_nap") is not None]
 
 
+# Robertson-zone → grove grondgroep (voor de suggestie-hint)
+ROBERTSON_GROEP = {1: "klei", 2: "veen", 3: "klei", 4: "klei",
+                   5: "klei", 6: "zand", 7: "zand", 8: "zand", 9: "klei"}
+
+
+def _representatief_laagtype(groep: str, bibliotheek: list) -> str:
+    """Kies een representatief bibliotheek-laagtype voor een grove groep (zand/klei/veen)."""
+    def vind(keys, exclude=()):
+        for l in bibliotheek:
+            tekst = f"{l.get('naam', '')} {l.get('materiaal', '')}".lower()
+            if any(k in tekst for k in keys) and not any(e in tekst for e in exclude):
+                return l["naam"]
+        return None
+
+    namen = [l["naam"] for l in bibliotheek]
+    fallback = namen[0] if namen else "Onbekend"
+    if groep == "veen":
+        return vind(["veen"]) or fallback
+    if groep == "zand":
+        # liefst ophoog-/pleistoceen zand; niet puin/fundering en niet 'zandige klei'
+        return (vind(["ophoog"]) or vind(["zand"], exclude=["puin", "fundering", "klei", "veen"])
+                or vind(["zand"]) or fallback)
+    return vind(["siltig"]) or vind(["klei"]) or fallback  # klei: liefst siltige klei
+
+
+def suggereer_grondopbouw(df: pd.DataFrame, cm: dict, bibliotheek: list,
+                          min_dikte: float = 0.5) -> list:
+    """Stel grondopbouw-rijen voor op basis van Robertson (qc/Rf) als startpunt.
+
+    De ruwe per-punt Robertson-zones worden vertaald naar grove groepen
+    (zand/klei/veen), met een rolling-mode gladgestreken zodat dunne ruislaagjes
+    verdwijnen. Aaneengesloten segmenten worden samengevoegd tot lagen; lagen
+    dunner dan `min_dikte` worden in de bovenliggende laag opgenomen.
+
+    Geeft rijen [{"bovenkant": NAP, "laagtype": <bibliotheeknaam>}] — bedoeld als
+    suggestie die de gebruiker daarna bijschaaft.
+    """
+    if "diepte_nap" not in df.columns or not cm.get("qc") or cm["qc"] not in df.columns:
+        return []
+
+    qc = df[cm["qc"]]
+    if cm.get("fs") and cm["fs"] in df.columns:
+        rf = (df[cm["fs"]] / qc.replace(0, np.nan)) * 100
+    else:
+        rf = pd.Series(2.0, index=df.index)
+
+    zones = classificeer_simple(qc, rf.fillna(2.0))
+    groep = zones.map(lambda z: ROBERTSON_GROEP.get(int(z), "klei"))
+
+    # Sorteer van boven naar beneden (aflopend NAP).
+    d = pd.DataFrame({"z": df["diepte_nap"], "g": groep}).sort_values("z", ascending=False)
+    d = d.reset_index(drop=True)
+    n = len(d)
+    if n == 0:
+        return []
+
+    # Rolling-mode gladstrijken over een venster ~ min_dikte.
+    groepen = ["veen", "klei", "zand"]
+    code = {gname: i for i, gname in enumerate(groepen)}
+    inv = {i: gname for gname, i in code.items()}
+    c = d["g"].map(code).astype(float)
+    dz = float(np.median(np.abs(np.diff(d["z"].values)))) if n > 1 else 0.02
+    win = max(1, int(round(min_dikte / max(dz, 1e-6))))
+    if win > 1:
+        from collections import Counter
+        c = c.rolling(win, center=True, min_periods=1).apply(
+            lambda w: Counter(w.astype(int)).most_common(1)[0][0], raw=True)
+    g = c.round().astype(int).map(inv).values
+    z = d["z"].values
+
+    # Segmenteer in aaneengesloten groepen.
+    segs = []  # [top_nap, onder_nap, groep]
+    start = 0
+    for i in range(1, n + 1):
+        if i == n or g[i] != g[start]:
+            top = z[start]
+            onder = z[i] if i < n else z[n - 1]
+            segs.append([top, onder, g[start]])
+            start = i
+
+    # Dunne lagen samenvoegen in de bovenliggende laag.
+    merged = []
+    for s in segs:
+        if merged and (s[0] - s[1]) < min_dikte:
+            merged[-1][1] = s[1]
+        else:
+            merged.append(s)
+
+    # Aangrenzende lagen van dezelfde groep samenvoegen.
+    samengevoegd = []
+    for s in merged:
+        if samengevoegd and samengevoegd[-1][2] == s[2]:
+            samengevoegd[-1][1] = s[1]
+        else:
+            samengevoegd.append(s)
+
+    return [{"bovenkant": round(float(s[0]), 2),
+             "laagtype": _representatief_laagtype(s[2], bibliotheek)}
+            for s in samengevoegd]
+
+
 # ───────────────────────────────────────────────────────────────
 # Robertson 1990 zones (alleen voor achtergrondhint)
 # ───────────────────────────────────────────────────────────────
@@ -259,10 +360,31 @@ def render():
 
     col_edit, col_plot = st.columns([1, 1.4])
 
+    z_top = float(df["diepte_nap"].max())
+
     with col_edit:
         st.markdown("**Grondopbouw (bovenkant per laag, m NAP):**")
-        st.caption(f"Maaiveld: NAP {mv_nap:+.2f}m · Sondeerbereik: NAP {df['diepte_nap'].max():+.2f} → "
-                   f"{df['diepte_nap'].min():+.2f}m · Default uit de Grondopbouw-tab; pas hier per sondering aan.")
+        st.caption(f"Maaiveld: NAP {mv_nap:+.2f}m · Sondeerbereik: NAP {z_top:+.2f} → "
+                   f"{basis_nap:+.2f}m · Default uit de Grondopbouw-tab; pas hier per sondering aan.")
+
+        # Robertson-suggestie als startpunt
+        col_sug1, col_sug2 = st.columns([1, 1])
+        with col_sug1:
+            min_dikte = st.number_input(
+                "Min. laagdikte [m]", min_value=0.1, max_value=5.0, value=0.5, step=0.1,
+                key=f"min_dikte_{selected}",
+                help="Dunner dan dit wordt samengevoegd bij de suggestie.",
+            )
+        with col_sug2:
+            st.caption("")
+            if st.button("🔎 Stel laaggrenzen voor (Robertson)", key=f"suggest_{selected}"):
+                voorstel = suggereer_grondopbouw(df, cm, bibliotheek, min_dikte)
+                if voorstel:
+                    st.session_state.sonderingen[selected]["grondopbouw_lokaal"] = voorstel
+                    st.success(f"Voorstel met {len(voorstel)} lagen geplaatst — pas aan en klik 'Laaggrenzen opslaan'.")
+                    st.rerun()
+                else:
+                    st.warning("Kon geen voorstel maken (qc/diepte ontbreekt?).")
 
         # Seed: lokale grondopbouw → projectdefault → uit huidige grenzen.
         if data.get("grondopbouw_lokaal"):
@@ -292,6 +414,21 @@ def render():
         )
 
         st.caption(f"Onderste laag loopt door tot de sondeerbasis (NAP {basis_nap:+.2f}m).")
+
+        # Waarschuw voor lagen die (deels) buiten het meetbereik vallen — niet wegfilteren.
+        buiten = []
+        for naam, g in grenzen.items():
+            top, onder = g.get("top_nap"), g.get("onder_nap")
+            if top is None or onder is None:
+                continue
+            if onder >= z_top:
+                buiten.append(f"**{naam}** ligt volledig bóven de bovenste meting (NAP {z_top:+.2f}m)")
+            elif top <= basis_nap:
+                buiten.append(f"**{naam}** ligt volledig ónder de sondeerbasis (NAP {basis_nap:+.2f}m) — geen meetpunten")
+            elif top < onder:
+                buiten.append(f"**{naam}** is omgekeerd (top < onder) — controleer de grenzen")
+        if buiten:
+            st.warning("⚠️ Buiten meetbereik:\n\n- " + "\n- ".join(buiten))
 
         if st.button("💾 Laaggrenzen opslaan", key=f"save_grenzen_{selected}", type="primary"):
             rows = edited.to_dict("records")
