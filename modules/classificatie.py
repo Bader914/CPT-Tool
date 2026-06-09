@@ -408,6 +408,16 @@ def render():
                     st.rerun()
                 else:
                     st.warning("Kon geen voorstel maken (qc/diepte ontbreekt?).")
+            if st.button("↩️ Gebruik SHZ-dieptezones (projectdefault)", key=f"shz_{selected}",
+                         help="Vul de tabel met de SHZ-lagen op NAP-niveau uit de Grondopbouw-tab. "
+                              "Handig als de grondsoort overal 'klei' is en je op niveau wilt verdelen."):
+                rows_shz = [dict(r) for r in default_rows] if default_rows else []
+                if rows_shz:
+                    st.session_state.sonderingen[selected]["grondopbouw_lokaal"] = rows_shz
+                    st.success("SHZ-dieptezones (projectdefault) geplaatst — pas aan en klik 'Laaggrenzen opslaan'.")
+                    st.rerun()
+                else:
+                    st.warning("Geen projectdefault beschikbaar (stel eerst de Grondopbouw-tab in).")
 
         # Seed: lokale grondopbouw → projectdefault → uit huidige grenzen.
         if data.get("grondopbouw_lokaal"):
@@ -444,6 +454,19 @@ def render():
         preview_lagen = bouw_lagen_uit_grondopbouw(edited.to_dict("records"), bibliotheek, basis_nap)
         preview_grenzen = grenzen_uit_lagen(preview_lagen) if preview_lagen else grenzen
         preview_grondlaag = toewijs_grondlaag(df["diepte_nap"], preview_grenzen)
+
+        # Afgeleide lagen met top / onder / dikte — maakt zichtbaar waarom er bijv.
+        # maar één laag is (die ene laag kan heel dik zijn, bijv. 9,81 m klei).
+        if preview_lagen:
+            afgeleid = pd.DataFrame([{
+                "Laag": l["naam"],
+                "Top [m NAP]": round(l["top_nap"], 2),
+                "Onder [m NAP]": round(l["onder_nap"], 2),
+                "Dikte [m]": round(l["top_nap"] - l["onder_nap"], 2),
+                "Su": "✅" if l.get("is_dijkmateriaal") else "—",
+            } for l in preview_lagen])
+            st.markdown("**Afgeleide lagen (top / onder / dikte):**")
+            st.dataframe(afgeleid, use_container_width=True, hide_index=True)
 
         # Waarschuw voor lagen die (deels) buiten het meetbereik vallen — niet wegfilteren.
         buiten = []
@@ -483,6 +506,9 @@ def render():
                                       key=f"rob_hint_{selected}")
         toon_lagen_band = st.checkbox("Toon SHZ-lagen als achtergrondband", value=True,
                                        key=f"lagen_band_{selected}")
+        toon_rf = st.checkbox("Toon Rf [%] (2e as)", value=True, key=f"toon_rf_{selected}",
+                              help="Wrijvingsgetal Rf = fs/qc·100. Hoog Rf (>~3%) wijst op klei/veen, "
+                                   "laag Rf (<~1%) op zand. Hoge qc met hoge Rf = stijve klei, geen zand.")
 
         fig = go.Figure()
 
@@ -513,9 +539,17 @@ def render():
         x_col = "qt" if "qt" in df.columns else cm["qc"]
         fig.add_trace(go.Scatter(
             x=df[x_col], y=df["diepte_nap"],
-            mode="lines", name=x_col,
+            mode="lines", name=("qt" if x_col == "qt" else "qc"),
             line=dict(color="#0d47a1", width=1.5),
         ))
+
+        # Rf op secundaire x-as (laat zien waarom iets klei vs zand is)
+        if toon_rf and cm.get("fs") and cm["fs"] in df.columns:
+            rf = (df[cm["fs"]] / df[cm["qc"]].replace(0, np.nan)) * 100
+            fig.add_trace(go.Scatter(
+                x=rf.clip(0, 12), y=df["diepte_nap"], name="Rf [%]",
+                xaxis="x2", line=dict(color="#e57373", width=1, dash="dot"),
+            ))
 
         # Robertson-zones als kleurpunten (optioneel)
         if toon_robertson and "robertson_zone" in df.columns:
@@ -531,10 +565,12 @@ def render():
         fig.update_layout(
             title=f"{selected}",
             xaxis=dict(title=("qt [MPa]" if x_col == "qt" else "qc [MPa]")),
+            xaxis2=dict(title="Rf [%]", overlaying="x", side="top",
+                        range=[0, 12], showgrid=False, color="#e57373"),
             yaxis=dict(title="Niveau [m NAP]"),
             height=700,
             template="plotly_white",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, font=dict(size=9)),
+            legend=dict(orientation="h", yanchor="bottom", y=1.08, font=dict(size=9)),
         )
         st.plotly_chart(fig, use_container_width=True)
 
