@@ -41,6 +41,31 @@ def boring_kleur(naam: str, materiaal: str = "") -> str:
     return "#BDBDBD"
 
 
+def teken_boorstaat(fig, lagen: list, col: int, z_top: float, basis_nap: float):
+    """Teken een boorstaat-kolom (gestapelde gekleurde balken) in subplot-kolom `col`.
+
+    Lagen worden geclipt op het meetbereik [basis_nap, z_top], zodat delen buiten
+    de sondering niet (omgekeerd) meegetekend worden. Zo zijn twee boorstaten
+    eerlijk te vergelijken.
+    """
+    for l in lagen:
+        top = min(l["top_nap"], z_top)
+        onder = max(l["onder_nap"], basis_nap)
+        if top <= onder:
+            continue  # valt buiten het meetbereik
+        fig.add_trace(go.Bar(
+            x=["Lithologie"], y=[top - onder], base=onder, width=0.85,
+            marker=dict(color=boring_kleur(l["naam"], l.get("materiaal", "")),
+                        line=dict(color="white", width=0.5)),
+            text=l["naam"].replace("_", " "), textposition="inside",
+            insidetextanchor="middle", textfont=dict(size=9, color="#1a1a1a"),
+            hovertemplate=f"{l['naam']}<br>NAP {l['top_nap']:+.2f} → {l['onder_nap']:+.2f} "
+                          f"({l['top_nap'] - l['onder_nap']:.2f} m)<extra></extra>",
+            showlegend=False,
+        ), row=1, col=col)
+    fig.update_xaxes(showticklabels=False, showgrid=False, row=1, col=col)
+
+
 def grenzen_uit_lagen(lagen_lokaal: list) -> dict:
     """Maak een laaggrenzen-dict (naam → top/onder/kleur/dijk) uit een lagen-lijst."""
     return {
@@ -535,52 +560,59 @@ def render():
                                       key=f"rob_hint_{selected}")
         toon_lagen_band = st.checkbox("Toon SHZ-lagen als achtergrondband", value=True,
                                        key=f"lagen_band_{selected}")
-        toon_rf = st.checkbox("Toon Rf [%] (2e as)", value=True, key=f"toon_rf_{selected}",
+        toon_rf = st.checkbox("Toon Rf [%]", value=True, key=f"toon_rf_{selected}",
                               help="Wrijvingsgetal Rf = fs/qc·100. Hoog Rf (>~3%) wijst op klei/veen, "
                                    "laag Rf (<~1%) op zand. Hoge qc met hoge Rf = stijve klei, geen zand.")
+        vergelijk = st.checkbox("🔬 Vergelijk Robertson ↔ SHZ-dieptezones", value=False,
+                                key=f"vergelijk_{selected}",
+                                help="Toon twee boorstaten naast elkaar: de Robertson-grondsoort "
+                                     "(bij huidige min. laagdikte) en de SHZ-dieptezones (projectdefault).")
 
         x_col = "qt" if "qt" in df.columns else cm["qc"]
+        qc_titel = "qt [MPa]" if x_col == "qt" else "qc [MPa]"
         heeft_rf = bool(toon_rf and cm.get("fs") and cm["fs"] in df.columns)
 
-        # Subplot-opbouw: boorstaat | qc [| Rf]
-        titels = ["Boorstaat", ("qt [MPa]" if x_col == "qt" else "qc [MPa]")]
-        breedtes = [0.18, 0.82]
+        # Boorstaat-kolommen bepalen: één (huidige tabel) of twee (vergelijken).
+        if vergelijk:
+            robertson_lagen = bouw_lagen_uit_grondopbouw(
+                suggereer_grondopbouw(df, cm, bibliotheek, min_dikte), bibliotheek, basis_nap)
+            shz_lagen = (bouw_lagen_uit_grondopbouw([dict(r) for r in default_rows], bibliotheek, basis_nap)
+                         if default_rows else [])
+            boor_kols = [("Robertson", robertson_lagen), ("SHZ-zones", shz_lagen)]
+        else:
+            boor_kols = [("Boorstaat", preview_lagen)]
+
+        titels = [t for t, _ in boor_kols] + [qc_titel] + (["Rf [%]"] if heeft_rf else [])
+        n_boor = len(boor_kols)
+        w_boor = 0.15
+        rest = 1.0 - w_boor * n_boor
         if heeft_rf:
-            titels = ["Boorstaat", ("qt [MPa]" if x_col == "qt" else "qc [MPa]"), "Rf [%]"]
-            breedtes = [0.15, 0.55, 0.30]
-        n = len(titels)
-        fig = make_subplots(rows=1, cols=n, shared_yaxes=True,
+            breedtes = [w_boor] * n_boor + [rest * 0.62, rest * 0.38]
+        else:
+            breedtes = [w_boor] * n_boor + [rest]
+        qc_col = n_boor + 1
+        rf_col = n_boor + 2
+
+        fig = make_subplots(rows=1, cols=len(titels), shared_yaxes=True,
                             column_widths=breedtes, horizontal_spacing=0.03,
                             subplot_titles=titels)
 
-        # ── Kolom 1: boorstaat (lithologie als gestapelde gekleurde balken) ──
-        # Echte Bar-traces i.p.v. shapes, zodat de kolom ook bij één laag rendert.
-        for l in preview_lagen:
-            fig.add_trace(go.Bar(
-                x=["Lithologie"], y=[l["top_nap"] - l["onder_nap"]], base=l["onder_nap"],
-                width=0.85,
-                marker=dict(color=boring_kleur(l["naam"], l.get("materiaal", "")),
-                            line=dict(color="white", width=0.5)),
-                text=l["naam"].replace("_", " "), textposition="inside",
-                insidetextanchor="middle", textfont=dict(size=9, color="#1a1a1a"),
-                hovertemplate=f"{l['naam']}<br>NAP {l['top_nap']:+.2f} → {l['onder_nap']:+.2f} "
-                              f"({l['top_nap'] - l['onder_nap']:.2f} m)<extra></extra>",
-                showlegend=False,
-            ), row=1, col=1)
-        fig.update_xaxes(showticklabels=False, showgrid=False, row=1, col=1)
+        # ── Boorstaat-kolom(men) ──
+        for i, (_, lagen_set) in enumerate(boor_kols, start=1):
+            teken_boorstaat(fig, lagen_set, i, z_top, basis_nap)
 
-        # ── Kolom 2: qc/qt ──
+        # ── qc/qt-kolom ──
         if toon_lagen_band:
             for naam, g in preview_grenzen.items():
                 if g.get("top_nap") is None or g.get("onder_nap") is None:
                     continue
                 fig.add_hrect(y0=g["onder_nap"], y1=g["top_nap"],
                               fillcolor=g.get("kleur", "#888888"), opacity=0.12,
-                              line_width=0, row=1, col=2)
+                              line_width=0, row=1, col=qc_col)
         fig.add_trace(go.Scatter(
             x=df[x_col], y=df["diepte_nap"], mode="lines",
             name=("qt" if x_col == "qt" else "qc"),
-            line=dict(color="#0d47a1", width=1.5)), row=1, col=2)
+            line=dict(color="#0d47a1", width=1.5)), row=1, col=qc_col)
         if toon_robertson and "robertson_zone" in df.columns:
             for zone_nr, info in ROBERTSON_ZONES.items():
                 mask = df["robertson_zone"] == zone_nr
@@ -588,15 +620,15 @@ def render():
                     fig.add_trace(go.Scatter(
                         x=df.loc[mask, x_col], y=df.loc[mask, "diepte_nap"], mode="markers",
                         name=f"R{zone_nr}", marker=dict(color=info["kleur"], size=3, opacity=0.5),
-                    ), row=1, col=2)
+                    ), row=1, col=qc_col)
 
-        # ── Kolom 3: Rf ──
+        # ── Rf-kolom ──
         if heeft_rf:
             rf = (df[cm["fs"]] / df[cm["qc"]].replace(0, np.nan)) * 100
             fig.add_trace(go.Scatter(
                 x=rf.clip(0, 12), y=df["diepte_nap"], mode="lines", name="Rf [%]",
-                line=dict(color="#e57373", width=1)), row=1, col=3)
-            fig.add_vline(x=3.0, line=dict(color="#bbb", dash="dot", width=1), row=1, col=3)
+                line=dict(color="#e57373", width=1)), row=1, col=rf_col)
+            fig.add_vline(x=3.0, line=dict(color="#bbb", dash="dot", width=1), row=1, col=rf_col)
 
         fig.update_yaxes(title_text="Niveau [m NAP]", row=1, col=1)
         fig.update_layout(height=700, template="plotly_white", showlegend=False,
