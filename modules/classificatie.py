@@ -553,19 +553,21 @@ def render():
                             column_widths=breedtes, horizontal_spacing=0.03,
                             subplot_titles=titels)
 
-        # ── Kolom 1: boorstaat (lithologie met standaardkleuren) ──
+        # ── Kolom 1: boorstaat (lithologie als gestapelde gekleurde balken) ──
+        # Echte Bar-traces i.p.v. shapes, zodat de kolom ook bij één laag rendert.
         for l in preview_lagen:
-            fig.add_hrect(
-                y0=l["onder_nap"], y1=l["top_nap"],
-                fillcolor=boring_kleur(l["naam"], l.get("materiaal", "")),
-                opacity=0.95, line_width=0.5, line_color="white", row=1, col=1,
-            )
-            fig.add_annotation(
-                x=0.5, y=(l["top_nap"] + l["onder_nap"]) / 2,
-                text=l["naam"].replace("_", " "), showarrow=False,
-                font=dict(size=9, color="#1a1a1a"), row=1, col=1,
-            )
-        fig.update_xaxes(range=[0, 1], showticklabels=False, showgrid=False, row=1, col=1)
+            fig.add_trace(go.Bar(
+                x=["Lithologie"], y=[l["top_nap"] - l["onder_nap"]], base=l["onder_nap"],
+                width=0.85,
+                marker=dict(color=boring_kleur(l["naam"], l.get("materiaal", "")),
+                            line=dict(color="white", width=0.5)),
+                text=l["naam"].replace("_", " "), textposition="inside",
+                insidetextanchor="middle", textfont=dict(size=9, color="#1a1a1a"),
+                hovertemplate=f"{l['naam']}<br>NAP {l['top_nap']:+.2f} → {l['onder_nap']:+.2f} "
+                              f"({l['top_nap'] - l['onder_nap']:.2f} m)<extra></extra>",
+                showlegend=False,
+            ), row=1, col=1)
+        fig.update_xaxes(showticklabels=False, showgrid=False, row=1, col=1)
 
         # ── Kolom 2: qc/qt ──
         if toon_lagen_band:
@@ -598,7 +600,7 @@ def render():
 
         fig.update_yaxes(title_text="Niveau [m NAP]", row=1, col=1)
         fig.update_layout(height=700, template="plotly_white", showlegend=False,
-                           margin=dict(t=40))
+                           barmode="overlay", margin=dict(t=40))
         st.plotly_chart(fig, use_container_width=True)
 
         # Samenvatting verdeling (live uit de tabel)
