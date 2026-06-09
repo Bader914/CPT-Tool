@@ -8,8 +8,37 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from modules.uitgangspunten import bouw_lagen_uit_grondopbouw, get_lagen_bibliotheek
+
+
+# Standaard lithologie-kleuren voor de boorstaat (Nederlandse conventie, à la
+# DINO/SBB/NEN 5104): zand = geel, klei = groen, veen = bruin, leem/silt = olijf,
+# grind = oranje, puin/fundering = grijs.
+LITHO_KLEUREN = {
+    "grind": "#FB8C00",       # oranje
+    "puin": "#9E9E9E",        # grijs
+    "fundering": "#9E9E9E",   # grijs
+    "veen": "#7B4B27",        # bruin
+    "klei": "#4CAF50",        # groen
+    "silt": "#9E9D24",        # olijf
+    "leem": "#9E9D24",        # olijf
+    "zand": "#FFD54F",        # geel
+}
+
+
+def boring_kleur(naam: str, materiaal: str = "") -> str:
+    """Standaard boorstaat-kleur op basis van de grondsoort in naam/materiaal.
+
+    Volgorde van meest naar minst dominant zodat 'zandige klei' → klei (groen)
+    en 'kleiig veen' → veen (bruin) correct uitkomen.
+    """
+    tekst = f"{naam} {materiaal}".lower()
+    for sleutel in ("grind", "puin", "fundering", "veen", "klei", "silt", "leem", "zand"):
+        if sleutel in tekst:
+            return LITHO_KLEUREN[sleutel]
+    return "#BDBDBD"
 
 
 def grenzen_uit_lagen(lagen_lokaal: list) -> dict:
@@ -510,68 +539,66 @@ def render():
                               help="Wrijvingsgetal Rf = fs/qc·100. Hoog Rf (>~3%) wijst op klei/veen, "
                                    "laag Rf (<~1%) op zand. Hoge qc met hoge Rf = stijve klei, geen zand.")
 
-        fig = go.Figure()
+        x_col = "qt" if "qt" in df.columns else cm["qc"]
+        heeft_rf = bool(toon_rf and cm.get("fs") and cm["fs"] in df.columns)
 
-        # SHZ-lagen als achtergrondband (live uit de tabel)
+        # Subplot-opbouw: boorstaat | qc [| Rf]
+        titels = ["Boorstaat", ("qt [MPa]" if x_col == "qt" else "qc [MPa]")]
+        breedtes = [0.18, 0.82]
+        if heeft_rf:
+            titels = ["Boorstaat", ("qt [MPa]" if x_col == "qt" else "qc [MPa]"), "Rf [%]"]
+            breedtes = [0.15, 0.55, 0.30]
+        n = len(titels)
+        fig = make_subplots(rows=1, cols=n, shared_yaxes=True,
+                            column_widths=breedtes, horizontal_spacing=0.03,
+                            subplot_titles=titels)
+
+        # ── Kolom 1: boorstaat (lithologie met standaardkleuren) ──
+        for l in preview_lagen:
+            fig.add_hrect(
+                y0=l["onder_nap"], y1=l["top_nap"],
+                fillcolor=boring_kleur(l["naam"], l.get("materiaal", "")),
+                opacity=0.95, line_width=0.5, line_color="white", row=1, col=1,
+            )
+            fig.add_annotation(
+                x=0.5, y=(l["top_nap"] + l["onder_nap"]) / 2,
+                text=l["naam"].replace("_", " "), showarrow=False,
+                font=dict(size=9, color="#1a1a1a"), row=1, col=1,
+            )
+        fig.update_xaxes(range=[0, 1], showticklabels=False, showgrid=False, row=1, col=1)
+
+        # ── Kolom 2: qc/qt ──
         if toon_lagen_band:
             for naam, g in preview_grenzen.items():
                 if g.get("top_nap") is None or g.get("onder_nap") is None:
                     continue
-                fig.add_hrect(
-                    y0=g["onder_nap"], y1=g["top_nap"],
-                    fillcolor=g.get("kleur", "#888888"),
-                    opacity=0.18, line_width=0,
-                    annotation_text=naam, annotation_position="left",
-                    annotation_font_size=9,
-                )
-
-        # Laaggrens-markers: horizontale lijn op elke bovenkant (live uit de tabel)
-        for naam, g in preview_grenzen.items():
-            if g.get("top_nap") is None:
-                continue
-            fig.add_hline(
-                y=g["top_nap"], line=dict(color="#455a64", dash="dash", width=1),
-                annotation_text=f"{g['top_nap']:+.2f}", annotation_position="right",
-                annotation_font_size=8,
-            )
-
-        # qt of qc lijn
-        x_col = "qt" if "qt" in df.columns else cm["qc"]
+                fig.add_hrect(y0=g["onder_nap"], y1=g["top_nap"],
+                              fillcolor=g.get("kleur", "#888888"), opacity=0.12,
+                              line_width=0, row=1, col=2)
         fig.add_trace(go.Scatter(
-            x=df[x_col], y=df["diepte_nap"],
-            mode="lines", name=("qt" if x_col == "qt" else "qc"),
-            line=dict(color="#0d47a1", width=1.5),
-        ))
-
-        # Rf op secundaire x-as (laat zien waarom iets klei vs zand is)
-        if toon_rf and cm.get("fs") and cm["fs"] in df.columns:
-            rf = (df[cm["fs"]] / df[cm["qc"]].replace(0, np.nan)) * 100
-            fig.add_trace(go.Scatter(
-                x=rf.clip(0, 12), y=df["diepte_nap"], name="Rf [%]",
-                xaxis="x2", line=dict(color="#e57373", width=1, dash="dot"),
-            ))
-
-        # Robertson-zones als kleurpunten (optioneel)
+            x=df[x_col], y=df["diepte_nap"], mode="lines",
+            name=("qt" if x_col == "qt" else "qc"),
+            line=dict(color="#0d47a1", width=1.5)), row=1, col=2)
         if toon_robertson and "robertson_zone" in df.columns:
             for zone_nr, info in ROBERTSON_ZONES.items():
                 mask = df["robertson_zone"] == zone_nr
                 if mask.any():
                     fig.add_trace(go.Scatter(
-                        x=df.loc[mask, x_col], y=df.loc[mask, "diepte_nap"],
-                        mode="markers", name=f"R{zone_nr} — {info['naam']}",
-                        marker=dict(color=info["kleur"], size=3, opacity=0.5),
-                    ))
+                        x=df.loc[mask, x_col], y=df.loc[mask, "diepte_nap"], mode="markers",
+                        name=f"R{zone_nr}", marker=dict(color=info["kleur"], size=3, opacity=0.5),
+                    ), row=1, col=2)
 
-        fig.update_layout(
-            title=f"{selected}",
-            xaxis=dict(title=("qt [MPa]" if x_col == "qt" else "qc [MPa]")),
-            xaxis2=dict(title="Rf [%]", overlaying="x", side="top",
-                        range=[0, 12], showgrid=False, color="#e57373"),
-            yaxis=dict(title="Niveau [m NAP]"),
-            height=700,
-            template="plotly_white",
-            legend=dict(orientation="h", yanchor="bottom", y=1.08, font=dict(size=9)),
-        )
+        # ── Kolom 3: Rf ──
+        if heeft_rf:
+            rf = (df[cm["fs"]] / df[cm["qc"]].replace(0, np.nan)) * 100
+            fig.add_trace(go.Scatter(
+                x=rf.clip(0, 12), y=df["diepte_nap"], mode="lines", name="Rf [%]",
+                line=dict(color="#e57373", width=1)), row=1, col=3)
+            fig.add_vline(x=3.0, line=dict(color="#bbb", dash="dot", width=1), row=1, col=3)
+
+        fig.update_yaxes(title_text="Niveau [m NAP]", row=1, col=1)
+        fig.update_layout(height=700, template="plotly_white", showlegend=False,
+                           margin=dict(t=40))
         st.plotly_chart(fig, use_container_width=True)
 
         # Samenvatting verdeling (live uit de tabel)
