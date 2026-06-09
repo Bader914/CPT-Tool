@@ -630,6 +630,17 @@ def render():
                 line=dict(color="#e57373", width=1)), row=1, col=rf_col)
             fig.add_vline(x=3.0, line=dict(color="#bbb", dash="dot", width=1), row=1, col=rf_col)
 
+        # ── GWS-lijn (blauw gestippeld) over alle kolommen ──
+        gwl_nap = (data.get("waterdruk_lokaal") or {}).get(
+            "gwl", up.get("dijkopbouw", {}).get("gwl", 0.0))
+        for c in range(1, len(titels) + 1):
+            fig.add_hline(y=gwl_nap, line=dict(color="#2196f3", dash="dot", width=1.5),
+                          row=1, col=c)
+        fig.add_annotation(x=1, xref="x domain", y=gwl_nap, yref="y",
+                           text=f"GWS NAP {gwl_nap:+.1f}m", showarrow=False,
+                           font=dict(size=9, color="#2196f3"),
+                           xanchor="right", yanchor="bottom", row=1, col=1)
+
         fig.update_yaxes(title_text="Niveau [m NAP]", row=1, col=1)
         fig.update_layout(height=700, template="plotly_white", showlegend=False,
                            barmode="overlay", margin=dict(t=40))
