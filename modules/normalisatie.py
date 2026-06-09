@@ -26,15 +26,57 @@ def bereken_q_net(qt: pd.Series, sigma_v0: pd.Series) -> pd.Series:
     return qt - sigma_v0
 
 
-def bereken_Rf(fs: pd.Series, qc: pd.Series) -> pd.Series:
-    """Rf = (fs / qc) * 100  [%]"""
-    return (fs / qc.replace(0, np.nan)) * 100
+def bereken_Rf(fs: pd.Series, qt: pd.Series) -> pd.Series:
+    """Wrijvingsgetal Rf = (fs / qt) · 100  [%].
+
+    Robertson/Lengkeek gebruiken de GECORRIGEERDE conusweerstand qt (niet qc).
+    Bij ontbrekende qt-correctie geldt qt ≈ qc, dus dan is het verschil klein.
+    """
+    return (fs / qt.replace(0, np.nan)) * 100
 
 
 def bereken_Bq(u2: pd.Series, u0: pd.Series, qt: pd.Series, sigma_v0: pd.Series) -> pd.Series:
     """Bq = (u2 - u0) / (qt - sigma_v0)"""
     q_net = qt - sigma_v0
     return (u2 - u0) / q_net.replace(0, np.nan)
+
+
+def bereken_gamma_sat(qt: pd.Series, Rf: pd.Series, methode: str = "lengkeek",
+                      gamma_w: float = 9.81) -> pd.Series:
+    """Verzadigd volumegewicht γ_sat [kN/m³] uit qt [MPa] en Rf [%].
+
+    Methodes:
+      'lengkeek'  — Lengkeek et al. (2018), afgestemd op NL slappe lagen/veen:
+                    γ_sat = 19 − 4.12 · log10(5/qt) / log10(30/Rf)
+      'robertson' — Robertson & Cabal (2010):
+                    γ_sat = γ_w · (0.27·log10(Rf) + 0.36·log10(qt/pa) + 1.236)
+      'simple'    — NEN 9997-1 Tabel 2b (γ uit qc-drempels; qt als proxy)
+
+    Resultaat geklemd op een fysisch bereik [9, 22] kN/m³; niet-bepaalbare punten
+    (qc=0 / Rf=0) krijgen 17 kN/m³ als neutrale fallback.
+    """
+    qt = pd.to_numeric(qt, errors="coerce").clip(lower=0.01)        # MPa, vermijd log(0)
+    rf = pd.to_numeric(Rf, errors="coerce").clip(lower=0.1, upper=12.0)  # %
+
+    if methode == "lengkeek":
+        noemer = np.log10(30.0 / rf).replace(0, np.nan)
+        g = 19.0 - 4.12 * (np.log10(5.0 / qt) / noemer)
+    elif methode == "robertson":
+        pa = 0.101  # MPa
+        g = gamma_w * (0.27 * np.log10(rf) + 0.36 * np.log10(qt / pa) + 1.236)
+    elif methode == "simple":
+        g = pd.Series(np.nan, index=qt.index)
+        g[qt < 0.5] = 14.0
+        g[(qt >= 0.5) & (qt < 1.0)] = 17.0
+        g[(qt >= 1.0) & (qt < 2.0)] = 19.0
+        g[(qt >= 2.0) & (qt < 5.0)] = 20.0
+        g[(qt >= 5.0) & (qt < 15.0)] = 19.0
+        g[(qt >= 15.0) & (qt < 25.0)] = 20.0
+        g[qt >= 25.0] = 21.0
+    else:
+        raise ValueError(f"Onbekende gamma_sat-methode: {methode}")
+
+    return g.replace([np.inf, -np.inf], np.nan).clip(lower=9.0, upper=22.0).fillna(17.0)
 
 
 # ───────────────────────────────────────────────────────────────
@@ -177,6 +219,62 @@ def bereken_sigma_v0_met_grondlaag(
     return pd.Series(sigma_v0, index=diepte_nap.index)
 
 
+def bereken_sigma_v0_uit_gamma(
+    diepte_nap: pd.Series,
+    gamma_sat: pd.Series,
+    mv_nap: float,
+    gwl_nap: float,
+    funderingslaag: dict | None = None,
+    boven_gws_reductie: float = 2.0,
+) -> pd.Series:
+    """Verticale totaalspanning σv0 [kPa] door integratie van een γ-profiel per punt.
+
+    Gebruikt het uit qc/Rf afgeleide γ_sat per meetpunt (zie bereken_gamma_sat):
+        - ONDER de GWS: γ_sat (verzadigd)
+        - BOVEN de GWS: γ_moist ≈ γ_sat − boven_gws_reductie (vochtig, niet verzadigd)
+          conform de standaard: moist boven, saturated onder het grondwater.
+
+    Integratie van maaiveld naar beneden; optioneel een funderingslaag bovenop
+    (eigen γ). γ in kN/m³, dz in m → σ in kPa.
+    """
+    z = diepte_nap.values.astype(float)
+    g = pd.to_numeric(gamma_sat, errors="coerce").fillna(17.0).values.astype(float)
+    # Boven GWS: vochtig volumegewicht (verzadigd minus reductie, niet negatief).
+    g_eff = np.where(z > gwl_nap, np.maximum(g - boven_gws_reductie, 0.0), g)
+
+    sort_idx = np.argsort(-z)
+    z_sorted = g_eff[sort_idx] * 0 + z[sort_idx]   # behoud volgorde van z
+    g_sorted = g_eff[sort_idx]
+
+    fund_actief = bool(funderingslaag and funderingslaag.get("actief"))
+    fund_dikte = funderingslaag.get("dikte", 0.0) if fund_actief else 0.0
+    fund_gamma = funderingslaag.get("gamma", 21.0) if fund_actief else None
+    fund_onder_nap = mv_nap - fund_dikte if fund_actief else mv_nap
+
+    sigma = np.zeros_like(z_sorted)
+    acc = 0.0
+    z_prev = mv_nap
+    for i, (zi, gi) in enumerate(zip(z_sorted, g_sorted)):
+        dz = z_prev - zi
+        if dz <= 0:
+            sigma[i] = acc
+            continue
+        z_top, z_bot = z_prev, zi
+        if fund_actief and z_top > fund_onder_nap:
+            dz_fund = min(z_top, mv_nap) - max(z_bot, fund_onder_nap)
+            if dz_fund > 0:
+                acc += dz_fund * fund_gamma
+            z_top = min(z_top, fund_onder_nap)
+        if z_top > z_bot:
+            acc += (z_top - z_bot) * gi
+        sigma[i] = acc
+        z_prev = zi
+
+    out = np.zeros_like(z)
+    out[sort_idx] = sigma
+    return pd.Series(out, index=diepte_nap.index)
+
+
 # ───────────────────────────────────────────────────────────────
 # Render
 # ───────────────────────────────────────────────────────────────
@@ -261,6 +359,29 @@ def render():
 
     gamma_w = waterdruk.get("gamma_w", 9.81)
 
+    # γ-bron voor σv0: handmatige SHZ-laag-γ (default) of qc-correlatie.
+    st.markdown("**Volumegewicht (γ) voor σ-spanningen**")
+    col_g1, col_g2 = st.columns([1.4, 1])
+    with col_g1:
+        gamma_bron = st.radio(
+            "γ-bron",
+            ["SHZ-laag (Tabel 91)", "qc-correlatie (Lengkeek 2018)",
+             "qc-correlatie (Robertson 2010)", "qc-correlatie (NEN simpel)"],
+            index=0, horizontal=False, key="gamma_bron",
+            help="SHZ: γ per grondlaag uit de uitgangspunten. qc-correlatie: γ_sat "
+                 "per meetpunt afgeleid uit qt en Rf.",
+        )
+    with col_g2:
+        gws_reductie = st.number_input(
+            "γ-reductie boven GWS [kN/m³]", min_value=0.0, max_value=5.0, value=2.0, step=0.5,
+            help="Boven de grondwaterstand is grond niet verzadigd: γ_moist ≈ γ_sat − reductie. "
+                 "Alleen voor de qc-correlatie.",
+        )
+    _bron_map = {"qc-correlatie (Lengkeek 2018)": "lengkeek",
+                 "qc-correlatie (Robertson 2010)": "robertson",
+                 "qc-correlatie (NEN simpel)": "simple"}
+    gamma_methode = _bron_map.get(gamma_bron)  # None = SHZ-laag
+
     st.markdown("---")
 
     if st.button("▶️ Bereken qt, u₀ en σ-spanningen voor alle sonderingen", type="primary", use_container_width=True):
@@ -304,20 +425,8 @@ def render():
 
                 qc = df[cm["qc"]]
 
-                # u0 — 4-zone-model met lineaire overgang (zie Excel waterdrukverloop)
-                df["u0"] = bereken_u0_interpolatie(
-                    df["diepte_nap"], gwl_local, knik_local,
-                    stijghoogte_local, top_zand_local, indringing_local, gamma_w,
-                ) / 1000.0  # kPa → MPa
-
-                sigma_v0_kpa = bereken_sigma_v0_met_grondlaag(
-                    df["diepte_nap"], df["grondlaag"], lagen_eff, mv_nap, gwl_local, fund
-                )
-                df["sigma_v0"] = sigma_v0_kpa / 1000.0  # kPa → MPa
-                df["sigma_v0_eff"] = (sigma_v0_kpa - df["u0"] * 1000.0).clip(lower=0) / 1000.0
-
-                # qt-correctie — gebruik de a-factor uit de GEF indien beschikbaar,
-                # anders de globaal ingestelde waarde.
+                # ── qt-correctie EERST (γ_sat en Rf hebben qt nodig) ──
+                # Gebruik de a-factor uit de GEF indien beschikbaar, anders globaal.
                 a_local = data.get("a_factor_gef") or a_factor
                 is_qt_corrected = data.get("is_qt_corrected", False)
                 if is_qt_corrected:
@@ -325,17 +434,41 @@ def render():
                     qt_note = "al gecorrigeerd (qty 14)"
                 elif cm.get("u2") and cm["u2"] in df.columns:
                     df["qt"] = bereken_qt(qc, df[cm["u2"]], a_local)
-                    df["Bq"] = bereken_Bq(df[cm["u2"]], df["u0"], df["qt"], df["sigma_v0"])
                     qt_note = f"u₂-correctie (a={a_local:.2f})"
                 else:
                     df["qt"] = qc
                     qt_note = "geen u₂ (qt = qc)"
 
-                # Afgeleide grootheden
+                # Rf = fs/qt (Robertson/Lengkeek). Altijd herberekenen met qt.
+                if cm.get("fs") and cm["fs"] in df.columns:
+                    df["Rf"] = bereken_Rf(df[cm["fs"]], df["qt"])
+
+                # u0 — 4-zone-model met lineaire overgang (zie Excel waterdrukverloop)
+                df["u0"] = bereken_u0_interpolatie(
+                    df["diepte_nap"], gwl_local, knik_local,
+                    stijghoogte_local, top_zand_local, indringing_local, gamma_w,
+                ) / 1000.0  # kPa → MPa
+
+                # ── σv0: γ-bron is SHZ-laag (default) of qc-correlatie ──
+                if gamma_methode and "Rf" in df.columns:
+                    df["gamma_sat"] = bereken_gamma_sat(df["qt"], df["Rf"], gamma_methode, gamma_w)
+                    sigma_v0_kpa = bereken_sigma_v0_uit_gamma(
+                        df["diepte_nap"], df["gamma_sat"], mv_nap, gwl_local, fund, gws_reductie
+                    )
+                else:
+                    sigma_v0_kpa = bereken_sigma_v0_met_grondlaag(
+                        df["diepte_nap"], df["grondlaag"], lagen_eff, mv_nap, gwl_local, fund
+                    )
+                df["sigma_v0"] = sigma_v0_kpa / 1000.0  # kPa → MPa
+                df["sigma_v0_eff"] = (sigma_v0_kpa - df["u0"] * 1000.0).clip(lower=0) / 1000.0
+
+                # Bq (vereist u₂)
+                if cm.get("u2") and cm["u2"] in df.columns and not is_qt_corrected:
+                    df["Bq"] = bereken_Bq(df[cm["u2"]], df["u0"], df["qt"], df["sigma_v0"])
+
+                # Afgeleide grootheden (alles in MPa → q_net MPa, Qt dimensieloos)
                 df["q_net"] = bereken_q_net(df["qt"], df["sigma_v0"])
                 df["Qt"] = df["q_net"] / df["sigma_v0_eff"].replace(0, np.nan)
-                if cm.get("fs") and cm["fs"] in df.columns and "Rf" not in df.columns:
-                    df["Rf"] = bereken_Rf(df[cm["fs"]], qc)
 
                 # Voorboring: data in dat dieptebereik ongeldig maken voor Su
                 if voorboring and voorboring.get("actief"):
@@ -350,8 +483,10 @@ def render():
                     "a": a_factor, "gwl": gwl_local, "maaiveld_nap": mv_nap,
                     "knik_nap": knik_local, "stijghoogte_nap": stijghoogte_local,
                     "top_zand_nap": top_zand_local, "indringing": indringing_local,
+                    "gamma_bron": gamma_bron,
                 }
-                resultaten.append({"Sondering": name, "Status": "✅", "qt": qt_note, "Metingen": len(df)})
+                resultaten.append({"Sondering": name, "Status": "✅", "qt": qt_note,
+                                   "γ-bron": gamma_bron, "Metingen": len(df)})
 
             except Exception as e:
                 resultaten.append({"Sondering": name, "Status": f"❌ {e}", "qt": "—", "Metingen": 0})

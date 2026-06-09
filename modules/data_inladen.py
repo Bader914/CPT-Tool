@@ -167,6 +167,35 @@ def check_u2_eenheid(df: pd.DataFrame, col_mapping: dict) -> str | None:
     return None
 
 
+def normaliseer_eenheden_naar_mpa(df: pd.DataFrame, col_mapping: dict) -> list:
+    """Reken qc/fs/u₂ om naar MPa op basis van de gedeclareerde GEF-kolomeenheid.
+
+    De GEF-header (#COLUMNINFO) bevat de eenheid per kolom. Staat een kolom in kPa
+    (of Pa), dan wordt die hier naar MPa omgerekend zodat de hele keten consistent
+    in MPa rekent (qt = qc + (1−a)·u₂, q_net = qt − σv0, …).
+
+    Geeft een lijst met meldingen terug van wat er is omgerekend. Voor CSV/Excel
+    zonder eenheid-info gebeurt er niets (dan vangt check_u2_eenheid het af).
+    """
+    column_info = df.attrs.get("gef_column_info", {})   # col_nr -> naam
+    column_units = df.attrs.get("gef_column_units", {})  # col_nr -> eenheid
+    naam_naar_eenheid = {column_info[nr]: column_units.get(nr, "")
+                         for nr in column_info if nr in column_units}
+
+    factor = {"kpa": 1e-3, "pa": 1e-6, "mpa": 1.0}
+    meldingen = []
+    for param in ("qc", "fs", "u2"):
+        kol = col_mapping.get(param)
+        if not kol or kol not in df.columns:
+            continue
+        eenheid = str(naam_naar_eenheid.get(kol, "")).strip().lower()
+        f = factor.get(eenheid)
+        if f is not None and f != 1.0:
+            df[kol] = pd.to_numeric(df[kol], errors="coerce") * f
+            meldingen.append(f"{param} ({kol}) omgerekend van {eenheid} → MPa (×{f})")
+    return meldingen
+
+
 # GEF Quantity Numbers (NEN-EN-ISO 22476-1 / GEF-CPT standaard)
 GEF_QUANTITY_MAPPING = {
     1: "diepte",      # Sondeerlengte
@@ -374,6 +403,8 @@ def render():
                 
                 # Kolomherkenning
                 col_mapping = detect_columns(df)
+                # Eenheden normaliseren naar MPa (kPa/Pa → MPa) o.b.v. GEF-header
+                eenheid_meldingen = normaliseer_eenheden_naar_mpa(df, col_mapping)
                 poriedruk_check = check_poriedruk_correctie(df, col_mapping)
                 
                 # Controleer of essentiële kolommen gevonden zijn
@@ -392,7 +423,11 @@ def render():
                     "a_factor_gef": a_factor_gef,
                 }
 
-                # u₂-eenheidcontrole (kPa i.p.v. MPa?)
+                # Melding als eenheden zijn omgerekend (kPa/Pa → MPa)
+                if eenheid_meldingen:
+                    st.info(f"ℹ️ **{f.name}**: eenheden genormaliseerd — {'; '.join(eenheid_meldingen)}")
+
+                # u₂-eenheidcontrole (kPa i.p.v. MPa?) — vangt CSV/Excel zonder eenheid-info af
                 u2_warn = check_u2_eenheid(df, col_mapping)
                 if u2_warn:
                     st.warning(f"⚠️ **{f.name}**: {u2_warn}")

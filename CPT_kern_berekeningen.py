@@ -78,49 +78,8 @@ def bereken_qt(qc: pd.Series, u2: pd.Series, a: float = 0.80) -> pd.Series:
 
 
 # =============================================================================
-# STAP 2 — Theoretisch waterdrukverloop u0 (met knikpunt)
+# STAP 2 — Theoretisch waterdrukverloop u0 (4-zone-model, conform Excel)
 # =============================================================================
-def bereken_u0_met_knik(
-    diepte_nap: pd.Series,
-    gwl_nap: float,
-    knik_nap: float,
-    u_top_watervoerend_kpa: float,
-    gamma_w: float = GAMMA_W,
-) -> pd.Series:
-    """Theoretische waterspanning u0 [kPa] over de diepte.
-
-    Het verloop kent drie zones, gescheiden door (1) de grondwaterstand (GWS)
-    en (2) het knikpunt: de overgang van het slecht doorlatende kleipakket naar
-    het onderliggende watervoerende zandpakket.
-
-        Boven GWS            (z > gwl):        u0 = 0
-        GWS → knik (klei):   (knik < z ≤ gwl): u0 = γ_w · (gwl − z)          [hydrostatisch]
-        Onder knik (zand):   (z ≤ knik):       u0 = u_top + γ_w · (knik − z) [start bij pakketdruk]
-
-    waarbij z = diepte in m NAP (positief omhoog).
-
-    Het knikpunt is nodig omdat het watervoerende zandpakket vaak een afwijkende
-    (piëzometrische) stijghoogte heeft — bijv. wegzakkende druk of kwel — die
-    niet hydrostatisch aansluit op de freatische lijn in de klei erboven.
-    `u_top_watervoerend_kpa` is de druk bóvenin het zandpakket; daaronder neemt
-    u0 weer hydrostatisch toe met γ_w.
-
-    Implementatienoot: np.where wordt geneste gebruikt zodat het hele profiel
-    in één vectorbewerking wordt berekend (snel, geen Python-loop per meetpunt).
-    """
-    z = diepte_nap.values.astype(float)
-    u0 = np.where(
-        z > gwl_nap,
-        0.0,                                                  # boven GWS: droog
-        np.where(
-            z > knik_nap,
-            gamma_w * (gwl_nap - z),                          # klei: hydrostatisch
-            u_top_watervoerend_kpa + gamma_w * (knik_nap - z),  # zand: pakketdruk + hydrostatisch
-        ),
-    )
-    return pd.Series(u0, index=diepte_nap.index)
-
-
 def bereken_u0_interpolatie(
     diepte_nap: pd.Series,
     gwl_nap: float,
@@ -161,8 +120,7 @@ def bereken_u0_interpolatie(
         z ≤ (top_zand+i) (zand)     u0 = γ_w·(stijghoogte − z)          [hydrostatisch vanaf stijghoogte]
 
     De interpolatiezone overbrugt soepel het verschil tussen de freatische
-    (hydrostatische) druk in de klei en de piëzometrische druk van het zand —
-    fysisch realistischer dan de discontinue sprong in bereken_u0_met_knik().
+    (hydrostatische) druk in de klei en de piëzometrische druk van het zand.
     """
     z = diepte_nap.values.astype(float) if hasattr(diepte_nap, "values") else np.asarray(diepte_nap, float)
 
@@ -327,16 +285,16 @@ def bereken_q_net(qt: pd.Series, sigma_v0: pd.Series) -> pd.Series:
     return qt - sigma_v0
 
 
-def bereken_Rf(fs: pd.Series, qc: pd.Series) -> pd.Series:
+def bereken_Rf(fs: pd.Series, qt: pd.Series) -> pd.Series:
     """Wrijvingsgetal (friction ratio) [%]:
 
-        Rf = (fs / qc) · 100
+        Rf = (fs / qt) · 100
 
-    Verhouding tussen mantelwrijving en conusweerstand. Een hoge Rf wijst op
-    fijnkorrelig materiaal (klei/veen), een lage Rf op zand. Wordt gebruikt voor
-    de Robertson-classificatie. Delen door 0 wordt afgevangen (→ NaN).
+    Robertson/Lengkeek gebruiken de GECORRIGEERDE conusweerstand qt (niet qc).
+    Een hoge Rf wijst op fijnkorrelig materiaal (klei/veen), een lage Rf op zand.
+    Bij ontbrekende qt-correctie geldt qt ≈ qc. Delen door 0 → NaN.
     """
-    return (fs / qc.replace(0, np.nan)) * 100
+    return (fs / qt.replace(0, np.nan)) * 100
 
 
 def bereken_Bq(
@@ -363,6 +321,50 @@ def bereken_Qt(q_net: pd.Series, sigma_v0_eff: pd.Series) -> pd.Series:
     Deling door 0 (σ'v0 = 0 aan maaiveld) → NaN.
     """
     return q_net / sigma_v0_eff.replace(0, np.nan)
+
+
+# =============================================================================
+# γ uit qc/Rf — alternatief voor handmatige SHZ-laag-γ in σv0
+# =============================================================================
+def bereken_gamma_sat(qt: pd.Series, Rf: pd.Series, methode: str = "lengkeek",
+                      gamma_w: float = GAMMA_W) -> pd.Series:
+    """Verzadigd volumegewicht γ_sat [kN/m³] uit qt [MPa] en Rf [%].
+
+    In plaats van γ handmatig per SHZ-laag op te geven, kun je γ_sat per meetpunt
+    afleiden uit de sondering. Methodes:
+
+      'lengkeek'  — Lengkeek et al. (2018), goed voor NL slappe lagen/veen:
+                        γ_sat = 19 − 4.12 · log10(5/qt) / log10(30/Rf)
+      'robertson' — Robertson & Cabal (2010):
+                        γ_sat = γ_w · (0.27·log10(Rf) + 0.36·log10(qt/pₐ) + 1.236)
+      'simple'    — NEN 9997-1 Tabel 2b (γ uit qc-drempels; qt als proxy)
+
+    Let op (veelgemaakte fouten in correlatie-code):
+      - Robertson & Cabal moet × γ_w (niet delen door γ_w).
+      - Vectoriseer: `df.loc[mask, "col"] = …` (geen chained indexing `df.loc[…].col = …`).
+
+    Resultaat geklemd op [9, 22] kN/m³; onbepaalbare punten → 17 kN/m³.
+    """
+    qt = pd.to_numeric(qt, errors="coerce").clip(lower=0.01)
+    rf = pd.to_numeric(Rf, errors="coerce").clip(lower=0.1, upper=12.0)
+    if methode == "lengkeek":
+        noemer = np.log10(30.0 / rf).replace(0, np.nan)
+        g = 19.0 - 4.12 * (np.log10(5.0 / qt) / noemer)
+    elif methode == "robertson":
+        pa = 0.101
+        g = gamma_w * (0.27 * np.log10(rf) + 0.36 * np.log10(qt / pa) + 1.236)
+    elif methode == "simple":
+        g = pd.Series(np.nan, index=qt.index)
+        g[qt < 0.5] = 14.0
+        g[(qt >= 0.5) & (qt < 1.0)] = 17.0
+        g[(qt >= 1.0) & (qt < 2.0)] = 19.0
+        g[(qt >= 2.0) & (qt < 5.0)] = 20.0
+        g[(qt >= 5.0) & (qt < 15.0)] = 19.0
+        g[(qt >= 15.0) & (qt < 25.0)] = 20.0
+        g[qt >= 25.0] = 21.0
+    else:
+        raise ValueError(f"Onbekende methode: {methode}")
+    return g.replace([np.inf, -np.inf], np.nan).clip(lower=9.0, upper=22.0).fillna(17.0)
 
 
 # =============================================================================
@@ -465,11 +467,12 @@ def _demo():
     print("=" * 70)
 
     # Uitgangspunten
-    mv_nap = 4.0       # maaiveld op NAP +4 m (kruin van de dijk)
-    gwl_nap = 0.0      # grondwaterstand op NAP 0 m
-    knik_nap = -12.0   # top watervoerend zandpakket op NAP -12 m
-    u_top = 30.0       # piëzometrische druk bovenin het zand [kPa]
-    a = 0.80           # netto-oppervlakteverhouding conus
+    mv_nap = 4.0          # maaiveld op NAP +4 m (kruin van de dijk)
+    gwl_nap = 0.0         # grondwaterstand op NAP 0 m
+    knik_nap = -5.0       # knikpunt drukverloop [m NAP]
+    stijghoogte = -2.0    # stijghoogte 1e zandpakket [m NAP]
+    top_zand = -12.0      # top watervoerend zandpakket [m NAP]
+    a = 0.80              # netto-oppervlakteverhouding conus
 
     # Twee SHZ-lagen, met γ en Nkt (vereenvoudigd uit Tabel 71/91)
     lagen = [
@@ -487,8 +490,9 @@ def _demo():
     diepte_nap = mv_nap - sondeerlengte
     grondlaag = pd.Series(["klei_dijk", "klei_dijk", "veen", "veen"])
 
-    # [2] u0 — let op: functie geeft kPa, intern werken we in MPa
-    u0_kpa = bereken_u0_met_knik(diepte_nap, gwl_nap, knik_nap, u_top)
+    # [2] u0 — 4-zone-model; functie geeft kPa, intern werken we in MPa
+    u0_kpa = bereken_u0_interpolatie(diepte_nap, gwl_nap, knik_nap,
+                                     stijghoogte, top_zand)
     u0 = u0_kpa / 1000.0  # → MPa
 
     # [3]+[4] σv0 en σ'v0 (functie geeft kPa → MPa)
@@ -498,10 +502,10 @@ def _demo():
     sigma_v0 = sigma_v0_kpa / 1000.0
     sigma_v0_eff = bereken_sigma_v0_eff(sigma_v0, u0)
 
-    # [1] qt, [5..] afgeleiden
+    # [1] qt, [5..] afgeleiden — Rf met qt (Robertson/Lengkeek)
     qt = bereken_qt(qc, u2, a)
     q_net = bereken_q_net(qt, sigma_v0)
-    Rf = bereken_Rf(fs, qc)
+    Rf = bereken_Rf(fs, qt)
     Qt = bereken_Qt(q_net, sigma_v0_eff)
 
     # [8] Su via Nkt per laag
