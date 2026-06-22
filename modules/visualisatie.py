@@ -27,13 +27,16 @@ def render():
         """, unsafe_allow_html=True)
         return
 
-    tab1, tab2, tab3 = st.tabs(["📊 Overzicht", "🔍 Afwijkingen", "📥 Export"])
+    tab1, tab2, tab3, tab4 = st.tabs(
+        ["📊 Overzicht", "🔍 Afwijkingen", "🔬 Vergelijk (Deltares)", "📥 Export"])
 
     with tab1:
         _render_overzicht(su_berekend)
     with tab2:
         _render_afwijkingen(su_berekend)
     with tab3:
+        _render_vergelijk(su_berekend)
+    with tab4:
         _render_export(su_berekend)
 
 
@@ -194,6 +197,95 @@ def _render_afwijkingen(su_berekend: dict):
     fig.update_layout(title="Su-verdeling per sondering", yaxis=dict(title="Su [kPa]"),
                        height=500, template="plotly_white")
     st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_vergelijk(su_berekend: dict):
+    """Vergelijk onze Su met een externe tool (bv. Deltares CPT-tool).
+
+    Upload een CSV/Excel met een diepte/NAP-kolom en een Su-kolom. De tool legt
+    die over ons gemiddelde Su-profiel en berekent de afwijking (Δ).
+    """
+    st.subheader("Vergelijk met externe tool (Deltares)")
+    st.caption("Upload een export met een NAP- (of diepte-) kolom en een Su-kolom. "
+               "We overlayen die op ons profiel en tonen de afwijking.")
+
+    up_file = st.file_uploader("Externe Su-export (CSV of Excel)",
+                               type=["csv", "xlsx"], key="vergelijk_upload")
+    if not up_file:
+        st.info("👆 Upload de Deltares-export om te vergelijken.")
+        return
+
+    try:
+        ext = pd.read_csv(up_file, sep=None, engine="python") if up_file.name.lower().endswith(".csv") \
+            else pd.read_excel(up_file)
+    except Exception as e:
+        st.error(f"Kon bestand niet lezen: {e}")
+        return
+
+    cols = list(ext.columns)
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        nap_col = st.selectbox("Kolom NAP [m]", cols, key="vg_nap")
+    with c2:
+        su_col = st.selectbox("Kolom Su [kPa]", cols, index=min(1, len(cols) - 1), key="vg_su")
+    with c3:
+        is_diepte = st.checkbox("Kolom is diepte (m onder maaiveld)", value=False,
+                                help="Aanvinken als de kolom diepte i.p.v. NAP is.")
+        mv_ref = st.number_input("Maaiveld [m NAP] (bij diepte)", value=0.0, step=0.1,
+                                 disabled=not is_diepte)
+
+    ext = ext[[nap_col, su_col]].apply(pd.to_numeric, errors="coerce").dropna()
+    ext.columns = ["nap", "su_extern"]
+    if is_diepte:
+        ext["nap"] = mv_ref - ext["nap"]
+    ext = ext.sort_values("nap")
+
+    # Ons gemiddelde Su-profiel (per 0.5 m NAP-bin) over alle sonderingen
+    rows = []
+    for _, data in su_berekend.items():
+        d = data["df"]
+        v = d["Su"].notna()
+        if v.any():
+            rows.append(d.loc[v, ["Su", "diepte_nap"]])
+    if not rows:
+        st.warning("Geen Su-data in onze tool.")
+        return
+    onze = pd.concat(rows, ignore_index=True)
+    onze["bin"] = (onze["diepte_nap"] * 2).round() / 2
+    prof = onze.groupby("bin")["Su"].mean().reset_index().sort_values("bin")
+
+    # Plot
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=prof["Su"], y=prof["bin"], mode="lines+markers",
+                             name="Onze tool (gem)", line=dict(color="#0d47a1", width=2)))
+    fig.add_trace(go.Scatter(x=ext["su_extern"], y=ext["nap"], mode="lines+markers",
+                             name="Deltares", line=dict(color="#e53935", width=2, dash="dash")))
+    fig.update_layout(title="Su — onze tool vs Deltares", height=650, template="plotly_white",
+                      xaxis=dict(title="Su [kPa]"), yaxis=dict(title="Niveau [m NAP]"),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02))
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Afwijking: interpoleer ons profiel op de externe NAP-niveaus
+    onze_op_extern = np.interp(ext["nap"], prof["bin"], prof["Su"],
+                               left=np.nan, right=np.nan)
+    delta = ext["su_extern"].values - onze_op_extern
+    geldig = ~np.isnan(delta)
+    if geldig.any():
+        d = delta[geldig]
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Gem. verschil (Deltares − onze)", f"{np.mean(d):+.1f} kPa")
+        c2.metric("Gem. absoluut verschil", f"{np.mean(np.abs(d)):.1f} kPa")
+        c3.metric("RMSE", f"{np.sqrt(np.mean(d**2)):.1f} kPa")
+        verg = pd.DataFrame({
+            "NAP [m]": ext["nap"].values[geldig].round(2),
+            "Su Deltares [kPa]": ext["su_extern"].values[geldig].round(1),
+            "Su onze [kPa]": np.round(onze_op_extern[geldig], 1),
+            "Δ [kPa]": np.round(d, 1),
+        })
+        with st.expander("📋 Verschil per niveau"):
+            st.dataframe(verg, use_container_width=True, hide_index=True)
+    else:
+        st.warning("Geen overlap in NAP-bereik tussen de twee profielen.")
 
 
 def _render_export(su_berekend: dict):
