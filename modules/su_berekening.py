@@ -17,6 +17,52 @@ def bereken_Su(q_net: pd.Series, Nkt: pd.Series) -> pd.Series:
     return (q_net * 1000) / Nkt
 
 
+def bereken_grensspanning(q_net: pd.Series, k: float = 0.33) -> pd.Series:
+    """Grensspanning (yield/prekonsolidatiespanning) σ'vy uit de CPT [MPa].
+
+        σ'vy = k · q_net      (q_net = qt − σv0)
+
+    Eerste-orde correlatie volgens Mayne (k ≈ 0,3–0,35 voor klei). Conform de
+    'conservatieve correlatie' uit de schematiseringshandleiding macrostabiliteit:
+    de grensspanning bepaalt samen met σ'v0 de OCR en daarmee de SHANSEP-sterkte.
+    """
+    return (k * q_net).clip(lower=0)
+
+
+def bereken_su_shansep(sigma_v0_eff: pd.Series, sigma_vy: pd.Series,
+                       S: float, m: float) -> pd.Series:
+    """Ongedraineerde sterkte volgens SHANSEP [kPa]:
+
+        Su = S · σ'v0 · OCRᵐ ,  met OCR = σ'vy / σ'v0
+
+    S = sterkteratio, m = exponent (per grondlaag, Tabel 91). σ'v0 en σ'vy in MPa
+    → Su in MPa, ×1000 voor kPa. OCR wordt op ≥ 1 geklemd (geen onderconsolidatie).
+    """
+    sv = sigma_v0_eff.replace(0, np.nan)
+    ocr = (sigma_vy / sv).clip(lower=1.0)
+    return S * sigma_v0_eff * (ocr ** m) * 1000.0
+
+
+def karakteristieke_waarde(su_punten: pd.Series, t_factor: float = 1.645) -> dict:
+    """Karakteristieke (voorzichtige lage) waarde van Su per laag.
+
+        Su_kar = Su_gem · (1 − t · VC) ,  VC = std / gem
+
+    t_factor = 1,645 → 5%-ondergrens (eenzijdig 95%). Geeft gem, std, VC, n en de
+    karakteristieke waarde terug. Eerste-orde benadering (NEN-stijl); voor een
+    formele toets kan een Student-t per n en ruimtelijke middeling nodig zijn.
+    """
+    s = su_punten.dropna()
+    n = int(s.size)
+    if n == 0:
+        return {"n": 0, "gem": np.nan, "std": np.nan, "VC": np.nan, "kar": np.nan}
+    gem = float(s.mean())
+    std = float(s.std(ddof=1)) if n > 1 else 0.0
+    vc = std / gem if gem else 0.0
+    kar = gem * (1 - t_factor * vc)
+    return {"n": n, "gem": gem, "std": std, "VC": vc, "kar": max(kar, 0.0)}
+
+
 def render():
     st.caption("Stap 5 — Su = q_net / Nkt per grondlaag")
 
@@ -52,6 +98,29 @@ def render():
         st.warning(f"⚠️ Nkt ontbreekt voor dijkmateriaal-lagen: {', '.join(missing_dijkmat_nkt)}. "
                     "Vul aan in Stap 0.")
 
+    # Su-methode + parameters
+    st.markdown("**Methode & karakteristieke waarde**")
+    col_m1, col_m2, col_m3 = st.columns(3)
+    with col_m1:
+        su_methode = st.radio(
+            "Su-methode",
+            ["Nkt (q_net / Nkt)", "SHANSEP (grensspanning uit CPT)"],
+            index=0, key="su_methode",
+            help="Nkt: Su = q_net/Nkt. SHANSEP: Su = S·σ'v0·OCRᵐ met OCR uit de "
+                 "grensspanning σ'vy = k·q_net (S/m per grondlaag, Tabel 91).",
+        )
+    with col_m2:
+        k_grens = st.number_input(
+            "Grensspanning-factor k [-]", min_value=0.1, max_value=0.6, value=0.33, step=0.01,
+            help="σ'vy = k·q_net (Mayne; k ≈ 0,3–0,35 voor klei). Alleen voor SHANSEP.",
+        )
+    with col_m3:
+        t_factor = st.number_input(
+            "t-factor karakteristiek [-]", min_value=0.0, max_value=3.0, value=1.645, step=0.005,
+            help="Su_kar = Su_gem·(1 − t·VC). 1,645 = 5%-ondergrens.",
+        )
+    is_shansep = su_methode.startswith("SHANSEP")
+
     st.markdown("---")
 
     if st.button("▶️ Bereken Su voor alle sonderingen", type="primary", use_container_width=True):
@@ -69,30 +138,51 @@ def render():
                 resultaten.append({"Sondering": name, "Status": "❌ grondlaag ontbreekt"})
                 continue
 
-            # Nkt per grondlaag — per-sondering lagen indien aanwezig, anders globaal
+            # Parameters per grondlaag — per-sondering lagen indien aanwezig, anders globaal
             lagen_eff = data.get("lagen_lokaal") or lagen
             nkt_map = {l["naam"]: l["Nkt"] for l in lagen_eff if l.get("Nkt") is not None}
+            s_map = {l["naam"]: l.get("S_ratio") for l in lagen_eff if l.get("S_ratio") is not None}
+            m_map = {l["naam"]: l.get("m_factor") for l in lagen_eff if l.get("m_factor") is not None}
             df["Nkt_gebruikt"] = df["grondlaag"].map(nkt_map)
 
-            # Su alleen voor dijkmateriaal (uit classificatie) + Nkt aanwezig + voorboring geldig
+            # Geldig: dijkmateriaal + voorboring geldig
             geldig = df.get("is_dijkmateriaal", pd.Series([True] * len(df), index=df.index))
             geldig = geldig.fillna(False).astype(bool)
             if "voorboring_geldig" in df.columns:
                 geldig = geldig & df["voorboring_geldig"].astype(bool)
-            geldig = geldig & df["Nkt_gebruikt"].notna()
 
             df["Su"] = np.nan
-            df.loc[geldig, "Su"] = bereken_Su(df.loc[geldig, "q_net"], df.loc[geldig, "Nkt_gebruikt"])
+            if is_shansep:
+                df["S_gebruikt"] = df["grondlaag"].map(s_map)
+                df["m_gebruikt"] = df["grondlaag"].map(m_map)
+                df["sigma_vy"] = bereken_grensspanning(df["q_net"], k_grens)
+                geldig_sh = geldig & df["S_gebruikt"].notna() & df["m_gebruikt"].notna() \
+                    & df.get("sigma_v0_eff", pd.Series(np.nan, index=df.index)).notna()
+                # per-rij SHANSEP (S/m verschillen per laag)
+                su_vals = bereken_su_shansep(
+                    df["sigma_v0_eff"], df["sigma_vy"],
+                    df["S_gebruikt"].fillna(0), df["m_gebruikt"].fillna(1))
+                df.loc[geldig_sh, "Su"] = su_vals[geldig_sh]
+                methode_note = f"SHANSEP (k={k_grens:.2f})"
+            else:
+                geldig_nkt = geldig & df["Nkt_gebruikt"].notna()
+                df.loc[geldig_nkt, "Su"] = bereken_Su(
+                    df.loc[geldig_nkt, "q_net"], df.loc[geldig_nkt, "Nkt_gebruikt"])
+                methode_note = "Nkt"
             df.loc[df["Su"] < 0, "Su"] = np.nan
 
             st.session_state.sonderingen[name]["df"] = df
             st.session_state.sonderingen[name]["su_berekend"] = True
+            st.session_state.sonderingen[name]["su_methode"] = methode_note
+            st.session_state.sonderingen[name]["t_factor"] = t_factor
 
-            su_valid = df["Su"].notna().sum()
+            kw = karakteristieke_waarde(df["Su"], t_factor)
             resultaten.append({
-                "Sondering": name, "Status": "✅",
-                "Meetpunten met Su": su_valid,
-                "Su gem [kPa]": f"{df['Su'].mean():.1f}" if su_valid > 0 else "—",
+                "Sondering": name, "Status": "✅", "Methode": methode_note,
+                "Meetpunten": kw["n"],
+                "Su gem [kPa]": f"{kw['gem']:.1f}" if kw["n"] else "—",
+                "VC [-]": f"{kw['VC']:.2f}" if kw["n"] else "—",
+                "Su kar [kPa]": f"{kw['kar']:.1f}" if kw["n"] else "—",
             })
             progress.progress((i + 1) / total)
 
@@ -124,13 +214,30 @@ def _render_per_sondering(su_berekend: dict):
     df = data["df"]
     cm = data["col_mapping"]
 
+    t_factor = data.get("t_factor", 1.645)
     su_data = df["Su"].dropna()
     if not su_data.empty:
+        kw = karakteristieke_waarde(df["Su"], t_factor)
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Gemiddeld", f"{su_data.mean():.1f} kPa")
-        c2.metric("Mediaan", f"{su_data.median():.1f} kPa")
-        c3.metric("Min", f"{su_data.min():.1f} kPa")
-        c4.metric("Max", f"{su_data.max():.1f} kPa")
+        c1.metric("Gemiddeld", f"{kw['gem']:.1f} kPa")
+        c2.metric("VC", f"{kw['VC']:.2f}")
+        c3.metric("Karakteristiek", f"{kw['kar']:.1f} kPa")
+        c4.metric("Methode", data.get("su_methode", "Nkt"))
+
+        # Karakteristieke waarde per grondlaag
+        rijen = []
+        for laag, sub in df.dropna(subset=["Su"]).groupby("grondlaag"):
+            kwl = karakteristieke_waarde(sub["Su"], t_factor)
+            rijen.append({
+                "Grondlaag": laag, "n": kwl["n"],
+                "Su gem [kPa]": round(kwl["gem"], 1),
+                "Su std [kPa]": round(kwl["std"], 1),
+                "VC [-]": round(kwl["VC"], 2),
+                "Su karakteristiek [kPa]": round(kwl["kar"], 1),
+            })
+        if rijen:
+            st.markdown(f"**Karakteristieke waarde per grondlaag** (Su_kar = Su_gem·(1 − {t_factor:.3f}·VC)):")
+            st.dataframe(pd.DataFrame(rijen), use_container_width=True, hide_index=True)
 
     toon_lagen = st.checkbox("Toon SHZ-laagverdeling op achtergrond", value=True,
                               key=f"toon_lagen_su_{selected}")
