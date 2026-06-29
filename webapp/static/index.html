@@ -94,6 +94,19 @@
         </details>
 
         <details class="adv">
+          <summary>Kolommen koppelen (alleen nodig bij een afwijkende GEF)</summary>
+          <p class="muted small">De tool herkent de kolommen automatisch. Klopt er iets niet?
+            Koppel ze hier handmatig.</p>
+          <div class="control-row">
+            <div class="param"><label>diepte/sondeerlengte</label><select id="colDiepte"></select></div>
+            <div class="param"><label>qc (puntdruk)</label><select id="colQc"></select></div>
+            <div class="param"><label>fs (wrijving)</label><select id="colFs"></select></div>
+            <div class="param"><label>u2 (waterspanning)</label><select id="colU2"></select></div>
+          </div>
+          <label class="chk small"><input type="checkbox" id="colQtCorr"> qc is al qt (gecorrigeerd) — geen u₂-correctie</label>
+        </details>
+
+        <details class="adv">
           <summary>Uitgangspunten — materialen, γ-bron &amp; voorboring</summary>
           <div class="control-row">
             <div class="param">

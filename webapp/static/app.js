@@ -90,6 +90,11 @@ function huidigeParams() {
     top_zand_nap: num("topzand"), indringing: num("indr") ?? 0.0,
     min_dikte: num("minDikte") ?? 0.5,
   };
+  if ($("colDiepte").options.length) {  // kolom-override (pas na eerste analyse beschikbaar)
+    const cv = (id) => $(id).value || null;
+    p.kolommen_override = { diepte: cv("colDiepte"), qc: cv("colQc"), fs: cv("colFs"),
+                            u2: cv("colU2"), is_qt_corrected: $("colQtCorr").checked };
+  }
   if ($("vbChk").checked && num("vbDiepte") != null)
     p.voorboring = { actief: true, diepte: num("vbDiepte") };
   if (matRendered) p.materialen = leesMaterialen();
@@ -125,8 +130,22 @@ $("sondSelect").addEventListener("change", e => {
 });
 $("herberekenBtn").addEventListener("click", analyseHuidige);
 ["suMethode", "gwl", "afac", "knik", "stijg", "topzand", "indr",
- "gammaBron", "vbChk", "vbDiepte", "tfac", "minDikte"].forEach(id =>
+ "gammaBron", "vbChk", "vbDiepte", "tfac", "minDikte",
+ "colDiepte", "colQc", "colFs", "colU2", "colQtCorr"].forEach(id =>
   $(id).addEventListener("change", analyseHuidige));
+
+// ── Kolom-koppeling (selects vullen per sondering) ──
+let colsForSounding = -1;
+function rendColSelects(d) {
+  const cols = d.beschikbare_kolommen || [];
+  const fill = (id, sel) => {
+    $(id).innerHTML = '<option value="">— auto —</option>' +
+      cols.map(c => `<option ${sel === c ? "selected" : ""}>${c}</option>`).join("");
+  };
+  fill("colDiepte", d.kolommen.diepte); fill("colQc", d.kolommen.qc);
+  fill("colFs", d.kolommen.fs); fill("colU2", d.kolommen.u2);
+  $("colQtCorr").checked = !!d.is_qt_corrected;
+}
 
 // ── Lagen-editor ──
 function lagenEditorRij(l = {}) {
@@ -207,6 +226,9 @@ function toonResultaat(d) {
     ? "Eenheden genormaliseerd: " + d.eenheid_meldingen.join("; ") + " · " : "")
     + (d.handmatig ? "Handmatige lagen" : "Automatische classificatie (Robertson)") + " · " + bron;
   if (d.bibliotheek) BIB = d.bibliotheek;
+  if (d.beschikbare_kolommen && colsForSounding !== current) {
+    rendColSelects(d); colsForSounding = current;   // alleen bij wisselen van sondering
+  }
   if (!matRendered && d.materialen) rendMatEditor(d.materialen);
   plotProfiel(d); plotSpanning(d); plotSu(d); lagenTabel(d);
   if (labData) toonLab();   // lab-overlay meeschalen met de herberekening

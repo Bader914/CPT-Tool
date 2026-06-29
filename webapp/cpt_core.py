@@ -326,8 +326,17 @@ def analyseer(content: str, params: dict | None = None) -> dict:
         return {"ok": False, "error": "Geen meetdata in dit GEF-bestand."}
     det = detect_columns(df, g.get("quantity_info", {}), g.get("column_info", {}))
     cm = det["mapping"]
+    beschikbare_kolommen = [str(c) for c in df.columns]
+    # handmatige kolom-override (als auto-detectie faalt op een afwijkende GEF)
+    override = p.get("kolommen_override") or {}
+    for k in ("diepte", "qc", "fs", "u2"):
+        if override.get(k) and override[k] in df.columns:
+            cm[k] = override[k]
+    if override.get("is_qt_corrected") is not None:
+        det["is_qt_corrected"] = bool(override["is_qt_corrected"])
     if not cm["diepte"] or not cm["qc"]:
-        return {"ok": False, "error": "Kon diepte/qc-kolom niet herkennen."}
+        return {"ok": False, "error": "Kon diepte/qc-kolom niet herkennen.",
+                "beschikbare_kolommen": beschikbare_kolommen}
     eenheid_msgs = normaliseer_naar_mpa(df, cm, g.get("units", {}))
 
     mat = _materialen(p)
@@ -441,7 +450,9 @@ def analyseer(content: str, params: dict | None = None) -> dict:
     return {
         "ok": True, "maaiveld_nap": round(mv, 2), "a_factor": round(a, 2),
         "su_methode": su_methode, "gamma_bron": gamma_bron, "handmatig": handmatig,
-        "kolommen": cm, "eenheid_meldingen": eenheid_msgs, "n": int(len(df)),
+        "kolommen": cm, "beschikbare_kolommen": beschikbare_kolommen,
+        "is_qt_corrected": bool(det["is_qt_corrected"]),
+        "eenheid_meldingen": eenheid_msgs, "n": int(len(df)),
         "gwl_nap": gwl, "materialen": mat,
         "diepte_nap": arr(diepte_nap), "qc": arr(qc), "qt": arr(qt), "fs": arr(fs),
         "Rf": arr(rf), "gamma_sat": arr(gamma_toon), "u0": arr(u0 * 1000),
