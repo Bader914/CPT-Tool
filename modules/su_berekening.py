@@ -261,7 +261,36 @@ def _render_per_sondering(su_berekend: dict):
 
     su_valid = df["Su"].notna()
     fig.add_trace(go.Scatter(x=df.loc[su_valid, "Su"], y=df.loc[su_valid, "diepte_nap"],
-                              name="Su", line=dict(color="#ef4444", width=2.5)), row=1, col=2)
+                              name="Su per punt", line=dict(color="#ef9a9a", width=1),
+                              opacity=0.7), row=1, col=2)
+
+    # Meerdere profielen boven elkaar (à la Deltares): gelineariseerd su-profiel
+    # en su_kar-profiel per dijkmateriaal-laag.
+    grenzen = data.get("laaggrenzen", {})
+    eerste = True
+    for naam, g in grenzen.items():
+        if not g.get("is_dijkmateriaal"):
+            continue
+        top, onder = g.get("top_nap"), g.get("onder_nap")
+        if top is None or onder is None:
+            continue
+        sub = df[(df["diepte_nap"] <= top) & (df["diepte_nap"] > onder) & df["Su"].notna()]
+        if len(sub) < 3:
+            continue
+        b, a = np.polyfit(sub["diepte_nap"], sub["Su"], 1)   # Su = b·NAP + a
+        su_top, su_bot = b * top + a, b * onder + a
+        gem = sub["Su"].mean()
+        vc = sub["Su"].std(ddof=1) / gem if gem else 0.0
+        f = max(1 - t_factor * vc, 0.0)
+        fig.add_trace(go.Scatter(
+            x=[su_top, su_bot], y=[top, onder], mode="lines",
+            name="su (gelineariseerd)", legendgroup="lin", showlegend=eerste,
+            line=dict(color="#111111", width=2)), row=1, col=2)
+        fig.add_trace(go.Scatter(
+            x=[su_top * f, su_bot * f], y=[top, onder], mode="lines",
+            name="su_kar (gelineariseerd)", legendgroup="kar", showlegend=eerste,
+            line=dict(color="#111111", width=1.5, dash="dot")), row=1, col=2)
+        eerste = False
 
     if "Nkt_gebruikt" in df.columns:
         nkt_valid = df["Nkt_gebruikt"].notna()
