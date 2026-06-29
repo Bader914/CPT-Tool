@@ -1,0 +1,9 @@
+.git
+webapp
+__pycache__
+*.pyc
+*.zip
+*.jpeg
+*.jpg
+*.png
+Gef bestanden

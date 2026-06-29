@@ -1,0 +1,10 @@
+services:
+  cpt-streamlit:
+    build: .
+    image: cpt-su-streamlit:latest
+    container_name: cpt-su-tool
+    restart: unless-stopped
+    environment:
+      - APP_PASSWORD=hhsk
+    ports:
+      - "8080:8501"
