@@ -4,6 +4,7 @@ CPT Su Tool — FastAPI backend.
 Serveert de lichte HHSK-frontend en biedt een API om een GEF-sondering te
 analyseren (rekenhart in cpt_core, volledig streamlit-vrij).
 """
+import json
 from pathlib import Path
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
@@ -23,14 +24,18 @@ def health():
 
 
 @app.post("/api/analyse")
-async def analyse(file: UploadFile = File(...), gwl_nap: float = Form(0.0)):
-    """Analyseer één GEF-bestand en geef het volledige resultaat als JSON terug."""
+async def analyse(file: UploadFile = File(...), params: str = Form("{}")):
+    """Analyseer één GEF-bestand met parameters (JSON) → volledig resultaat als JSON."""
     if not file.filename.lower().endswith(".gef"):
         raise HTTPException(400, "Upload een .gef-bestand.")
+    try:
+        p = json.loads(params) if params else {}
+    except json.JSONDecodeError:
+        p = {}
     raw = await file.read()
     content = raw.decode("utf-8", errors="ignore")
     try:
-        result = cpt_core.analyseer_gef(content, gwl_nap=gwl_nap)
+        result = cpt_core.analyseer(content, p)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(500, f"Analyse mislukt: {e}")
     if not result.get("ok"):

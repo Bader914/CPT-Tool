@@ -214,6 +214,18 @@ def bereken_Su(qnet, nkt):
     return (qnet * 1000) / nkt
 
 
+def bereken_grensspanning(qnet, k=0.33):
+    """Grensspanning σ'vy = k·qnet [MPa] (Mayne)."""
+    return (k * qnet).clip(lower=0)
+
+
+def bereken_su_shansep(sigma_eff, sigma_vy, S, m):
+    """SHANSEP: Su = S·σ'v0·OCRᵐ [kPa], OCR = σ'vy/σ'v0."""
+    sv = sigma_eff.replace(0, np.nan)
+    ocr = (sigma_vy / sv).clip(lower=1.0)
+    return S * sigma_eff * (ocr ** m) * 1000.0
+
+
 def karakteristieke_waarde(su, t=1.645):
     s = pd.Series(su).dropna()
     if s.empty:
@@ -224,13 +236,39 @@ def karakteristieke_waarde(su, t=1.645):
 
 
 # =====================================================================
-# Volledige analyse (automatisch, met defaults)
+# Volledige analyse (met parameters + optionele handmatige lagen)
 # =====================================================================
-NKT_PER_GROND = {"klei": 15.0, "veen": 17.0}
+NKT_PER_GROND = {"klei": 15.0, "veen": 17.0, "zand": None}
+S_PER_GROND = {"klei": 0.32, "veen": 0.35, "zand": None}
+M_PER_GROND = {"klei": 0.80, "veen": 0.90, "zand": None}
 
 
-def analyseer_gef(content: str, gwl_nap: float = 0.0, a_factor: float | None = None) -> dict:
-    """Volledige automatische analyse van één GEF → dict voor de frontend."""
+def _toewijs_handmatige_lagen(diepte_nap, lagen):
+    """Per meetpunt grondsoort/nkt/S/m uit handmatige lagen (top→onder, NAP)."""
+    items = sorted([l for l in lagen if l.get("bovenkant") is not None],
+                   key=lambda l: -float(l["bovenkant"]))
+    z = diepte_nap.values
+    gron = np.array(["onbekend"] * len(z), dtype=object)
+    nkt = np.full(len(z), np.nan); S = np.full(len(z), np.nan); M = np.full(len(z), np.nan)
+    for i, l in enumerate(items):
+        top = float(l["bovenkant"])
+        onder = float(items[i + 1]["bovenkant"]) if i + 1 < len(items) else float(z.min()) - 0.01
+        mask = (z <= top) & (z > onder)
+        gs = l.get("grondsoort", "klei")
+        gron[mask] = gs
+        nkt[mask] = l.get("nkt") if l.get("nkt") is not None else (NKT_PER_GROND.get(gs) or np.nan)
+        S[mask] = l.get("S") if l.get("S") is not None else (S_PER_GROND.get(gs) or np.nan)
+        M[mask] = l.get("m") if l.get("m") is not None else (M_PER_GROND.get(gs) or np.nan)
+    return (pd.Series(gron, index=diepte_nap.index), pd.Series(nkt, index=diepte_nap.index),
+            pd.Series(S, index=diepte_nap.index), pd.Series(M, index=diepte_nap.index))
+
+
+def analyseer(content: str, params: dict | None = None) -> dict:
+    """Analyseer één GEF met parameters. params (alle optioneel):
+       gwl_nap, a_factor, su_methode ('nkt'|'shansep'), k_grens,
+       knik_nap, stijghoogte_nap, top_zand_nap, indringing, lagen[] (handmatig).
+    """
+    p = params or {}
     g = parse_gef(content)
     df = g["df"]
     if df.empty:
@@ -242,7 +280,10 @@ def analyseer_gef(content: str, gwl_nap: float = 0.0, a_factor: float | None = N
     eenheid_msgs = normaliseer_naar_mpa(df, cm, g.get("units", {}))
 
     mv = g["maaiveld_nap"] if g["maaiveld_nap"] is not None else 0.0
-    a = a_factor if a_factor is not None else (g.get("a_factor_gef") or 0.80)
+    a = p.get("a_factor") if p.get("a_factor") is not None else (g.get("a_factor_gef") or 0.80)
+    gwl = float(p.get("gwl_nap", 0.0))
+    su_methode = p.get("su_methode", "nkt")
+    k_grens = float(p.get("k_grens", 0.33))
 
     df = df.dropna(subset=[cm["qc"], cm["diepte"]]).reset_index(drop=True)
     diepte_nap = mv - df[cm["diepte"]]
@@ -254,36 +295,49 @@ def analyseer_gef(content: str, gwl_nap: float = 0.0, a_factor: float | None = N
     qt = qc if det["is_qt_corrected"] else bereken_qt(qc, u2, a)
     rf = bereken_Rf(fs, qt).fillna(2.0)
     isbt = bereken_isbt(qc, rf)
-    grondsoort = grondsoort_uit_isbt(isbt)
     gamma_sat = bereken_gamma_sat(qt, rf)
 
     base = float(diepte_nap.min())
-    u0 = bereken_u0(diepte_nap, gwl_nap, knik=base - 0.01, stijg=gwl_nap,
-                    top_zand=base - 0.01) / 1000.0   # ~hydrostatisch tot basis
-    sigma = sigma_v0_uit_gamma(diepte_nap, gamma_sat, mv, gwl_nap) / 1000.0
-    sigma_eff = np.clip(sigma - u0, 0, None)
+    handmatig = bool(p.get("lagen"))
+    if handmatig:
+        grondsoort, nkt, S, M = _toewijs_handmatige_lagen(diepte_nap, p["lagen"])
+    else:
+        grondsoort = grondsoort_uit_isbt(isbt)
+        nkt = grondsoort.map(NKT_PER_GROND); S = grondsoort.map(S_PER_GROND); M = grondsoort.map(M_PER_GROND)
+
+    # waterdruk: defaults = ~hydrostatisch tot basis, of opgegeven knik/stijghoogte
+    knik = float(p.get("knik_nap", base - 0.01))
+    stijg = float(p.get("stijghoogte_nap", gwl))
+    top_zand = float(p.get("top_zand_nap", base - 0.01))
+    indr = float(p.get("indringing", 0.0))
+    u0 = bereken_u0(diepte_nap, gwl, knik, stijg, top_zand, indr) / 1000.0
+    sigma = sigma_v0_uit_gamma(diepte_nap, gamma_sat, mv, gwl) / 1000.0
+    sigma_eff = pd.Series(np.clip(sigma - u0, 0, None), index=df.index)
     qnet = qt - sigma
 
-    nkt = grondsoort.map(NKT_PER_GROND)
-    geldig = nkt.notna() & (qnet > 0)
     su = pd.Series(np.nan, index=df.index)
-    su[geldig] = bereken_Su(qnet[geldig], nkt[geldig])
+    cohesief = grondsoort.isin(["klei", "veen"])
+    if su_methode == "shansep":
+        svy = bereken_grensspanning(qnet, k_grens)
+        geldig = cohesief & S.notna() & M.notna() & (qnet > 0)
+        su_all = bereken_su_shansep(sigma_eff, svy, S.fillna(0), M.fillna(1))
+        su[geldig] = su_all[geldig]
+    else:
+        geldig = cohesief & nkt.notna() & (qnet > 0)
+        su[geldig] = bereken_Su(qnet[geldig], nkt[geldig])
+    su[su < 0] = np.nan
 
-    # laagsamenvatting (aaneengesloten grondsoort) — eenvoudige boorstaat
     lagen = _segmenteer(diepte_nap.values, grondsoort.values, su.values)
-    kw = karakteristieke_waarde(su)
+    kw = karakteristieke_waarde(su, float(p.get("t_factor", 1.645)))
 
     def arr(s):
         return [None if (v is None or (isinstance(v, float) and np.isnan(v))) else round(float(v), 4)
                 for v in s]
 
     return {
-        "ok": True,
-        "maaiveld_nap": round(mv, 2),
-        "a_factor": round(a, 2),
-        "kolommen": cm,
-        "eenheid_meldingen": eenheid_msgs,
-        "n": int(len(df)),
+        "ok": True, "maaiveld_nap": round(mv, 2), "a_factor": round(a, 2),
+        "su_methode": su_methode, "handmatig": handmatig,
+        "kolommen": cm, "eenheid_meldingen": eenheid_msgs, "n": int(len(df)),
         "diepte_nap": arr(diepte_nap), "qc": arr(qc), "qt": arr(qt), "fs": arr(fs),
         "Rf": arr(rf), "gamma_sat": arr(gamma_sat), "u0": arr(u0 * 1000),
         "sigma_v0": arr(sigma * 1000), "sigma_eff": arr(sigma_eff * 1000),
@@ -292,6 +346,11 @@ def analyseer_gef(content: str, gwl_nap: float = 0.0, a_factor: float | None = N
         "su_samenvatting": {k: (round(v, 1) if isinstance(v, float) else v) for k, v in kw.items()},
         "kleuren": LITHO_KLEUREN,
     }
+
+
+# achterwaartse compatibiliteit
+def analyseer_gef(content: str, gwl_nap: float = 0.0, a_factor=None) -> dict:
+    return analyseer(content, {"gwl_nap": gwl_nap, "a_factor": a_factor})
 
 
 def _segmenteer(z, g, su, min_dikte=0.3):

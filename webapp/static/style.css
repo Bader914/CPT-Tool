@@ -101,6 +101,25 @@ th { background: #eef5fb; color: var(--hhsk-blue-dark); font-weight: 700; }
 .uitleg summary { cursor: pointer; font-weight: 600; color: var(--hhsk-blue-dark); }
 .uitleg p { margin: 8px 0 4px; color: var(--muted); }
 
+/* Controls */
+.controls { background: #fbfdff; }
+.control-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+.param select, .param input { padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: .95rem; font-family: inherit; background: #fff; }
+.adv { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+.adv summary { cursor: pointer; font-weight: 600; color: var(--hhsk-blue-dark); margin-bottom: 8px; }
+.adv .control-row { margin-top: 8px; }
+.control-actions { margin-top: 16px; display: flex; gap: 10px; }
+.btn.ghost { background: #fff; color: var(--hhsk-blue); border: 1px solid var(--hhsk-blue); }
+.btn.ghost:hover { background: #eef5fb; }
+.btn.mini { padding: 3px 9px; font-size: .8rem; }
+.editor-btns { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.chk { font-size: .9rem; font-weight: 600; color: var(--hhsk-blue-dark); display: flex; align-items: center; gap: 6px; }
+#lagenEditor input, #lagenEditor select { width: 100%; padding: 5px 7px; border: 1px solid var(--border);
+  border-radius: 6px; font-family: inherit; font-size: .88rem; }
+#lagenEditor th { font-size: .82rem; }
+#lagenEditor td { padding: 5px 8px; }
+
 .footer { text-align: center; color: var(--muted); font-size: .82rem; padding: 20px 0; }
 .hidden { display: none; }
 

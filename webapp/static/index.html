@@ -18,7 +18,7 @@
         <div class="brand-sub">Hoogheemraadschap van Schieland en de Krimpenerwaard</div>
       </div>
     </div>
-    <a class="help-link" href="#uitleg">Uitleg & methode</a>
+    <a class="help-link" href="#uitleg">Uitleg &amp; methode</a>
   </header>
 
   <main class="container">
@@ -27,46 +27,88 @@
     <section class="card intro">
       <h1>Van sondering naar dijksterkte — in een paar klikken</h1>
       <p class="lead">
-        Deze tool vertaalt een <strong>sondering</strong> (CPT) automatisch naar de
-        <strong>ongedraineerde schuifsterkte&nbsp;Su</strong> van de grond, met grafieken en
-        uitleg bij elke stap. Upload een GEF-bestand en je ziet meteen de grondopbouw,
-        de spanningen en de sterkte.
+        Deze tool vertaalt <strong>sonderingen</strong> (CPT) automatisch naar de
+        <strong>ongedraineerde schuifsterkte&nbsp;Su</strong>, met grafieken en uitleg bij elke stap.
+        Upload één of meer GEF-bestanden; je kunt daarna de lagen en parameters zelf aanpassen.
       </p>
       <div class="steps">
-        <div class="step"><span>1</span> Upload sondering (GEF)</div>
-        <div class="step"><span>2</span> Automatische grondsoort + boorstaat</div>
-        <div class="step"><span>3</span> Spanningen &amp; waterdruk</div>
+        <div class="step"><span>1</span> Upload sondering(en)</div>
+        <div class="step"><span>2</span> Grondsoort + boorstaat</div>
+        <div class="step"><span>3</span> Lagen &amp; parameters aanpassen</div>
         <div class="step"><span>4</span> Schuifsterkte Su</div>
       </div>
     </section>
 
     <!-- UPLOAD -->
     <section class="card">
-      <h2>1 · Sondering inladen</h2>
-      <p class="muted">
-        Sleep of kies een <code>.gef</code>-bestand. De tool herkent zelf de kolommen
-        (puntdruk qc, wrijving fs, waterdruk u₂, diepte) en het maaiveldniveau.
-      </p>
-      <div class="upload-row">
-        <label class="dropzone" id="dropzone">
-          <input type="file" id="fileInput" accept=".gef" hidden />
-          <span class="dz-icon">📁</span>
-          <span class="dz-text">Klik of sleep een GEF-bestand hierheen</span>
-          <span class="dz-file" id="dzFile"></span>
-        </label>
-        <div class="param">
-          <label for="gwl">Grondwaterstand [m NAP]
-            <span class="info" title="Het niveau waar het grondwater staat. Hieronder duwt water omhoog en draagt het een deel van het gewicht.">ⓘ</span>
-          </label>
-          <input type="number" id="gwl" value="0.0" step="0.1" />
-          <button id="analyseBtn" class="btn primary" disabled>Analyseer ▶</button>
-        </div>
-      </div>
+      <h2>1 · Sondering(en) inladen</h2>
+      <p class="muted">Sleep of kies één of meer <code>.gef</code>-bestanden.</p>
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept=".gef" multiple hidden />
+        <span class="dz-icon">📁</span>
+        <span class="dz-text">Klik of sleep GEF-bestand(en) hierheen</span>
+        <span class="dz-file" id="dzFile"></span>
+      </label>
       <div id="status" class="status"></div>
     </section>
 
-    <!-- RESULTATEN -->
+    <!-- CONTROLS + RESULTATEN -->
     <section id="resultaten" class="hidden">
+
+      <!-- besturing -->
+      <section class="card controls">
+        <div class="control-row">
+          <div class="param">
+            <label>Sondering</label>
+            <select id="sondSelect"></select>
+          </div>
+          <div class="param">
+            <label>Su-methode
+              <span class="info" title="Nkt: Su = qnet/Nkt. SHANSEP: Su = S·σ'·OCRᵐ met grensspanning uit de CPT.">ⓘ</span>
+            </label>
+            <select id="suMethode">
+              <option value="nkt">Nkt (qnet / Nkt)</option>
+              <option value="shansep">SHANSEP (grensspanning)</option>
+            </select>
+          </div>
+          <div class="param">
+            <label>Grondwaterstand [m NAP]</label>
+            <input type="number" id="gwl" value="0.0" step="0.1" />
+          </div>
+          <div class="param">
+            <label>a-factor (qt-correctie)</label>
+            <input type="number" id="afac" step="0.01" placeholder="auto" />
+          </div>
+        </div>
+
+        <details class="adv">
+          <summary>Waterdruk (geavanceerd) — knikpunt, stijghoogte, top zand</summary>
+          <div class="control-row">
+            <div class="param"><label>Knikpunt [m NAP]</label><input type="number" id="knik" step="0.5" placeholder="auto"></div>
+            <div class="param"><label>Stijghoogte [m NAP]</label><input type="number" id="stijg" step="0.5" placeholder="= GWS"></div>
+            <div class="param"><label>Top zandpakket [m NAP]</label><input type="number" id="topzand" step="0.5" placeholder="auto"></div>
+            <div class="param"><label>Indringing [m]</label><input type="number" id="indr" step="0.1" value="0"></div>
+          </div>
+          <p class="muted small">Leeg = hydrostatisch tot de sondeerbasis (zoals het standaardmodel).</p>
+        </details>
+
+        <details class="adv">
+          <summary>Lagen handmatig instellen (i.p.v. automatische classificatie)</summary>
+          <p class="muted small">Vul de bovenkant (m NAP), grondsoort en optioneel Nkt/S/m per laag.
+            De onderkant = bovenkant van de volgende rij.</p>
+          <table id="lagenEditor"></table>
+          <div class="editor-btns">
+            <button class="btn ghost" id="addLaagBtn">+ laag</button>
+            <button class="btn ghost" id="vulAutoBtn">↻ vul met automatische lagen</button>
+            <label class="chk"><input type="checkbox" id="handmatigChk"> handmatige lagen gebruiken</label>
+          </div>
+        </details>
+
+        <div class="control-actions">
+          <button class="btn primary" id="herberekenBtn">↻ Herbereken</button>
+          <button class="btn ghost" id="exportBtn">⬇ Export CSV</button>
+        </div>
+      </section>
 
       <!-- samenvatting -->
       <section class="card">
@@ -78,32 +120,21 @@
       <!-- grafieken -->
       <section class="card">
         <h2>Grondopbouw &amp; metingen</h2>
-        <p class="muted">
-          Links de <strong>boorstaat</strong> (geel = zand, groen = klei, bruin = veen),
-          daarnaast de <strong>puntdruk qc</strong> (hoog = stevig) en het
-          <strong>wrijvingsgetal Rf</strong> (hoog = klei/veen, laag = zand).
-          Hoge qc met hoge Rf is stijve klei — geen zand.
-        </p>
+        <p class="muted">Boorstaat (geel = zand, groen = klei, bruin = veen), puntdruk qc (hoog = stevig),
+          en wrijvingsgetal Rf (hoog = klei/veen). Hoge qc + hoge Rf = stijve klei, geen zand.</p>
         <div id="plotProfiel" class="plot"></div>
       </section>
 
       <section class="card">
         <h2>Spanningen &amp; waterdruk</h2>
-        <p class="muted">
-          De grond erboven drukt op elke laag (<strong>σ<sub>v0</sub></strong>). Het water duwt
-          omhoog (<strong>u₀</strong>). De korrels dragen het verschil:
-          <strong>σ′<sub>v0</sub> = σ<sub>v0</sub> − u₀</strong>. Die effectieve spanning bepaalt de sterkte.
-        </p>
+        <p class="muted">σ<sub>v0</sub> = gewicht erboven; u₀ = waterdruk; σ′<sub>v0</sub> = σ<sub>v0</sub> − u₀ (korrelspanning).</p>
         <div id="plotSpanning" class="plot"></div>
       </section>
 
       <section class="card">
         <h2>Schuifsterkte Su</h2>
-        <p class="muted">
-          <strong>Su = q<sub>net</sub> / N<sub>kt</sub></strong> per meetpunt (alleen in klei/veen).
-          De zwarte lijn is het gemiddelde; <strong>Su,kar</strong> is de voorzichtige
-          (karakteristieke) waarde waarmee je een dijk toetst.
-        </p>
+        <p class="muted">Su per meetpunt (rood, alleen klei/veen) + gemiddelde per laag (zwart).
+          Su,kar is de voorzichtige (karakteristieke) waarde voor de dijktoets.</p>
         <div id="plotSu" class="plot"></div>
         <div class="tabel-wrap"><table id="lagenTabel"></table></div>
       </section>
@@ -112,35 +143,22 @@
     <!-- UITLEG -->
     <section id="uitleg" class="card uitleg">
       <h2>Uitleg &amp; methode</h2>
-      <details open>
-        <summary>Wat is een sondering?</summary>
-        <p>Een machine drukt een conuspunt de grond in en meet hoe hard de grond terugduwt
-        (<strong>qc</strong>) en de wrijving langs de zijkant (<strong>fs</strong>). Hard = zand,
-        zacht met veel wrijving = klei/veen.</p>
-      </details>
-      <details>
-        <summary>Hoe bepaalt de tool de grondsoort?</summary>
-        <p>Met de Robertson-index <em>I<sub>SBT</sub></em> uit qc en Rf (officiële methode, ook in
-        de Deltares-tool). De scheiding zand/klei ligt op I<sub>SBT</sub> = 2,60; boven 3,60 is het veen.</p>
-      </details>
-      <details>
-        <summary>Hoe wordt de waterdruk berekend?</summary>
-        <p>Een 4-zone-verloop: 0 boven de grondwaterstand, daaronder hydrostatisch, met een
-        soepele overgang naar een dieper watervoerend zandpakket. Exact gevalideerd tegen de
-        bron-Excel (0,00 kPa afwijking).</p>
-      </details>
-      <details>
-        <summary>Hoe wordt Su berekend?</summary>
-        <p>Su = q<sub>net</sub> / N<sub>kt</sub>, met q<sub>net</sub> = qt − σ<sub>v0</sub>. Het volumegewicht γ
-        wordt automatisch uit qc/Rf afgeleid (Lengkeek 2018). Alleen in klei/veen (de cohesieve lagen).</p>
-      </details>
-      <p class="muted small">Methodes conform Robertson (2010), Lengkeek (2018), NEN 9997-1 en de
-      schematiseringshandleiding macrostabiliteit.</p>
+      <details open><summary>Wat is een sondering?</summary>
+        <p>Een conuspunt wordt de grond in gedrukt en meet de puntdruk (qc) en de wrijving (fs).
+        Hard = zand, zacht met veel wrijving = klei/veen.</p></details>
+      <details><summary>Grondsoort?</summary>
+        <p>Robertson-index I<sub>SBT</sub> uit qc en Rf (officiële methode, ook in de Deltares-tool).
+        Scheiding zand/klei op I<sub>SBT</sub> = 2,60; boven 3,60 = veen.</p></details>
+      <details><summary>Waterdruk u₀?</summary>
+        <p>4-zone-verloop (0 boven GWS, hydrostatisch eronder, soepele overgang naar het zandpakket).
+        Gevalideerd tegen de bron-Excel (0,00 kPa).</p></details>
+      <details><summary>Su?</summary>
+        <p>Nkt-methode: Su = q<sub>net</sub>/N<sub>kt</sub>. SHANSEP: Su = S·σ′<sub>v0</sub>·OCRᵐ met de grensspanning
+        σ′<sub>vy</sub> = k·q<sub>net</sub>. γ uit qc/Rf (Lengkeek 2018). Alleen in klei/veen.</p></details>
+      <p class="muted small">Conform Robertson (2010), Lengkeek (2018), NEN 9997-1 en de schematiseringshandleiding macrostabiliteit.</p>
     </section>
 
-    <footer class="footer">
-      CPT Su Tool · HHSK · gemaakt voor heldere, navolgbare sterktebepaling uit sonderingen
-    </footer>
+    <footer class="footer">CPT Su Tool · HHSK · heldere, navolgbare sterktebepaling uit sonderingen</footer>
   </main>
 
   <script src="app.js"></script>
