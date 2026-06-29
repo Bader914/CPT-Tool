@@ -46,6 +46,11 @@ function setStatus(msg, type = "") {
 // ── Materialen-editor (uitgangspunten) ──
 const GRONDSOORTEN = ["zand", "klei", "veen"];
 let matRendered = false;
+let BIB = {};   // benoemde materialenbibliotheek (uit de backend)
+function matOpts(sel) {
+  return ['<option value="">— grondsoort —</option>']
+    .concat(Object.keys(BIB).map(n => `<option ${sel === n ? "selected" : ""}>${n}</option>`)).join("");
+}
 function rendMatEditor(materialen) {
   const rij = (g, m) => `<tr data-g="${g}">
     <td><span class="swatch" style="background:${({zand:"#FFD54F",klei:"#4CAF50",veen:"#7B4B27"})[g]}"></span>${g}</td>
@@ -83,6 +88,7 @@ function huidigeParams() {
     t_factor: num("tfac") ?? 1.645,
     knik_nap: num("knik"), stijghoogte_nap: num("stijg"),
     top_zand_nap: num("topzand"), indringing: num("indr") ?? 0.0,
+    min_dikte: num("minDikte") ?? 0.5,
   };
   if ($("vbChk").checked && num("vbDiepte") != null)
     p.voorboring = { actief: true, diepte: num("vbDiepte") };
@@ -119,39 +125,48 @@ $("sondSelect").addEventListener("change", e => {
 });
 $("herberekenBtn").addEventListener("click", analyseHuidige);
 ["suMethode", "gwl", "afac", "knik", "stijg", "topzand", "indr",
- "gammaBron", "vbChk", "vbDiepte", "tfac"].forEach(id =>
+ "gammaBron", "vbChk", "vbDiepte", "tfac", "minDikte"].forEach(id =>
   $(id).addEventListener("change", analyseHuidige));
 
 // ── Lagen-editor ──
 function lagenEditorRij(l = {}) {
-  const opts = GRONDSOORTEN.map(g =>
+  const gopts = GRONDSOORTEN.map(g =>
     `<option ${l.grondsoort === g ? "selected" : ""}>${g}</option>`).join("");
   return `<tr>
     <td><input type="number" step="0.1" class="le-bk" value="${l.bovenkant ?? ""}"></td>
-    <td><select class="le-gs">${opts}</select></td>
+    <td><select class="le-mat">${matOpts(l.materiaal)}</select></td>
+    <td><select class="le-gs">${gopts}</select></td>
     <td><input type="number" step="0.1" class="le-nkt" value="${l.nkt ?? ""}" placeholder="auto"></td>
     <td><input type="number" step="0.01" class="le-s" value="${l.S ?? ""}" placeholder="auto"></td>
     <td><input type="number" step="0.01" class="le-m" value="${l.m ?? ""}" placeholder="auto"></td>
     <td><button class="btn ghost mini le-del">✕</button></td></tr>`;
 }
+function bindLagenRijen() {
+  $("lagenEditor").querySelectorAll(".le-del").forEach(b =>
+    b.onclick = () => b.closest("tr").remove());
+  $("lagenEditor").querySelectorAll(".le-mat").forEach(sel =>
+    sel.onchange = () => {  // benoemd materiaal zet de grondsoort
+      const m = BIB[sel.value];
+      if (m) sel.closest("tr").querySelector(".le-gs").value = m.grondsoort;
+    });
+}
 function rendLagenEditor(rows) {
   $("lagenEditor").innerHTML =
-    `<thead><tr><th>Bovenkant [m NAP]</th><th>Grondsoort</th><th>Nkt</th><th>S</th><th>m</th><th></th></tr></thead>
+    `<thead><tr><th>Bovenkant [m NAP]</th><th>Materiaal</th><th>Grondsoort</th><th>Nkt</th><th>S</th><th>m</th><th></th></tr></thead>
      <tbody>${rows.map(lagenEditorRij).join("")}</tbody>`;
-  $("lagenEditor").querySelectorAll(".le-del").forEach(b =>
-    b.addEventListener("click", () => { b.closest("tr").remove(); }));
+  bindLagenRijen();
 }
 function leesLagenEditor() {
   return Array.from($("lagenEditor").querySelectorAll("tbody tr")).map(tr => {
     const g = (cls) => { const v = tr.querySelector(cls).value; return v === "" ? null : parseFloat(v); };
-    return { bovenkant: g(".le-bk"), grondsoort: tr.querySelector(".le-gs").value,
+    return { bovenkant: g(".le-bk"), materiaal: tr.querySelector(".le-mat").value || null,
+             grondsoort: tr.querySelector(".le-gs").value,
              nkt: g(".le-nkt"), S: g(".le-s"), m: g(".le-m") };
   }).filter(l => l.bovenkant !== null);
 }
 $("addLaagBtn").addEventListener("click", () => {
   $("lagenEditor").querySelector("tbody").insertAdjacentHTML("beforeend", lagenEditorRij());
-  $("lagenEditor").querySelectorAll(".le-del").forEach(b =>
-    b.onclick = () => b.closest("tr").remove());
+  bindLagenRijen();
 });
 $("vulAutoBtn").addEventListener("click", () => {
   const r = soundings[current] && soundings[current].result;
@@ -191,8 +206,19 @@ function toonResultaat(d) {
   $("meldingen").textContent = ((d.eenheid_meldingen && d.eenheid_meldingen.length)
     ? "Eenheden genormaliseerd: " + d.eenheid_meldingen.join("; ") + " · " : "")
     + (d.handmatig ? "Handmatige lagen" : "Automatische classificatie (Robertson)") + " · " + bron;
+  if (d.bibliotheek) BIB = d.bibliotheek;
   if (!matRendered && d.materialen) rendMatEditor(d.materialen);
   plotProfiel(d); plotSpanning(d); plotSu(d); lagenTabel(d);
+}
+
+// ── GWS-lijn (gestippeld blauw) op de NAP-as ──
+function gwsLine(gwl) {
+  return { type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: gwl, y1: gwl,
+           line: { color: HHSK_BLUE, width: 1.2, dash: "dot" }, layer: "below" };
+}
+function gwsAnno(gwl) {
+  return { xref: "paper", yref: "y", x: 0.005, y: gwl, text: "GWS", showarrow: false,
+           font: { size: 10, color: HHSK_BLUE }, xanchor: "left", yanchor: "bottom" };
 }
 
 // ── Plots ──
@@ -220,6 +246,8 @@ function plotProfiel(d) {
   layout.yaxis2 = { matches: "y", showticklabels: false };
   layout.yaxis3 = { matches: "y", showticklabels: false };
   layout.barmode = "overlay";
+  layout.shapes = [gwsLine(d.gwl_nap)];
+  layout.annotations = [gwsAnno(d.gwl_nap)];
   Plotly.newPlot("plotProfiel", traces, layout, { responsive: true, displayModeBar: false });
 }
 
@@ -236,6 +264,8 @@ function plotSpanning(d) {
   layout.yaxis = { title: "Niveau [m NAP]" };
   layout.yaxis2 = { matches: "y", showticklabels: false };
   layout.showlegend = true; layout.legend = { orientation: "h", y: 1.08 };
+  layout.shapes = [gwsLine(d.gwl_nap)];
+  layout.annotations = [gwsAnno(d.gwl_nap)];
   Plotly.newPlot("plotSpanning", traces, layout, { responsive: true, displayModeBar: false });
 }
 
@@ -249,18 +279,22 @@ function plotSu(d) {
     height: 540, margin: { l: 55, r: 15, t: 25, b: 45 }, paper_bgcolor: "#fff", plot_bgcolor: "#fff",
     font: { family: "Inter, sans-serif", size: 12, color: HHSK_DARK },
     xaxis: { title: "Su [kPa]" }, yaxis: { title: "Niveau [m NAP]" }, showlegend: false,
+    shapes: [gwsLine(d.gwl_nap)], annotations: [gwsAnno(d.gwl_nap)],
   };
   Plotly.newPlot("plotSu", traces, layout, { responsive: true, displayModeBar: false });
 }
 
 function lagenTabel(d) {
-  const rows = d.lagen.map(l =>
-    `<tr><td><span class="swatch" style="background:${d.kleuren[l.grondsoort] || "#bbb"}"></span>${l.grondsoort}</td>
+  const rows = d.lagen.map(l => {
+    const isZand = l.grondsoort === "zand";
+    const naam = (l.materiaal || l.grondsoort) + (isZand ? " <span class='muted'>(funderingslaag)</span>" : "");
+    return `<tr><td><span class="swatch" style="background:${d.kleuren[l.grondsoort] || "#bbb"}"></span>${naam}</td>
      <td>${l.top}</td><td>${l.onder}</td><td>${l.dikte}</td><td>${l.n ?? "—"}</td>
      <td>${l.su_gem ?? "—"}</td><td>${l.VC_data ?? "—"}</td><td>${l.su_kar ?? "—"}</td>
-     <td>${l.su_kar_mat ?? "—"}</td></tr>`).join("");
+     <td>${l.su_kar_mat ?? "—"}</td></tr>`;
+  }).join("");
   $("lagenTabel").innerHTML =
-    `<thead><tr><th>Grondsoort</th><th>Top [m NAP]</th><th>Onder [m NAP]</th><th>Dikte [m]</th><th>n</th>
+    `<thead><tr><th>Laag / materiaal</th><th>Top [m NAP]</th><th>Onder [m NAP]</th><th>Dikte [m]</th><th>n</th>
      <th>Su gem [kPa]</th><th>VC</th><th>Su kar (data) [kPa]</th><th>Su kar (mat-VC) [kPa]</th></tr></thead><tbody>${rows}</tbody>`;
 }
 

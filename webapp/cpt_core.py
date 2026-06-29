@@ -247,6 +247,24 @@ NKT_PER_GROND = {g: m["nkt"] for g, m in DEFAULT_MATERIALEN.items()}
 S_PER_GROND = {g: m["S"] for g, m in DEFAULT_MATERIALEN.items()}
 M_PER_GROND = {g: m["m"] for g, m in DEFAULT_MATERIALEN.items()}
 
+# Benoemde materialenbibliotheek (Holocene slappe lagen — indicatieve waarden,
+# in de geest van de schematiseringshandleiding macrostabiliteit / Tabel 91).
+# Bewerkbaar in de UI; 'grondsoort' bepaalt of er Su (klei/veen) wordt berekend.
+BIBLIOTHEEK = {
+    "Klei, slap":   {"grondsoort": "klei", "gamma_sat": 14.0, "gamma_unsat": 13.5, "nkt": 16.0, "S": 0.30, "m": 0.80, "VC": 0.25},
+    "Klei":         {"grondsoort": "klei", "gamma_sat": 17.0, "gamma_unsat": 16.0, "nkt": 15.0, "S": 0.32, "m": 0.80, "VC": 0.25},
+    "Klei, humeus": {"grondsoort": "klei", "gamma_sat": 14.5, "gamma_unsat": 13.5, "nkt": 16.0, "S": 0.33, "m": 0.85, "VC": 0.25},
+    "Klei, venig":  {"grondsoort": "klei", "gamma_sat": 13.0, "gamma_unsat": 12.5, "nkt": 16.0, "S": 0.34, "m": 0.85, "VC": 0.30},
+    "Veen":         {"grondsoort": "veen", "gamma_sat": 10.5, "gamma_unsat": 10.2, "nkt": 17.0, "S": 0.35, "m": 0.90, "VC": 0.30},
+    "Veen, kleiig": {"grondsoort": "veen", "gamma_sat": 11.5, "gamma_unsat": 11.0, "nkt": 17.0, "S": 0.35, "m": 0.90, "VC": 0.30},
+    "Zand, los":    {"grondsoort": "zand", "gamma_sat": 18.0, "gamma_unsat": 17.0, "nkt": None, "S": None, "m": None, "VC": 0.25},
+    "Zand, vast":   {"grondsoort": "zand", "gamma_sat": 20.0, "gamma_unsat": 18.0, "nkt": None, "S": None, "m": None, "VC": 0.25},
+}
+
+
+def _f(x):
+    return float(x) if x is not None else np.nan
+
 
 def _materialen(params):
     """Merge gebruikersmaterialen over de defaults (per grondsoort)."""
@@ -257,24 +275,43 @@ def _materialen(params):
     return mat
 
 
-def _toewijs_handmatige_lagen(diepte_nap, lagen):
-    """Per meetpunt grondsoort/nkt/S/m uit handmatige lagen (top→onder, NAP)."""
+def _toewijs_handmatige_lagen(diepte_nap, lagen, mat, bib):
+    """Per meetpunt grondsoort/nkt/S/m + γ uit handmatige lagen (top→onder, NAP).
+
+    Een laag mag een benoemd materiaal noemen (l['materiaal'] uit de bibliotheek);
+    dat levert grondsoort + default-parameters. Expliciete nkt/S/m op de laag winnen.
+    """
     items = sorted([l for l in lagen if l.get("bovenkant") is not None],
                    key=lambda l: -float(l["bovenkant"]))
     z = diepte_nap.values
-    gron = np.array(["onbekend"] * len(z), dtype=object)
-    nkt = np.full(len(z), np.nan); S = np.full(len(z), np.nan); M = np.full(len(z), np.nan)
+    n = len(z)
+    gron = np.array(["onbekend"] * n, dtype=object)
+    matnaam = np.array([""] * n, dtype=object)
+    nkt = np.full(n, np.nan); S = np.full(n, np.nan); M = np.full(n, np.nan)
+    gsat = np.full(n, np.nan); guns = np.full(n, np.nan)
     for i, l in enumerate(items):
         top = float(l["bovenkant"])
         onder = float(items[i + 1]["bovenkant"]) if i + 1 < len(items) else float(z.min()) - 0.01
         mask = (z <= top) & (z > onder)
-        gs = l.get("grondsoort", "klei")
+        bibm = bib.get(l.get("materiaal")) if l.get("materiaal") else None
+        gs = (bibm or {}).get("grondsoort") or l.get("grondsoort", "klei")
+        base = dict(mat.get(gs, {}))                       # grondsoort-default
+        if bibm:                                            # benoemd materiaal wint
+            base.update({k: v for k, v in bibm.items() if k != "grondsoort" and v is not None})
+
+        def pick(key):
+            return l[key] if l.get(key) is not None else base.get(key)
+
         gron[mask] = gs
-        nkt[mask] = l.get("nkt") if l.get("nkt") is not None else (NKT_PER_GROND.get(gs) or np.nan)
-        S[mask] = l.get("S") if l.get("S") is not None else (S_PER_GROND.get(gs) or np.nan)
-        M[mask] = l.get("m") if l.get("m") is not None else (M_PER_GROND.get(gs) or np.nan)
-    return (pd.Series(gron, index=diepte_nap.index), pd.Series(nkt, index=diepte_nap.index),
-            pd.Series(S, index=diepte_nap.index), pd.Series(M, index=diepte_nap.index))
+        matnaam[mask] = l.get("materiaal") or gs
+        nkt[mask] = _f(pick("nkt"))
+        S[mask] = _f(pick("S"))
+        M[mask] = _f(pick("m"))
+        gsat[mask] = _f(base.get("gamma_sat"))
+        guns[mask] = _f(base.get("gamma_unsat"))
+    idx = diepte_nap.index
+    return (pd.Series(gron, index=idx), pd.Series(nkt, index=idx), pd.Series(S, index=idx),
+            pd.Series(M, index=idx), pd.Series(gsat, index=idx), pd.Series(guns, index=idx))
 
 
 def analyseer(content: str, params: dict | None = None) -> dict:
@@ -303,6 +340,7 @@ def analyseer(content: str, params: dict | None = None) -> dict:
     k_grens = float(p.get("k_grens", 0.33))
     gamma_bron = p.get("gamma_bron", "lengkeek")   # 'lengkeek' | 'materiaal'
     t_factor = float(p.get("t_factor", 1.645))
+    min_dikte = float(p.get("min_dikte", 0.3))     # dunne lagen samenvoegen (boorstaat)
 
     df = df.dropna(subset=[cm["qc"], cm["diepte"]]).reset_index(drop=True)
     diepte_nap = mv - df[cm["diepte"]]
@@ -317,9 +355,11 @@ def analyseer(content: str, params: dict | None = None) -> dict:
     gamma_lengkeek = bereken_gamma_sat(qt, rf)
 
     base = float(diepte_nap.min())
+    gsat_laag = guns_laag = None
     handmatig = bool(p.get("lagen"))
     if handmatig:
-        grondsoort, nkt, S, M = _toewijs_handmatige_lagen(diepte_nap, p["lagen"])
+        grondsoort, nkt, S, M, gsat_laag, guns_laag = _toewijs_handmatige_lagen(
+            diepte_nap, p["lagen"], mat, BIBLIOTHEEK)
         # vul ontbrekende nkt/S/m uit de materialentabel per grondsoort
         nkt = nkt.fillna(grondsoort.map(lambda gs: mat.get(gs, {}).get("nkt")))
         S = S.fillna(grondsoort.map(lambda gs: mat.get(gs, {}).get("S")))
@@ -330,10 +370,13 @@ def analyseer(content: str, params: dict | None = None) -> dict:
         S = grondsoort.map(lambda gs: mat.get(gs, {}).get("S"))
         M = grondsoort.map(lambda gs: mat.get(gs, {}).get("m"))
 
-    # γ-bron: Lengkeek-correlatie of γ per grondsoort uit de materialentabel
+    # γ-bron: Lengkeek-correlatie of γ per (benoemd) materiaal / grondsoort
     if gamma_bron == "materiaal":
         gsat = grondsoort.map(lambda gs: mat.get(gs, {}).get("gamma_sat") or 17.0)
         guns = grondsoort.map(lambda gs: mat.get(gs, {}).get("gamma_unsat") or 17.0)
+        if gsat_laag is not None:       # benoemde materialen leveren γ per laag
+            gsat = gsat_laag.fillna(gsat)
+            guns = guns_laag.fillna(guns)
         gamma_punt = pd.Series(np.where(diepte_nap.values > gwl, guns.values, gsat.values), index=df.index)
         gamma_toon = gsat
         sigma = sigma_v0_uit_gamma(diepte_nap, gamma_punt, mv, gwl, boven_gws_reductie=0.0) / 1000.0
@@ -369,13 +412,18 @@ def analyseer(content: str, params: dict | None = None) -> dict:
         su[geldig] = bereken_Su(qnet[geldig], nkt[geldig])
     su[su < 0] = np.nan
 
-    lagen = _segmenteer(diepte_nap.values, grondsoort.values, su.values)
+    if handmatig:
+        # exact de gebruikersgrenzen aanhouden (geen samenvoeging per grondsoort)
+        lagen = _lagen_uit_handmatig(diepte_nap.values, p["lagen"], BIBLIOTHEEK)
+    else:
+        lagen = _segmenteer(diepte_nap.values, grondsoort.values, su.values, min_dikte)
     # per-laag Su-statistiek (gem/std/VC/karakteristiek), met materiaal-VC indien aanwezig
     for l in lagen:
         m_in = (diepte_nap <= l["top"]) & (diepte_nap > l["onder"])
         sub = su[m_in].dropna()
         kwl = karakteristieke_waarde(sub, t_factor)
-        vc_mat = mat.get(l["grondsoort"], {}).get("VC")
+        vc_mat = (BIBLIOTHEEK.get(l.get("materiaal"), {}).get("VC")
+                  or mat.get(l["grondsoort"], {}).get("VC"))
         l["n"] = kwl["n"]
         l["su_gem"] = round(kwl["gem"], 1) if kwl["gem"] is not None else None
         l["VC_data"] = round(kwl["VC"], 2) if kwl["VC"] is not None else None
@@ -401,13 +449,39 @@ def analyseer(content: str, params: dict | None = None) -> dict:
         "qnet": arr(qnet), "Qt": arr(Qt), "Bq": arr(Bq),
         "Su": arr(su), "grondsoort": list(grondsoort.values), "lagen": lagen,
         "su_samenvatting": {k: (round(v, 1) if isinstance(v, float) else v) for k, v in kw.items()},
-        "kleuren": LITHO_KLEUREN,
+        "kleuren": LITHO_KLEUREN, "bibliotheek": BIBLIOTHEEK,
     }
 
 
 # achterwaartse compatibiliteit
 def analyseer_gef(content: str, gwl_nap: float = 0.0, a_factor=None) -> dict:
     return analyseer(content, {"gwl_nap": gwl_nap, "a_factor": a_factor})
+
+
+def _lagen_uit_handmatig(z, lagen_input, bib):
+    """Laagblokken exact op de door de gebruiker opgegeven grenzen (geen samenvoeging).
+
+    Elke rij → één laag: top = bovenkant, onder = bovenkant van de volgende rij
+    (laatste tot de sondeerbasis). su_gem wordt later per laag ingevuld.
+    """
+    items = sorted([l for l in lagen_input if l.get("bovenkant") is not None],
+                   key=lambda l: -float(l["bovenkant"]))
+    if not z.size or not items:
+        return []
+    z_top, z_bot = float(z.max()), float(z.min())
+    out = []
+    for i, l in enumerate(items):
+        top = min(float(l["bovenkant"]), z_top)
+        onder = float(items[i + 1]["bovenkant"]) if i + 1 < len(items) else z_bot
+        onder = max(onder, z_bot)
+        if top <= onder:
+            continue
+        bibm = bib.get(l.get("materiaal")) or {}
+        gs = bibm.get("grondsoort") or l.get("grondsoort", "klei")
+        out.append({"top": round(top, 2), "onder": round(onder, 2),
+                    "grondsoort": gs, "materiaal": l.get("materiaal") or gs,
+                    "dikte": round(top - onder, 2), "su_gem": None})
+    return out
 
 
 def _segmenteer(z, g, su, min_dikte=0.3):

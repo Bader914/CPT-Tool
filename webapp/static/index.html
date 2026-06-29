@@ -125,9 +125,15 @@
           <table id="lagenEditor"></table>
           <div class="editor-btns">
             <button class="btn ghost" id="addLaagBtn">+ laag</button>
-            <button class="btn ghost" id="vulAutoBtn">↻ vul met automatische lagen</button>
+            <button class="btn ghost" id="vulAutoBtn">↻ suggestie (Robertson)</button>
+            <label class="param mini">min. laagdikte [m]
+              <input type="number" id="minDikte" step="0.1" value="0.5" style="width:5rem">
+            </label>
             <label class="chk"><input type="checkbox" id="handmatigChk"> handmatige lagen gebruiken</label>
           </div>
+          <p class="muted small">Kies per laag een <strong>materiaal</strong> uit de bibliotheek
+            (γ, Nkt, S, m, VC volgen automatisch) — of laat het op de grondsoort staan.
+            Een zandlaag is een funderingslaag: daar wordt geen Su berekend.</p>
         </details>
 
         <div class="control-actions">
