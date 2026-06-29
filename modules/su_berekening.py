@@ -224,19 +224,29 @@ def _render_per_sondering(su_berekend: dict):
         c3.metric("Karakteristiek", f"{kw['kar']:.1f} kPa")
         c4.metric("Methode", data.get("su_methode", "Nkt"))
 
+        # VC per materiaal (uit de materialentabel), zoals Deltares de ingevoerde VC gebruikt
+        up = st.session_state.get("uitgangspunten", {})
+        lagen_eff = data.get("lagen_lokaal") or up.get("lagen", [])
+        vc_mat_map = {l["naam"]: l.get("VC_su") for l in lagen_eff if l.get("VC_su") is not None}
+
         # Karakteristieke waarde per grondlaag
         rijen = []
         for laag, sub in df.dropna(subset=["Su"]).groupby("grondlaag"):
             kwl = karakteristieke_waarde(sub["Su"], t_factor)
+            vc_mat = vc_mat_map.get(laag)
+            kar_mat = round(kwl["gem"] * (1 - t_factor * vc_mat), 1) if vc_mat is not None else "—"
             rijen.append({
                 "Grondlaag": laag, "n": kwl["n"],
                 "Su gem [kPa]": round(kwl["gem"], 1),
-                "Su std [kPa]": round(kwl["std"], 1),
-                "VC [-]": round(kwl["VC"], 2),
-                "Su karakteristiek [kPa]": round(kwl["kar"], 1),
+                "VC data [-]": round(kwl["VC"], 2),
+                "Su kar (data-VC) [kPa]": round(kwl["kar"], 1),
+                "VC materiaal [-]": round(vc_mat, 2) if vc_mat is not None else "—",
+                "Su kar (mat-VC) [kPa]": kar_mat,
             })
         if rijen:
-            st.markdown(f"**Karakteristieke waarde per grondlaag** (Su_kar = Su_gem·(1 − {t_factor:.3f}·VC)):")
+            st.markdown(f"**Karakteristieke waarde per grondlaag** "
+                        f"(Su_kar = Su_gem·(1 − {t_factor:.3f}·VC); data-VC uit de spreiding, "
+                        f"materiaal-VC uit de materialentabel):")
             st.dataframe(pd.DataFrame(rijen), use_container_width=True, hide_index=True)
 
     toon_lagen = st.checkbox("Toon SHZ-laagverdeling op achtergrond", value=True,

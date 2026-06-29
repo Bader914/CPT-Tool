@@ -517,6 +517,60 @@ def render():
 
         # Stabiele laag-bibliotheek (gedeeld met de per-sondering interpretatie).
         lagen_biblio = get_lagen_bibliotheek(up)
+
+        # === Materiaaleigenschappen (bewerkbaar, à la Deltares CPT-tool) ===
+        with st.expander("🧪 Materiaaleigenschappen (γ, S, m, Nkt, VC) — bewerken/toevoegen",
+                         expanded=False):
+            st.caption("Bewerk de materialen of voeg er toe. Deze lijst voedt de laagtype-keuze "
+                       "hieronder en de berekening (γ voor σ, S/m voor SHANSEP, Nkt, VC voor karakteristiek).")
+            mat_df = pd.DataFrame([{
+                "Materiaal": l["naam"],
+                "γ_sat": l.get("gamma_nat"), "γ_unsat": l.get("gamma_droog"),
+                "S": l.get("S_ratio"), "m": l.get("m_factor"),
+                "Nkt": l.get("Nkt"), "VC_su": l.get("VC_su", 0.25),
+                "Dijkmateriaal": bool(l.get("is_dijkmateriaal", False)),
+            } for l in lagen_biblio])
+            mat_edit = st.data_editor(
+                mat_df, num_rows="dynamic", hide_index=True, use_container_width=True,
+                key="materialen_editor",
+                column_config={
+                    "Materiaal": st.column_config.TextColumn("Materiaal", width="large"),
+                    "γ_sat": st.column_config.NumberColumn("γ_sat [kN/m³]", format="%.2f", step=0.1),
+                    "γ_unsat": st.column_config.NumberColumn("γ_unsat [kN/m³]", format="%.2f", step=0.1),
+                    "S": st.column_config.NumberColumn("S [-]", format="%.2f", step=0.01),
+                    "m": st.column_config.NumberColumn("m [-]", format="%.2f", step=0.01),
+                    "Nkt": st.column_config.NumberColumn("Nkt [-]", format="%.1f", step=0.1),
+                    "VC_su": st.column_config.NumberColumn("VC_su [-]", format="%.2f", step=0.01),
+                    "Dijkmateriaal": st.column_config.CheckboxColumn("Dijkmateriaal (Su)"),
+                },
+            )
+            if st.button("💾 Materialen opslaan", key="save_materialen", type="primary"):
+                def _f(v):
+                    return float(v) if pd.notna(v) else None
+                nieuwe = []
+                for r in mat_edit.to_dict("records"):
+                    naam = r.get("Materiaal")
+                    if not naam or str(naam).strip() == "":
+                        continue
+                    laag = next((dict(l) for l in lagen_biblio if l["naam"] == naam), {})
+                    laag.update({
+                        "naam": str(naam), "gamma_nat": _f(r.get("γ_sat")),
+                        "gamma_droog": _f(r.get("γ_unsat")), "S_ratio": _f(r.get("S")),
+                        "m_factor": _f(r.get("m")), "Nkt": _f(r.get("Nkt")),
+                        "VC_su": _f(r.get("VC_su")), "is_dijkmateriaal": bool(r.get("Dijkmateriaal")),
+                    })
+                    laag.setdefault("kleur", "#888888")
+                    laag.setdefault("materiaal", str(naam))
+                    nieuwe.append(laag)
+                if nieuwe:
+                    up["lagen_bibliotheek"] = nieuwe
+                    st.session_state.uitgangspunten = up
+                    st.success(f"✅ {len(nieuwe)} materialen opgeslagen.")
+                    st.rerun()
+                else:
+                    st.warning("Geen geldige materialen (vul minstens een naam in).")
+
+        lagen_biblio = get_lagen_bibliotheek(up)
         type_namen = [l["naam"] for l in lagen_biblio]
 
         # Seed de tabel: uit eerder opgeslagen grondopbouw, anders uit de huidige lagen
