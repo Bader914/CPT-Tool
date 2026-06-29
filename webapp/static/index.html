@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CPT Su Tool — HHSK</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🌊</span>
+      <div>
+        <div class="brand-title">CPT Su Tool</div>
+        <div class="brand-sub">Hoogheemraadschap van Schieland en de Krimpenerwaard</div>
+      </div>
+    </div>
+    <a class="help-link" href="#uitleg">Uitleg & methode</a>
+  </header>
+
+  <main class="container">
+
+    <!-- INTRO -->
+    <section class="card intro">
+      <h1>Van sondering naar dijksterkte — in een paar klikken</h1>
+      <p class="lead">
+        Deze tool vertaalt een <strong>sondering</strong> (CPT) automatisch naar de
+        <strong>ongedraineerde schuifsterkte&nbsp;Su</strong> van de grond, met grafieken en
+        uitleg bij elke stap. Upload een GEF-bestand en je ziet meteen de grondopbouw,
+        de spanningen en de sterkte.
+      </p>
+      <div class="steps">
+        <div class="step"><span>1</span> Upload sondering (GEF)</div>
+        <div class="step"><span>2</span> Automatische grondsoort + boorstaat</div>
+        <div class="step"><span>3</span> Spanningen &amp; waterdruk</div>
+        <div class="step"><span>4</span> Schuifsterkte Su</div>
+      </div>
+    </section>
+
+    <!-- UPLOAD -->
+    <section class="card">
+      <h2>1 · Sondering inladen</h2>
+      <p class="muted">
+        Sleep of kies een <code>.gef</code>-bestand. De tool herkent zelf de kolommen
+        (puntdruk qc, wrijving fs, waterdruk u₂, diepte) en het maaiveldniveau.
+      </p>
+      <div class="upload-row">
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" accept=".gef" hidden />
+          <span class="dz-icon">📁</span>
+          <span class="dz-text">Klik of sleep een GEF-bestand hierheen</span>
+          <span class="dz-file" id="dzFile"></span>
+        </label>
+        <div class="param">
+          <label for="gwl">Grondwaterstand [m NAP]
+            <span class="info" title="Het niveau waar het grondwater staat. Hieronder duwt water omhoog en draagt het een deel van het gewicht.">ⓘ</span>
+          </label>
+          <input type="number" id="gwl" value="0.0" step="0.1" />
+          <button id="analyseBtn" class="btn primary" disabled>Analyseer ▶</button>
+        </div>
+      </div>
+      <div id="status" class="status"></div>
+    </section>
+
+    <!-- RESULTATEN -->
+    <section id="resultaten" class="hidden">
+
+      <!-- samenvatting -->
+      <section class="card">
+        <h2 id="bestandTitel">2 · Resultaat</h2>
+        <div class="kpis" id="kpis"></div>
+        <p class="muted small" id="meldingen"></p>
+      </section>
+
+      <!-- grafieken -->
+      <section class="card">
+        <h2>Grondopbouw &amp; metingen</h2>
+        <p class="muted">
+          Links de <strong>boorstaat</strong> (geel = zand, groen = klei, bruin = veen),
+          daarnaast de <strong>puntdruk qc</strong> (hoog = stevig) en het
+          <strong>wrijvingsgetal Rf</strong> (hoog = klei/veen, laag = zand).
+          Hoge qc met hoge Rf is stijve klei — geen zand.
+        </p>
+        <div id="plotProfiel" class="plot"></div>
+      </section>
+
+      <section class="card">
+        <h2>Spanningen &amp; waterdruk</h2>
+        <p class="muted">
+          De grond erboven drukt op elke laag (<strong>σ<sub>v0</sub></strong>). Het water duwt
+          omhoog (<strong>u₀</strong>). De korrels dragen het verschil:
+          <strong>σ′<sub>v0</sub> = σ<sub>v0</sub> − u₀</strong>. Die effectieve spanning bepaalt de sterkte.
+        </p>
+        <div id="plotSpanning" class="plot"></div>
+      </section>
+
+      <section class="card">
+        <h2>Schuifsterkte Su</h2>
+        <p class="muted">
+          <strong>Su = q<sub>net</sub> / N<sub>kt</sub></strong> per meetpunt (alleen in klei/veen).
+          De zwarte lijn is het gemiddelde; <strong>Su,kar</strong> is de voorzichtige
+          (karakteristieke) waarde waarmee je een dijk toetst.
+        </p>
+        <div id="plotSu" class="plot"></div>
+        <div class="tabel-wrap"><table id="lagenTabel"></table></div>
+      </section>
+    </section>
+
+    <!-- UITLEG -->
+    <section id="uitleg" class="card uitleg">
+      <h2>Uitleg &amp; methode</h2>
+      <details open>
+        <summary>Wat is een sondering?</summary>
+        <p>Een machine drukt een conuspunt de grond in en meet hoe hard de grond terugduwt
+        (<strong>qc</strong>) en de wrijving langs de zijkant (<strong>fs</strong>). Hard = zand,
+        zacht met veel wrijving = klei/veen.</p>
+      </details>
+      <details>
+        <summary>Hoe bepaalt de tool de grondsoort?</summary>
+        <p>Met de Robertson-index <em>I<sub>SBT</sub></em> uit qc en Rf (officiële methode, ook in
+        de Deltares-tool). De scheiding zand/klei ligt op I<sub>SBT</sub> = 2,60; boven 3,60 is het veen.</p>
+      </details>
+      <details>
+        <summary>Hoe wordt de waterdruk berekend?</summary>
+        <p>Een 4-zone-verloop: 0 boven de grondwaterstand, daaronder hydrostatisch, met een
+        soepele overgang naar een dieper watervoerend zandpakket. Exact gevalideerd tegen de
+        bron-Excel (0,00 kPa afwijking).</p>
+      </details>
+      <details>
+        <summary>Hoe wordt Su berekend?</summary>
+        <p>Su = q<sub>net</sub> / N<sub>kt</sub>, met q<sub>net</sub> = qt − σ<sub>v0</sub>. Het volumegewicht γ
+        wordt automatisch uit qc/Rf afgeleid (Lengkeek 2018). Alleen in klei/veen (de cohesieve lagen).</p>
+      </details>
+      <p class="muted small">Methodes conform Robertson (2010), Lengkeek (2018), NEN 9997-1 en de
+      schematiseringshandleiding macrostabiliteit.</p>
+    </section>
+
+    <footer class="footer">
+      CPT Su Tool · HHSK · gemaakt voor heldere, navolgbare sterktebepaling uit sonderingen
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
