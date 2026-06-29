@@ -209,6 +209,7 @@ function toonResultaat(d) {
   if (d.bibliotheek) BIB = d.bibliotheek;
   if (!matRendered && d.materialen) rendMatEditor(d.materialen);
   plotProfiel(d); plotSpanning(d); plotSu(d); lagenTabel(d);
+  if (labData) toonLab();   // lab-overlay meeschalen met de herberekening
 }
 
 // ── GWS-lijn (gestippeld blauw) op de NAP-as ──
@@ -401,6 +402,118 @@ function plotCmp() {
     ["Gem. verschil", gem.toFixed(1) + " kPa"], ["Gem. absoluut", absg.toFixed(1) + " kPa"], ["RMSE", rmse.toFixed(1) + " kPa"],
   ].map(([l, v]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
 }
+
+// ── Validatie met laboratorium (Su) + Nkt-kalibratie ──
+const labZone = $("labZone"), labInput = $("labInput");
+let labData = null;        // {nap:[], su:[]}
+let labNktSuggestie = null;
+labZone.addEventListener("click", () => labInput.click());
+["dragover", "dragenter"].forEach(ev => labZone.addEventListener(ev, e => { e.preventDefault(); labZone.classList.add("drag"); }));
+["dragleave", "drop"].forEach(ev => labZone.addEventListener(ev, e => { e.preventDefault(); labZone.classList.remove("drag"); }));
+labZone.addEventListener("drop", e => { e.preventDefault(); if (e.dataTransfer.files[0]) leesLab(e.dataTransfer.files[0]); });
+labInput.addEventListener("change", () => { if (labInput.files[0]) leesLab(labInput.files[0]); });
+
+function parseNapSu(txt) {  // gedeelde CSV-parser (NAP ; Su)
+  txt = txt.trim();
+  const sep = txt.includes(";") ? ";" : (txt.includes("\t") ? "\t" : ",");
+  const lines = txt.split(/\r?\n/);
+  const head = lines[0].split(sep).map(h => h.trim().toLowerCase());
+  let inap = head.findIndex(h => h.includes("nap")), isu = head.findIndex(h => h.includes("su"));
+  let start = 1;
+  if (inap < 0 || isu < 0) { inap = 0; isu = 1; start = isNaN(parseFloat(head[0])) ? 1 : 0; }
+  const nap = [], su = [];
+  for (let i = start; i < lines.length; i++) {
+    const c = lines[i].split(sep);
+    const a = parseFloat(c[inap]), b = parseFloat(c[isu]);
+    if (!isNaN(a) && !isNaN(b)) { nap.push(a); su.push(b); }
+  }
+  return { nap, su };
+}
+
+// lineaire interpolatie van y op x-waarde, met x/y-arrays (willekeurige volgorde)
+function interpOp(xArr, yArr, x) {
+  const pts = xArr.map((xi, i) => [xi, yArr[i]]).filter(p => p[1] != null && !isNaN(p[0]))
+    .sort((a, b) => a[0] - b[0]);
+  if (!pts.length) return null;
+  if (x <= pts[0][0]) return pts[0][1];
+  if (x >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+  for (let i = 1; i < pts.length; i++) {
+    if (x <= pts[i][0]) {
+      const t = (x - pts[i - 1][0]) / (pts[i][0] - pts[i - 1][0]);
+      return pts[i - 1][1] + t * (pts[i][1] - pts[i - 1][1]);
+    }
+  }
+  return pts[pts.length - 1][1];
+}
+
+function leesLab(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    labData = parseNapSu(reader.result);
+    if (!labData.nap.length) { $("labFile").textContent = "✗ geen geldige rijen (verwacht NAP ; Su)"; return; }
+    $("labFile").textContent = `✓ ${file.name} (${labData.nap.length} labpunten)`;
+    toonLab();
+  };
+  reader.readAsText(file);
+}
+
+function toonLab() {
+  const r = soundings[current] && soundings[current].result;
+  if (!r || !labData) return;
+  // per labpunt: qnet interpoleren → Nkt terugrekenen
+  const rows = labData.nap.map((nap, i) => {
+    const su_lab = labData.su[i];
+    const qnet = interpOp(r.diepte_nap, r.qnet, nap);          // MPa
+    const nkt = (qnet != null && su_lab > 0) ? (qnet * 1000) / su_lab : null;
+    return { nap, su_lab, qnet, nkt };
+  });
+  const nkts = rows.map(x => x.nkt).filter(v => v != null && isFinite(v) && v > 0).sort((a, b) => a - b);
+  const gem = nkts.length ? nkts.reduce((a, b) => a + b, 0) / nkts.length : null;
+  const med = nkts.length ? nkts[Math.floor(nkts.length / 2)] : null;
+  labNktSuggestie = med;
+
+  // plot: ons Su-profiel (per punt) + labpunten
+  const traces = [
+    { x: r.Su, y: r.diepte_nap, mode: "lines", name: "CPT-Su", line: { color: "#ef9a9a", width: 1 } },
+    { x: labData.su, y: labData.nap, mode: "markers", name: "Lab (Su)",
+      marker: { color: HHSK_DARK, size: 9, symbol: "diamond" },
+      hovertemplate: "Lab Su=%{x:.1f} kPa<br>NAP %{y:.2f}<extra></extra>" },
+  ];
+  r.lagen.forEach(l => { if (l.su_gem != null)
+    traces.push({ x: [l.su_gem, l.su_gem], y: [l.top, l.onder], mode: "lines",
+                  line: { color: "#111", width: 2 }, showlegend: false }); });
+  Plotly.newPlot("plotLab", traces, {
+    height: 540, margin: { l: 55, r: 15, t: 30, b: 45 }, paper_bgcolor: "#fff", plot_bgcolor: "#fff",
+    font: { family: "Inter, sans-serif", size: 12, color: HHSK_DARK },
+    xaxis: { title: "Su [kPa]" }, yaxis: { title: "Niveau [m NAP]" },
+    legend: { orientation: "h", y: 1.05 },
+    shapes: [gwsLine(r.gwl_nap)], annotations: [gwsAnno(r.gwl_nap)],
+  }, { responsive: true, displayModeBar: false });
+
+  $("labMetrics").innerHTML = [
+    ["Labpunten", nkts.length],
+    ["Nkt terug (gem)", gem != null ? gem.toFixed(1) : "—"],
+    ["Nkt terug (mediaan)", med != null ? med.toFixed(1) : "—"],
+  ].map(([l, v]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+
+  $("labTabel").innerHTML =
+    `<thead><tr><th>NAP [m]</th><th>Su lab [kPa]</th><th>qnet (CPT) [MPa]</th><th>Nkt terug</th></tr></thead><tbody>` +
+    rows.map(x => `<tr><td>${x.nap.toFixed(2)}</td><td>${x.su_lab.toFixed(1)}</td>
+      <td>${x.qnet != null ? x.qnet.toFixed(3) : "—"}</td>
+      <td>${x.nkt != null ? x.nkt.toFixed(1) : "—"}</td></tr>`).join("") + `</tbody>`;
+  $("labActions").style.display = labNktSuggestie != null ? "flex" : "none";
+}
+
+$("labNktBtn").addEventListener("click", () => {
+  if (labNktSuggestie == null || !matRendered) return;
+  const v = labNktSuggestie.toFixed(1);
+  ["klei", "veen"].forEach(g => {
+    const tr = $("matEditor").querySelector(`tr[data-g="${g}"]`);
+    if (tr) tr.querySelector(".m-nkt").value = v;
+  });
+  $("suMethode").value = "nkt";
+  analyseHuidige();
+});
 
 function baseLayout(cols) {
   return {

@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CPT Su Tool — HHSK</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231A76BB'/%3E%3Cpath d='M4 20c4-4 8-4 12 0s8 4 12 0' stroke='white' stroke-width='2.5' fill='none'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
@@ -177,6 +178,25 @@
         <p class="muted">Vergelijk de Su-profielen van alle geladen sonderingen in één beeld.</p>
         <button class="btn ghost" id="analyseAlleBtn">↻ Analyseer &amp; toon alle</button>
         <div id="plotAlle" class="plot"></div>
+      </section>
+
+      <!-- validatie met laboratorium -->
+      <section class="card">
+        <h2>Validatie met laboratorium (Su) &amp; Nkt-kalibratie</h2>
+        <p class="muted">Upload labmetingen (CSV met een NAP- en een Su-kolom, bijv. uit triaxiaal-/celproeven).
+          De tool legt ze over het Su-profiel en rekent per punt de <strong>Nkt terug</strong>
+          (N<sub>kt</sub> = q<sub>net</sub>/Su<sub>lab</sub>). Zo kalibreer je de Nkt op echte proeven.</p>
+        <label class="dropzone small" id="labZone">
+          <input type="file" id="labInput" accept=".csv,.txt" hidden />
+          <span class="dz-text">Klik of sleep een CSV (NAP ; Su_lab)</span>
+          <span class="dz-file" id="labFile"></span>
+        </label>
+        <div id="labMetrics" class="kpis"></div>
+        <div class="control-actions" id="labActions" style="display:none">
+          <button class="btn primary" id="labNktBtn">↻ Gebruik gekalibreerde Nkt (klei &amp; veen)</button>
+        </div>
+        <div id="plotLab" class="plot"></div>
+        <div class="tabel-wrap"><table id="labTabel"></table></div>
       </section>
 
       <!-- vergelijk met Deltares -->
