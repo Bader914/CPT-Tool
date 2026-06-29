@@ -8,3 +8,13 @@ services:
       - APP_PASSWORD=hhsk
     ports:
       - "8080:8501"
+
+  # Nieuwe standalone-tool (FastAPI) — draait ernaast voor review op poort 8081.
+  # Zodra goedgekeurd, vervangt deze de Streamlit-tool op 8080.
+  cpt-standalone:
+    build: ./webapp
+    image: cpt-su-standalone:latest
+    container_name: cpt-su-standalone
+    restart: unless-stopped
+    ports:
+      - "8081:8000"

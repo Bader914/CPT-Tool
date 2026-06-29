@@ -13,6 +13,8 @@ docker compose up -d --build
 # beperkt tot eigen IP via de firewall (zie README/firewall-instructies).
 echo ""
 echo "================================================================"
-echo "  KLAAR ✅   http://178.104.119.117:8080   (wachtwoord: hhsk)"
+echo "  KLAAR ✅"
+echo "  Streamlit (huidig):  http://178.104.119.117:8080   (wachtwoord: hhsk)"
+echo "  Standalone (review): http://178.104.119.117:8081"
 echo "================================================================"
 docker compose ps
