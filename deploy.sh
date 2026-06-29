@@ -9,7 +9,8 @@ if [ -d /opt/cpt-tool/.git ]; then cd /opt/cpt-tool && git fetch origin main && 
 echo "==> Streamlit-tool bouwen en starten (poort 8080)..."
 cd /opt/cpt-tool
 docker compose up -d --build
-ufw allow 8080/tcp >/dev/null 2>&1 || true
+# LET OP: poort 8080 NIET meer voor iedereen openzetten. De toegang is
+# beperkt tot eigen IP via de firewall (zie README/firewall-instructies).
 echo ""
 echo "================================================================"
 echo "  KLAAR ✅   http://178.104.119.117:8080   (wachtwoord: hhsk)"
