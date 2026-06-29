@@ -223,6 +223,110 @@ function lagenTabel(d) {
     `<thead><tr><th>Grondsoort</th><th>Top [m NAP]</th><th>Onder [m NAP]</th><th>Dikte [m]</th><th>Su gem [kPa]</th></tr></thead><tbody>${rows}</tbody>`;
 }
 
+// ── Alle sonderingen samen ──
+const KLEUREN = ["#1A76BB", "#e53935", "#00A3A1", "#f59e0b", "#8b5cf6", "#22c55e", "#ec4899", "#0D4F86"];
+$("analyseAlleBtn").addEventListener("click", async () => {
+  for (let i = 0; i < soundings.length; i++) {
+    if (!soundings[i].result) { current = i; await analyseHuidige(); }
+  }
+  current = parseInt($("sondSelect").value);
+  plotAlle();
+});
+function plotAlle() {
+  const traces = [];
+  soundings.forEach((s, i) => {
+    if (!s.result) return;
+    traces.push({ x: s.result.Su, y: s.result.diepte_nap, mode: "lines", name: s.name,
+      line: { color: KLEUREN[i % KLEUREN.length], width: 1.6 },
+      hovertemplate: `${s.name}<br>Su=%{x:.1f} kPa<br>NAP %{y:.2f}<extra></extra>` });
+  });
+  Plotly.newPlot("plotAlle", traces, {
+    height: 560, margin: { l: 55, r: 15, t: 30, b: 45 }, paper_bgcolor: "#fff", plot_bgcolor: "#fff",
+    font: { family: "Inter, sans-serif", size: 12, color: HHSK_DARK },
+    xaxis: { title: "Su [kPa]" }, yaxis: { title: "Niveau [m NAP]" },
+    legend: { orientation: "h", y: 1.04, font: { size: 10 } },
+  }, { responsive: true, displayModeBar: false });
+}
+
+// ── Vergelijk met Deltares ──
+const cmpZone = $("cmpZone"), cmpInput = $("cmpInput");
+let cmpData = null; // {nap:[], su:[]}
+cmpZone.addEventListener("click", () => cmpInput.click());
+["dragover", "dragenter"].forEach(ev => cmpZone.addEventListener(ev, e => { e.preventDefault(); cmpZone.classList.add("drag"); }));
+["dragleave", "drop"].forEach(ev => cmpZone.addEventListener(ev, e => { e.preventDefault(); cmpZone.classList.remove("drag"); }));
+cmpZone.addEventListener("drop", e => { e.preventDefault(); if (e.dataTransfer.files[0]) leesCmp(e.dataTransfer.files[0]); });
+cmpInput.addEventListener("change", () => { if (cmpInput.files[0]) leesCmp(cmpInput.files[0]); });
+
+function leesCmp(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const txt = reader.result.trim();
+    const sep = txt.includes(";") ? ";" : (txt.includes("\t") ? "\t" : ",");
+    const lines = txt.split(/\r?\n/);
+    // header met NAP/Su detecteren, anders kolom 0/1
+    const head = lines[0].split(sep).map(h => h.trim().toLowerCase());
+    let inap = head.findIndex(h => h.includes("nap")), isu = head.findIndex(h => h.includes("su"));
+    let start = 1;
+    if (inap < 0 || isu < 0) { inap = 0; isu = 1; start = isNaN(parseFloat(head[0])) ? 1 : 0; }
+    const nap = [], su = [];
+    for (let i = start; i < lines.length; i++) {
+      const c = lines[i].split(sep);
+      const a = parseFloat(c[inap]), b = parseFloat(c[isu]);
+      if (!isNaN(a) && !isNaN(b)) { nap.push(a); su.push(b); }
+    }
+    if (!nap.length) { $("cmpFile").textContent = "✗ geen geldige rijen"; return; }
+    cmpData = { nap, su };
+    $("cmpFile").textContent = `✓ ${file.name} (${nap.length} punten)`;
+    plotCmp();
+  };
+  reader.readAsText(file);
+}
+
+function plotCmp() {
+  const r = soundings[current] && soundings[current].result;
+  if (!r || !cmpData) return;
+  // ons gemiddelde Su-profiel per 0.5 m NAP-bin
+  const bins = {};
+  for (let i = 0; i < r.n; i++) {
+    if (r.Su[i] == null) continue;
+    const b = Math.round(r.diepte_nap[i] * 2) / 2;
+    (bins[b] = bins[b] || []).push(r.Su[i]);
+  }
+  const bnap = Object.keys(bins).map(Number).sort((a, b) => a - b);
+  const bsu = bnap.map(b => bins[b].reduce((x, y) => x + y, 0) / bins[b].length);
+
+  const traces = [
+    { x: bsu, y: bnap, mode: "lines+markers", name: "Onze tool (gem)", line: { color: HHSK_BLUE, width: 2 } },
+    { x: cmpData.su, y: cmpData.nap, mode: "lines+markers", name: "Deltares", line: { color: RED, width: 2, dash: "dash" } },
+  ];
+  Plotly.newPlot("plotCmp", traces, {
+    height: 560, margin: { l: 55, r: 15, t: 30, b: 45 }, paper_bgcolor: "#fff", plot_bgcolor: "#fff",
+    font: { family: "Inter, sans-serif", size: 12, color: HHSK_DARK },
+    xaxis: { title: "Su [kPa]" }, yaxis: { title: "Niveau [m NAP]" },
+    legend: { orientation: "h", y: 1.05 },
+  }, { responsive: true, displayModeBar: false });
+
+  // afwijking: interpoleer ons profiel op de Deltares-NAP
+  const interp = (x) => {
+    if (x >= bnap[bnap.length - 1]) return bsu[bnap.length - 1];
+    if (x <= bnap[0]) return bsu[0];
+    for (let i = 1; i < bnap.length; i++) {
+      if (x <= bnap[i]) {
+        const t = (x - bnap[i - 1]) / (bnap[i] - bnap[i - 1]);
+        return bsu[i - 1] + t * (bsu[i] - bsu[i - 1]);
+      }
+    }
+    return bsu[0];
+  };
+  const d = cmpData.nap.map((nap, i) => cmpData.su[i] - interp(nap)).filter(v => !isNaN(v));
+  const gem = d.reduce((a, b) => a + b, 0) / d.length;
+  const absg = d.reduce((a, b) => a + Math.abs(b), 0) / d.length;
+  const rmse = Math.sqrt(d.reduce((a, b) => a + b * b, 0) / d.length);
+  $("cmpMetrics").innerHTML = [
+    ["Gem. verschil", gem.toFixed(1) + " kPa"], ["Gem. absoluut", absg.toFixed(1) + " kPa"], ["RMSE", rmse.toFixed(1) + " kPa"],
+  ].map(([l, v]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+}
+
 function baseLayout(cols) {
   return {
     grid: { rows: 1, columns: cols, pattern: "independent" },

@@ -120,6 +120,10 @@ th { background: #eef5fb; color: var(--hhsk-blue-dark); font-weight: 700; }
 #lagenEditor th { font-size: .82rem; }
 #lagenEditor td { padding: 5px 8px; }
 
+.dropzone.small { padding: 14px; margin-top: 8px; }
+.dropzone.small .dz-text { font-size: .92rem; }
+#cmpMetrics { margin: 14px 0; }
+
 .footer { text-align: center; color: var(--muted); font-size: .82rem; padding: 20px 0; }
 .hidden { display: none; }
 

@@ -138,6 +138,28 @@
         <div id="plotSu" class="plot"></div>
         <div class="tabel-wrap"><table id="lagenTabel"></table></div>
       </section>
+
+      <!-- alle sonderingen samen -->
+      <section class="card" id="overzichtCard">
+        <h2>Alle sonderingen samen</h2>
+        <p class="muted">Vergelijk de Su-profielen van alle geladen sonderingen in één beeld.</p>
+        <button class="btn ghost" id="analyseAlleBtn">↻ Analyseer &amp; toon alle</button>
+        <div id="plotAlle" class="plot"></div>
+      </section>
+
+      <!-- vergelijk met Deltares -->
+      <section class="card">
+        <h2>Vergelijk met externe tool (Deltares)</h2>
+        <p class="muted">Upload een CSV met een NAP- en een Su-kolom (bijv. de Deltares-export).
+          De tool legt het over het Su-profiel van de geselecteerde sondering en toont de afwijking.</p>
+        <label class="dropzone small" id="cmpZone">
+          <input type="file" id="cmpInput" accept=".csv,.txt" hidden />
+          <span class="dz-text">Klik of sleep een CSV (NAP ; Su)</span>
+          <span class="dz-file" id="cmpFile"></span>
+        </label>
+        <div id="cmpMetrics" class="kpis"></div>
+        <div id="plotCmp" class="plot"></div>
+      </section>
     </section>
 
     <!-- UITLEG -->
