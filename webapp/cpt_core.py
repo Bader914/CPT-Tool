@@ -238,9 +238,23 @@ def karakteristieke_waarde(su, t=1.645):
 # =====================================================================
 # Volledige analyse (met parameters + optionele handmatige lagen)
 # =====================================================================
-NKT_PER_GROND = {"klei": 15.0, "veen": 17.0, "zand": None}
-S_PER_GROND = {"klei": 0.32, "veen": 0.35, "zand": None}
-M_PER_GROND = {"klei": 0.80, "veen": 0.90, "zand": None}
+DEFAULT_MATERIALEN = {
+    "zand": {"gamma_sat": 19.0, "gamma_unsat": 18.0, "nkt": None, "S": None, "m": None, "VC": 0.25},
+    "klei": {"gamma_sat": 17.0, "gamma_unsat": 16.5, "nkt": 15.0, "S": 0.32, "m": 0.80, "VC": 0.25},
+    "veen": {"gamma_sat": 11.0, "gamma_unsat": 10.5, "nkt": 17.0, "S": 0.35, "m": 0.90, "VC": 0.25},
+}
+NKT_PER_GROND = {g: m["nkt"] for g, m in DEFAULT_MATERIALEN.items()}
+S_PER_GROND = {g: m["S"] for g, m in DEFAULT_MATERIALEN.items()}
+M_PER_GROND = {g: m["m"] for g, m in DEFAULT_MATERIALEN.items()}
+
+
+def _materialen(params):
+    """Merge gebruikersmaterialen over de defaults (per grondsoort)."""
+    mat = {g: dict(v) for g, v in DEFAULT_MATERIALEN.items()}
+    for g, v in (params.get("materialen") or {}).items():
+        if g in mat and isinstance(v, dict):
+            mat[g].update({k: v[k] for k in v if v[k] is not None})
+    return mat
 
 
 def _toewijs_handmatige_lagen(diepte_nap, lagen):
@@ -279,11 +293,16 @@ def analyseer(content: str, params: dict | None = None) -> dict:
         return {"ok": False, "error": "Kon diepte/qc-kolom niet herkennen."}
     eenheid_msgs = normaliseer_naar_mpa(df, cm, g.get("units", {}))
 
+    mat = _materialen(p)
     mv = g["maaiveld_nap"] if g["maaiveld_nap"] is not None else 0.0
+    if p.get("maaiveld_nap") is not None:
+        mv = float(p["maaiveld_nap"])
     a = p.get("a_factor") if p.get("a_factor") is not None else (g.get("a_factor_gef") or 0.80)
     gwl = float(p.get("gwl_nap", 0.0))
     su_methode = p.get("su_methode", "nkt")
     k_grens = float(p.get("k_grens", 0.33))
+    gamma_bron = p.get("gamma_bron", "lengkeek")   # 'lengkeek' | 'materiaal'
+    t_factor = float(p.get("t_factor", 1.645))
 
     df = df.dropna(subset=[cm["qc"], cm["diepte"]]).reset_index(drop=True)
     diepte_nap = mv - df[cm["diepte"]]
@@ -295,40 +314,77 @@ def analyseer(content: str, params: dict | None = None) -> dict:
     qt = qc if det["is_qt_corrected"] else bereken_qt(qc, u2, a)
     rf = bereken_Rf(fs, qt).fillna(2.0)
     isbt = bereken_isbt(qc, rf)
-    gamma_sat = bereken_gamma_sat(qt, rf)
+    gamma_lengkeek = bereken_gamma_sat(qt, rf)
 
     base = float(diepte_nap.min())
     handmatig = bool(p.get("lagen"))
     if handmatig:
         grondsoort, nkt, S, M = _toewijs_handmatige_lagen(diepte_nap, p["lagen"])
+        # vul ontbrekende nkt/S/m uit de materialentabel per grondsoort
+        nkt = nkt.fillna(grondsoort.map(lambda gs: mat.get(gs, {}).get("nkt")))
+        S = S.fillna(grondsoort.map(lambda gs: mat.get(gs, {}).get("S")))
+        M = M.fillna(grondsoort.map(lambda gs: mat.get(gs, {}).get("m")))
     else:
         grondsoort = grondsoort_uit_isbt(isbt)
-        nkt = grondsoort.map(NKT_PER_GROND); S = grondsoort.map(S_PER_GROND); M = grondsoort.map(M_PER_GROND)
+        nkt = grondsoort.map(lambda gs: mat.get(gs, {}).get("nkt"))
+        S = grondsoort.map(lambda gs: mat.get(gs, {}).get("S"))
+        M = grondsoort.map(lambda gs: mat.get(gs, {}).get("m"))
 
-    # waterdruk: defaults = ~hydrostatisch tot basis, of opgegeven knik/stijghoogte
+    # γ-bron: Lengkeek-correlatie of γ per grondsoort uit de materialentabel
+    if gamma_bron == "materiaal":
+        gsat = grondsoort.map(lambda gs: mat.get(gs, {}).get("gamma_sat") or 17.0)
+        guns = grondsoort.map(lambda gs: mat.get(gs, {}).get("gamma_unsat") or 17.0)
+        gamma_punt = pd.Series(np.where(diepte_nap.values > gwl, guns.values, gsat.values), index=df.index)
+        gamma_toon = gsat
+        sigma = sigma_v0_uit_gamma(diepte_nap, gamma_punt, mv, gwl, boven_gws_reductie=0.0) / 1000.0
+    else:
+        gamma_toon = gamma_lengkeek
+        sigma = sigma_v0_uit_gamma(diepte_nap, gamma_lengkeek, mv, gwl) / 1000.0
+
     knik = float(p.get("knik_nap", base - 0.01))
     stijg = float(p.get("stijghoogte_nap", gwl))
     top_zand = float(p.get("top_zand_nap", base - 0.01))
     indr = float(p.get("indringing", 0.0))
     u0 = bereken_u0(diepte_nap, gwl, knik, stijg, top_zand, indr) / 1000.0
-    sigma = sigma_v0_uit_gamma(diepte_nap, gamma_sat, mv, gwl) / 1000.0
     sigma_eff = pd.Series(np.clip(sigma - u0, 0, None), index=df.index)
     qnet = qt - sigma
+    Qt = qnet / sigma_eff.replace(0, np.nan)
+    Bq = (u2 - u0) / qnet.replace(0, np.nan)
+
+    # voorboring: data in de bovenste meters ongeldig voor Su
+    vb = p.get("voorboring") or {}
+    voorboring_ok = pd.Series(True, index=df.index)
+    if vb.get("actief"):
+        voorboring_ok = diepte_nap <= (mv - float(vb.get("diepte", 0.0)))
 
     su = pd.Series(np.nan, index=df.index)
     cohesief = grondsoort.isin(["klei", "veen"])
     if su_methode == "shansep":
         svy = bereken_grensspanning(qnet, k_grens)
-        geldig = cohesief & S.notna() & M.notna() & (qnet > 0)
+        geldig = cohesief & S.notna() & M.notna() & (qnet > 0) & voorboring_ok
         su_all = bereken_su_shansep(sigma_eff, svy, S.fillna(0), M.fillna(1))
         su[geldig] = su_all[geldig]
     else:
-        geldig = cohesief & nkt.notna() & (qnet > 0)
+        geldig = cohesief & nkt.notna() & (qnet > 0) & voorboring_ok
         su[geldig] = bereken_Su(qnet[geldig], nkt[geldig])
     su[su < 0] = np.nan
 
     lagen = _segmenteer(diepte_nap.values, grondsoort.values, su.values)
-    kw = karakteristieke_waarde(su, float(p.get("t_factor", 1.645)))
+    # per-laag Su-statistiek (gem/std/VC/karakteristiek), met materiaal-VC indien aanwezig
+    for l in lagen:
+        m_in = (diepte_nap <= l["top"]) & (diepte_nap > l["onder"])
+        sub = su[m_in].dropna()
+        kwl = karakteristieke_waarde(sub, t_factor)
+        vc_mat = mat.get(l["grondsoort"], {}).get("VC")
+        l["n"] = kwl["n"]
+        l["su_gem"] = round(kwl["gem"], 1) if kwl["gem"] is not None else None
+        l["VC_data"] = round(kwl["VC"], 2) if kwl["VC"] is not None else None
+        l["su_kar"] = round(kwl["kar"], 1) if kwl["kar"] is not None else None
+        l["VC_mat"] = vc_mat
+        l["su_kar_mat"] = (round(kwl["gem"] * (1 - t_factor * vc_mat), 1)
+                           if (kwl["gem"] is not None and vc_mat is not None) else None)
+
+    kw = karakteristieke_waarde(su, t_factor)
 
     def arr(s):
         return [None if (v is None or (isinstance(v, float) and np.isnan(v))) else round(float(v), 4)
@@ -336,13 +392,14 @@ def analyseer(content: str, params: dict | None = None) -> dict:
 
     return {
         "ok": True, "maaiveld_nap": round(mv, 2), "a_factor": round(a, 2),
-        "su_methode": su_methode, "handmatig": handmatig,
+        "su_methode": su_methode, "gamma_bron": gamma_bron, "handmatig": handmatig,
         "kolommen": cm, "eenheid_meldingen": eenheid_msgs, "n": int(len(df)),
+        "gwl_nap": gwl, "materialen": mat,
         "diepte_nap": arr(diepte_nap), "qc": arr(qc), "qt": arr(qt), "fs": arr(fs),
-        "Rf": arr(rf), "gamma_sat": arr(gamma_sat), "u0": arr(u0 * 1000),
+        "Rf": arr(rf), "gamma_sat": arr(gamma_toon), "u0": arr(u0 * 1000),
         "sigma_v0": arr(sigma * 1000), "sigma_eff": arr(sigma_eff * 1000),
-        "qnet": arr(qnet), "Su": arr(su), "grondsoort": list(grondsoort.values),
-        "lagen": lagen,
+        "qnet": arr(qnet), "Qt": arr(Qt), "Bq": arr(Bq),
+        "Su": arr(su), "grondsoort": list(grondsoort.values), "lagen": lagen,
         "su_samenvatting": {k: (round(v, 1) if isinstance(v, float) else v) for k, v in kw.items()},
         "kleuren": LITHO_KLEUREN,
     }

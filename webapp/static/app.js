@@ -43,6 +43,35 @@ function setStatus(msg, type = "") {
   $("status").className = "status" + (type ? " " + type : "");
 }
 
+// ── Materialen-editor (uitgangspunten) ──
+const GRONDSOORTEN = ["zand", "klei", "veen"];
+let matRendered = false;
+function rendMatEditor(materialen) {
+  const rij = (g, m) => `<tr data-g="${g}">
+    <td><span class="swatch" style="background:${({zand:"#FFD54F",klei:"#4CAF50",veen:"#7B4B27"})[g]}"></span>${g}</td>
+    <td><input class="m-gs" type="number" step="0.1" value="${m.gamma_sat ?? ""}"></td>
+    <td><input class="m-gu" type="number" step="0.1" value="${m.gamma_unsat ?? ""}"></td>
+    <td><input class="m-nkt" type="number" step="0.1" value="${m.nkt ?? ""}" placeholder="—"></td>
+    <td><input class="m-s" type="number" step="0.01" value="${m.S ?? ""}" placeholder="—"></td>
+    <td><input class="m-m" type="number" step="0.01" value="${m.m ?? ""}" placeholder="—"></td>
+    <td><input class="m-vc" type="number" step="0.01" value="${m.VC ?? ""}"></td></tr>`;
+  $("matEditor").innerHTML =
+    `<thead><tr><th>Grondsoort</th><th>γ_sat</th><th>γ_unsat</th><th>Nkt</th><th>S</th><th>m</th><th>VC</th></tr></thead>
+     <tbody>${GRONDSOORTEN.map(g => rij(g, materialen[g] || {})).join("")}</tbody>`;
+  $("matEditor").querySelectorAll("input").forEach(i => i.addEventListener("change", analyseHuidige));
+  matRendered = true;
+}
+function leesMaterialen() {
+  const out = {};
+  $("matEditor").querySelectorAll("tbody tr").forEach(tr => {
+    const g = tr.dataset.g;
+    const v = (cls) => { const x = tr.querySelector(cls).value; return x === "" ? null : parseFloat(x); };
+    out[g] = { gamma_sat: v(".m-gs"), gamma_unsat: v(".m-gu"), nkt: v(".m-nkt"),
+               S: v(".m-s"), m: v(".m-m"), VC: v(".m-vc") };
+  });
+  return out;
+}
+
 // ── Parameters lezen ──
 function huidigeParams() {
   const num = (id) => { const v = $(id).value; return v === "" ? null : parseFloat(v); };
@@ -50,14 +79,18 @@ function huidigeParams() {
     gwl_nap: num("gwl") ?? 0.0,
     su_methode: $("suMethode").value,
     a_factor: num("afac"),
+    gamma_bron: $("gammaBron").value,
+    t_factor: num("tfac") ?? 1.645,
     knik_nap: num("knik"), stijghoogte_nap: num("stijg"),
     top_zand_nap: num("topzand"), indringing: num("indr") ?? 0.0,
   };
+  if ($("vbChk").checked && num("vbDiepte") != null)
+    p.voorboring = { actief: true, diepte: num("vbDiepte") };
+  if (matRendered) p.materialen = leesMaterialen();
   if ($("handmatigChk").checked) {
     const lagen = leesLagenEditor();
     if (lagen.length) p.lagen = lagen;
   }
-  // null-waarden weglaten zodat backend-defaults gelden
   Object.keys(p).forEach(k => p[k] === null && delete p[k]);
   return p;
 }
@@ -85,11 +118,11 @@ $("sondSelect").addEventListener("change", e => {
   else analyseHuidige();
 });
 $("herberekenBtn").addEventListener("click", analyseHuidige);
-["suMethode", "gwl", "afac", "knik", "stijg", "topzand", "indr"].forEach(id =>
+["suMethode", "gwl", "afac", "knik", "stijg", "topzand", "indr",
+ "gammaBron", "vbChk", "vbDiepte", "tfac"].forEach(id =>
   $(id).addEventListener("change", analyseHuidige));
 
 // ── Lagen-editor ──
-const GRONDSOORTEN = ["zand", "klei", "veen"];
 function lagenEditorRij(l = {}) {
   const opts = GRONDSOORTEN.map(g =>
     `<option ${l.grondsoort === g ? "selected" : ""}>${g}</option>`).join("");
@@ -154,9 +187,11 @@ function toonResultaat(d) {
   ];
   $("kpis").innerHTML = kpis.map(([l, v]) =>
     `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
-  $("meldingen").textContent = (d.eenheid_meldingen && d.eenheid_meldingen.length)
-    ? "Eenheden genormaliseerd: " + d.eenheid_meldingen.join("; ")
-    : (d.handmatig ? "Handmatige lagen gebruikt." : "Automatische classificatie (Robertson).");
+  const bron = d.gamma_bron === "materiaal" ? "γ uit materiaaltabel" : "γ uit Lengkeek";
+  $("meldingen").textContent = ((d.eenheid_meldingen && d.eenheid_meldingen.length)
+    ? "Eenheden genormaliseerd: " + d.eenheid_meldingen.join("; ") + " · " : "")
+    + (d.handmatig ? "Handmatige lagen" : "Automatische classificatie (Robertson)") + " · " + bron;
+  if (!matRendered && d.materialen) rendMatEditor(d.materialen);
   plotProfiel(d); plotSpanning(d); plotSu(d); lagenTabel(d);
 }
 
@@ -170,13 +205,16 @@ function plotProfiel(d) {
     hovertemplate: `${l.grondsoort}<br>NAP ${l.top} → ${l.onder} (${l.dikte} m)<extra></extra>`,
     xaxis: "x", yaxis: "y",
   }));
-  traces.push({ x: d.qc, y, mode: "lines", line: { color: HHSK_BLUE, width: 1.4 }, xaxis: "x2", yaxis: "y2",
-    hovertemplate: "qc=%{x:.2f} MPa<br>NAP %{y:.2f}<extra></extra>" });
+  traces.push({ x: d.qc, y, mode: "lines", name: "qc", line: { color: "#90caf9", width: 1, dash: "dot" }, xaxis: "x2", yaxis: "y2",
+    hovertemplate: "qc=%{x:.2f} MPa<extra></extra>" });
+  traces.push({ x: d.qt, y, mode: "lines", name: "qt", line: { color: HHSK_BLUE, width: 1.4 }, xaxis: "x2", yaxis: "y2",
+    hovertemplate: "qt=%{x:.2f} MPa<br>NAP %{y:.2f}<extra></extra>" });
   traces.push({ x: d.Rf, y, mode: "lines", line: { color: RED, width: 1 }, xaxis: "x3", yaxis: "y3",
     hovertemplate: "Rf=%{x:.1f}%<extra></extra>" });
   const layout = baseLayout(3);
   layout.xaxis = { domain: [0, 0.16], showticklabels: false, title: "Boorstaat" };
-  layout.xaxis2 = { domain: [0.22, 0.62], title: "qc [MPa]" };
+  layout.xaxis2 = { domain: [0.22, 0.62], title: "qc / qt [MPa]" };
+  layout.showlegend = false;
   layout.xaxis3 = { domain: [0.70, 1.0], title: "Rf [%]", range: [0, 12] };
   layout.yaxis = { title: "Niveau [m NAP]" };
   layout.yaxis2 = { matches: "y", showticklabels: false };
@@ -218,9 +256,12 @@ function plotSu(d) {
 function lagenTabel(d) {
   const rows = d.lagen.map(l =>
     `<tr><td><span class="swatch" style="background:${d.kleuren[l.grondsoort] || "#bbb"}"></span>${l.grondsoort}</td>
-     <td>${l.top}</td><td>${l.onder}</td><td>${l.dikte}</td><td>${l.su_gem ?? "—"}</td></tr>`).join("");
+     <td>${l.top}</td><td>${l.onder}</td><td>${l.dikte}</td><td>${l.n ?? "—"}</td>
+     <td>${l.su_gem ?? "—"}</td><td>${l.VC_data ?? "—"}</td><td>${l.su_kar ?? "—"}</td>
+     <td>${l.su_kar_mat ?? "—"}</td></tr>`).join("");
   $("lagenTabel").innerHTML =
-    `<thead><tr><th>Grondsoort</th><th>Top [m NAP]</th><th>Onder [m NAP]</th><th>Dikte [m]</th><th>Su gem [kPa]</th></tr></thead><tbody>${rows}</tbody>`;
+    `<thead><tr><th>Grondsoort</th><th>Top [m NAP]</th><th>Onder [m NAP]</th><th>Dikte [m]</th><th>n</th>
+     <th>Su gem [kPa]</th><th>VC</th><th>Su kar (data) [kPa]</th><th>Su kar (mat-VC) [kPa]</th></tr></thead><tbody>${rows}</tbody>`;
 }
 
 // ── Alle sonderingen samen ──

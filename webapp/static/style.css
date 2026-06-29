@@ -115,10 +115,12 @@ th { background: #eef5fb; color: var(--hhsk-blue-dark); font-weight: 700; }
 .btn.mini { padding: 3px 9px; font-size: .8rem; }
 .editor-btns { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
 .chk { font-size: .9rem; font-weight: 600; color: var(--hhsk-blue-dark); display: flex; align-items: center; gap: 6px; }
-#lagenEditor input, #lagenEditor select { width: 100%; padding: 5px 7px; border: 1px solid var(--border);
+#lagenEditor input, #lagenEditor select,
+#matEditor input { width: 100%; padding: 5px 7px; border: 1px solid var(--border);
   border-radius: 6px; font-family: inherit; font-size: .88rem; }
-#lagenEditor th { font-size: .82rem; }
-#lagenEditor td { padding: 5px 8px; }
+#lagenEditor th, #matEditor th { font-size: .82rem; }
+#lagenEditor td, #matEditor td { padding: 5px 8px; }
+.chk.small { font-weight: 500; font-size: .82rem; margin-top: 4px; }
 
 .dropzone.small { padding: 14px; margin-top: 8px; }
 .dropzone.small .dz-text { font-size: .92rem; }

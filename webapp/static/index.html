@@ -93,6 +93,32 @@
         </details>
 
         <details class="adv">
+          <summary>Uitgangspunten — materialen, γ-bron &amp; voorboring</summary>
+          <div class="control-row">
+            <div class="param">
+              <label>γ-bron (volumegewicht)
+                <span class="info" title="Lengkeek: γ uit qc/Rf. Materiaal: γ per grondsoort uit de tabel hieronder.">ⓘ</span>
+              </label>
+              <select id="gammaBron">
+                <option value="lengkeek">qc-correlatie (Lengkeek 2018)</option>
+                <option value="materiaal">γ per grondsoort (materiaaltabel)</option>
+              </select>
+            </div>
+            <div class="param">
+              <label>Voorboring tot [m −mv]</label>
+              <input type="number" id="vbDiepte" step="0.1" placeholder="0" />
+              <label class="chk small"><input type="checkbox" id="vbChk"> voorboring toepassen</label>
+            </div>
+            <div class="param">
+              <label>t-factor (karakteristiek)</label>
+              <input type="number" id="tfac" step="0.005" value="1.645" />
+            </div>
+          </div>
+          <p class="muted small">Materiaaleigenschappen per grondsoort (γ in kN/m³):</p>
+          <table id="matEditor"></table>
+        </details>
+
+        <details class="adv">
           <summary>Lagen handmatig instellen (i.p.v. automatische classificatie)</summary>
           <p class="muted small">Vul de bovenkant (m NAP), grondsoort en optioneel Nkt/S/m per laag.
             De onderkant = bovenkant van de volgende rij.</p>
