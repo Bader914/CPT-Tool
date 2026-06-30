@@ -17,6 +17,9 @@ REMOTE=$(git rev-parse origin/main 2>/dev/null || echo "$LOCAL")
 if [ "$LOCAL" != "$REMOTE" ]; then
   echo "$(date '+%F %T') nieuwe versie ($REMOTE) — deployen" >> "$LOG"
   git reset --hard origin/main >> "$LOG" 2>&1
-  docker compose up -d --build >> "$LOG" 2>&1
+  # --remove-orphans ruimt containers op die niet meer in de compose staan
+  # (bv. de oude standalone). Raakt alleen dit compose-project, niet andere
+  # services op de server zoals de Dirctkank-bot.
+  docker compose up -d --build --remove-orphans >> "$LOG" 2>&1
   echo "$(date '+%F %T') klaar" >> "$LOG"
 fi
