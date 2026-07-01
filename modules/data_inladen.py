@@ -27,6 +27,7 @@ def parse_gef(file_content: str) -> pd.DataFrame:
     gef_type = None
     zid_value = None        # Maaiveldniveau [m NAP] uit #ZID
     a_factor_gef = None     # Netto-oppervlakteverhouding conus (a) uit #MEASUREMENTVAR
+    voorboring_gef = None   # Voorgeboorde diepte [m] uit #MEASUREMENTVAR 13
 
     for i, line in enumerate(lines):
         line = line.strip()
@@ -71,17 +72,23 @@ def parse_gef(file_content: str) -> pd.DataFrame:
         
         elif line.startswith("#MEASUREMENTVAR"):
             # Format: #MEASUREMENTVAR = var_nr, value, unit, description
-            # Zoek conservatief naar de netto-oppervlakteverhouding (a / alpha):
-            # waarde in [0.5, 1.0] én een beschrijving die erop wijst.
+            # GEF-standaard: var 3 = netto-oppervlakteverhouding (a), var 13 = voorgeboorde diepte.
+            # We lezen op vaste nummers én als reserve op trefwoord in de beschrijving.
             parts = line.split("=", 1)[1].strip().split(",")
             if len(parts) >= 2:
                 try:
+                    var_nr = int(float(parts[0].strip()))
                     val = float(parts[1].strip())
                     descr = ",".join(parts[3:]).lower() if len(parts) >= 4 else ""
                     keywords = ("area ratio", "oppervlakteverhouding", "oppervlakte verhouding",
-                                "alpha", "netto", "a-factor", "net area", "conusfactor")
-                    if 0.5 <= val <= 1.0 and any(k in descr for k in keywords):
+                                "alpha", "netto", "a-factor", "net area", "conusfactor",
+                                "quoti", "opp. quot")
+                    if a_factor_gef is None and 0.5 <= val <= 1.0 and (
+                            var_nr == 3 or any(k in descr for k in keywords)):
                         a_factor_gef = val
+                    if voorboring_gef is None and val >= 0 and (
+                            var_nr == 13 or "voorgeboord" in descr or "voorboor" in descr):
+                        voorboring_gef = val
                 except (ValueError, IndexError):
                     pass
 
@@ -141,6 +148,7 @@ def parse_gef(file_content: str) -> pd.DataFrame:
     df.attrs["gef_type"] = gef_type
     df.attrs["maaiveld_nap"] = zid_value  # None als niet gevonden
     df.attrs["a_factor_gef"] = a_factor_gef  # None als niet gevonden
+    df.attrs["voorboring_gef"] = voorboring_gef  # None als niet gevonden [m]
 
     return df
 
@@ -413,6 +421,7 @@ def render():
                 
                 maaiveld_nap = df.attrs.get("maaiveld_nap", None)
                 a_factor_gef = df.attrs.get("a_factor_gef", None)
+                voorboring_gef = df.attrs.get("voorboring_gef", None)
 
                 st.session_state.sonderingen[f.name] = {
                     "df": df,
@@ -421,6 +430,10 @@ def render():
                     "is_qt_corrected": df.attrs.get("is_qt_corrected", False),
                     "maaiveld_nap": maaiveld_nap,
                     "a_factor_gef": a_factor_gef,
+                    "voorboring_gef": voorboring_gef,
+                    # Voorboring automatisch uit de GEF; niet meer aanpasbaar (uit_gef=True)
+                    "voorboring": ({"actief": True, "diepte": float(voorboring_gef), "uit_gef": True}
+                                   if voorboring_gef and voorboring_gef > 0 else {}),
                 }
 
                 # Melding als eenheden zijn omgerekend (kPa/Pa → MPa)
@@ -433,6 +446,9 @@ def render():
                     st.warning(f"⚠️ **{f.name}**: {u2_warn}")
                 if a_factor_gef is not None:
                     st.info(f"ℹ️ **{f.name}**: a-factor uit GEF gelezen: {a_factor_gef:.2f}")
+                if voorboring_gef and voorboring_gef > 0:
+                    st.info(f"ℹ️ **{f.name}**: voorboring uit GEF gelezen: {voorboring_gef:.2f} m "
+                            "(automatisch toegepast)")
 
                 if has_diepte and has_qc:
                     cols_found = []
@@ -638,25 +654,37 @@ def render():
 
                 voorb = st.session_state.sonderingen[selected].get("voorboring", {}) or {}
                 fund = st.session_state.sonderingen[selected].get("funderingslaag", {}) or {}
+                vb_uit_gef = bool(voorb.get("uit_gef"))
 
                 col_vb, col_fd = st.columns(2)
 
                 with col_vb:
                     st.markdown("**🕳️ Voorboring**")
-                    voorboring_actief = st.checkbox(
-                        "Voorboring toepassen",
-                        value=voorb.get("actief", False),
-                        key=f"vb_actief_{selected}",
-                        help="Als ingeschakeld wordt de sondeerdata in het opgegeven dieptebereik genegeerd."
-                    )
-                    voorboring_diepte = st.number_input(
-                        "Voorboring tot [m onder maaiveld]",
-                        value=float(voorb.get("diepte", 0.5)),
-                        min_value=0.0, max_value=10.0, step=0.1,
-                        key=f"vb_diepte_{selected}",
-                        disabled=not voorboring_actief,
-                        help="Sondeerdata van 0 tot deze diepte wordt niet gebruikt voor Su."
-                    )
+                    if vb_uit_gef:
+                        st.success(f"✅ Automatisch uit GEF: **{float(voorb.get('diepte', 0.0)):.2f} m** "
+                                   "voorgeboord (MEASUREMENTVAR 13). Wordt toegepast en is niet aanpasbaar.")
+                        voorboring_actief = True
+                        voorboring_diepte = float(voorb.get("diepte", 0.0))
+                        st.number_input(
+                            "Voorboring tot [m onder maaiveld]",
+                            value=voorboring_diepte, min_value=0.0, max_value=10.0,
+                            step=0.01, format="%.2f", key=f"vb_diepte_{selected}", disabled=True,
+                        )
+                    else:
+                        voorboring_actief = st.checkbox(
+                            "Voorboring toepassen",
+                            value=voorb.get("actief", False),
+                            key=f"vb_actief_{selected}",
+                            help="Als ingeschakeld wordt de sondeerdata in het opgegeven dieptebereik genegeerd."
+                        )
+                        voorboring_diepte = st.number_input(
+                            "Voorboring tot [m onder maaiveld]",
+                            value=float(voorb.get("diepte", 0.5)),
+                            min_value=0.0, max_value=10.0, step=0.01, format="%.2f",
+                            key=f"vb_diepte_{selected}",
+                            disabled=not voorboring_actief,
+                            help="Sondeerdata van 0 tot deze diepte wordt niet gebruikt voor Su."
+                        )
 
                 with col_fd:
                     st.markdown("**🧱 Funderingslaag**")
@@ -694,6 +722,7 @@ def render():
                     st.session_state.sonderingen[selected]["voorboring"] = {
                         "actief": voorboring_actief,
                         "diepte": voorboring_diepte,
+                        "uit_gef": vb_uit_gef,
                     }
                     st.session_state.sonderingen[selected]["funderingslaag"] = {
                         "actief": fund_actief,
