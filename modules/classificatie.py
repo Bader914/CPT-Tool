@@ -302,11 +302,51 @@ def default_laaggrenzen(lagen: list) -> dict:
     return grenzen
 
 
+def _classificeer_sondering(name, data, up, bibliotheek, lagen, default_rows,
+                            min_dikte, gebruik_suggestie):
+    """Classificeer één sondering: diepte_nap, Robertson-hint en de laagindeling.
+
+    De initiële laagindeling komt (in volgorde) uit: bestaande lokale bewerking →
+    automatisch Robertson-voorstel uit de sondering zelf → projectdefault als reserve.
+    """
+    df = data["df"].copy()
+    cm = data["col_mapping"]
+    mv_nap = data.get("maaiveld_nap") or up.get("dijkopbouw", {}).get("kruinniveau", 4.0)
+    df["diepte_nap"] = mv_nap - df[cm["diepte"]]
+    if cm.get("fs") and cm["fs"] in df.columns:
+        df["Rf"] = (df[cm["fs"]] / df[cm["qc"]].replace(0, np.nan)) * 100
+    else:
+        df["Rf"] = np.nan
+    df["robertson_zone"] = classificeer_simple(df[cm["qc"]], df["Rf"].fillna(2.0))
+    df["grondsoort"] = df["robertson_zone"].map(
+        lambda z: ROBERTSON_ZONES.get(z, {}).get("naam", "Onbekend"))
+
+    rows = data.get("grondopbouw_lokaal")
+    if not rows and gebruik_suggestie:
+        rows = suggereer_grondopbouw(df, cm, bibliotheek, min_dikte)
+    if not rows:
+        rows = [dict(r) for r in default_rows]
+
+    basis_nap = float(df["diepte_nap"].min())
+    lagen_lokaal = bouw_lagen_uit_grondopbouw(rows, bibliotheek, basis_nap)
+    grenzen = grenzen_uit_lagen(lagen_lokaal) if lagen_lokaal else default_laaggrenzen(lagen)
+    df["grondlaag"] = toewijs_grondlaag(df["diepte_nap"], grenzen)
+    dijkmat_lagen = {n for n, gg in grenzen.items() if gg.get("is_dijkmateriaal")}
+    df["is_dijkmateriaal"] = df["grondlaag"].isin(dijkmat_lagen)
+
+    st.session_state.sonderingen[name]["df"] = df
+    st.session_state.sonderingen[name]["grondopbouw_lokaal"] = rows
+    st.session_state.sonderingen[name]["lagen_lokaal"] = lagen_lokaal
+    st.session_state.sonderingen[name]["laaggrenzen"] = grenzen
+    st.session_state.sonderingen[name]["geclassificeerd"] = True
+
+
 # ───────────────────────────────────────────────────────────────
 # UI
 # ───────────────────────────────────────────────────────────────
 def render():
-    st.caption("Stap 3 — Handmatige laagindeling per sondering (Robertson als hint op achtergrond)")
+    st.caption("Stap 3 — Laagindeling per sondering: automatisch voorgesteld uit de sondering "
+               "(Robertson); daarna vrij aan te passen.")
 
     up = st.session_state.get("uitgangspunten", {})
     lagen = up.get("lagen", [])
@@ -352,7 +392,7 @@ def render():
         return
 
     # Toon SHZ-lagen overzicht
-    with st.expander("📚 SHZ-grondlagen (uit Uitgangspunten)", expanded=False):
+    with st.expander("📚 Materialenbibliotheek (grondsoorten & eigenschappen, uit Uitgangspunten)", expanded=False):
         for laag in lagen:
             tag = " **[Su]**" if laag.get("is_dijkmateriaal") else ""
             top = laag.get("top_nap")
@@ -360,56 +400,41 @@ def render():
             pos = f"default NAP {top:+.1f} → {onder:+.1f}m" if top is not None and onder is not None else "variabel per locatie"
             st.markdown(f"- **{laag['naam']}**: {pos} — {laag['materiaal']}{tag}")
 
-    # Pas defaults toe op alle sonderingen die nog niet geclassificeerd zijn
-    st.markdown("---")
-    st.subheader("Snel-classificatie (defaults toepassen)")
-
+    # Materialenbibliotheek (grondsoorten + eigenschappen) uit Uitgangspunten.
     bibliotheek = get_lagen_bibliotheek(up)
-    # Projectdefault als grondopbouw-rijen: globale grondopbouw-tab, anders uit lagen.
     default_rows = up.get("grondopbouw") or rows_uit_lagen(lagen)
+    min_dikte_auto = float(up.get("suggestie_min_dikte", 0.5))
 
-    if st.button("▶️ Pas standaard laaggrenzen toe op alle sonderingen", type="primary", use_container_width=True):
-        succes = 0
-        for name, data in gereed.items():
-            df = data["df"].copy()
-            cm = data["col_mapping"]
-            mv_nap = data.get("maaiveld_nap") or up.get("dijkopbouw", {}).get("kruinniveau", 4.0)
+    # Punt 1: automatisch een laagindeling voorstellen UIT ELKE SONDERING (Robertson),
+    # zodra hij binnenkomt — geen vaste SHZ-standaard meer. Daarna per sondering aanpasbaar.
+    nieuwe = [n for n, d in gereed.items() if not d.get("geclassificeerd")]
+    for naam in nieuwe:
+        _classificeer_sondering(naam, gereed[naam], up, bibliotheek, lagen,
+                                default_rows, min_dikte_auto, gebruik_suggestie=True)
+    if nieuwe:
+        st.success(f"✅ Voor {len(nieuwe)} sondering(en) is automatisch een laagindeling uit de "
+                   "sondering voorgesteld (Robertson). Pas hieronder per sondering aan.")
 
-            # Bereken diepte_nap (zonder normalisatie)
-            df["diepte_nap"] = mv_nap - df[cm["diepte"]]
-
-            # Bereken Rf voor Robertson-hint
-            if cm.get("fs") and cm["fs"] in df.columns:
-                df["Rf"] = (df[cm["fs"]] / df[cm["qc"]].replace(0, np.nan)) * 100
-            else:
-                df["Rf"] = np.nan
-
-            # Robertson achtergrondhint
-            rf_for_hint = df["Rf"].fillna(2.0)
-            df["robertson_zone"] = classificeer_simple(df[cm["qc"]], rf_for_hint)
-            df["grondsoort"] = df["robertson_zone"].map(
-                lambda z: ROBERTSON_ZONES.get(z, {}).get("naam", "Onbekend")
-            )
-
-            # Per-sondering grondopbouw: bestaande lokale, anders projectdefault.
-            rows = data.get("grondopbouw_lokaal") or [dict(r) for r in default_rows]
-            basis_nap = float(df["diepte_nap"].min())
-            lagen_lokaal = bouw_lagen_uit_grondopbouw(rows, bibliotheek, basis_nap)
-            grenzen = grenzen_uit_lagen(lagen_lokaal) if lagen_lokaal else default_laaggrenzen(lagen)
-
-            df["grondlaag"] = toewijs_grondlaag(df["diepte_nap"], grenzen)
-            dijkmat_lagen = {n for n, g in grenzen.items() if g.get("is_dijkmateriaal")}
-            df["is_dijkmateriaal"] = df["grondlaag"].isin(dijkmat_lagen)
-
-            st.session_state.sonderingen[name]["df"] = df
-            st.session_state.sonderingen[name]["grondopbouw_lokaal"] = rows
-            st.session_state.sonderingen[name]["lagen_lokaal"] = lagen_lokaal
-            st.session_state.sonderingen[name]["laaggrenzen"] = grenzen
-            st.session_state.sonderingen[name]["geclassificeerd"] = True
-            succes += 1
-
-        st.success(f"✅ {succes} sondering(en) geclassificeerd met de projectdefault. Pas hieronder per sondering aan.")
-        st.rerun()
+    st.markdown("---")
+    st.caption("De laagindeling wordt automatisch uit elke sondering voorgesteld. "
+               "Opnieuw voorstellen of de projectdefault toepassen kan hieronder.")
+    col_b1, col_b2 = st.columns(2)
+    with col_b1:
+        if st.button("🔄 Laagindeling opnieuw voorstellen (Robertson)", use_container_width=True):
+            for naam, d in gereed.items():
+                st.session_state.sonderingen[naam]["grondopbouw_lokaal"] = None
+                _classificeer_sondering(naam, d, up, bibliotheek, lagen,
+                                        default_rows, min_dikte_auto, gebruik_suggestie=True)
+            st.success("✅ Laagindeling opnieuw voorgesteld uit de sonderingen.")
+            st.rerun()
+    with col_b2:
+        if default_rows and st.button("📋 Projectdefault (SHZ) toepassen", use_container_width=True):
+            for naam, d in gereed.items():
+                st.session_state.sonderingen[naam]["grondopbouw_lokaal"] = [dict(r) for r in default_rows]
+                _classificeer_sondering(naam, d, up, bibliotheek, lagen,
+                                        default_rows, min_dikte_auto, gebruik_suggestie=False)
+            st.success("✅ Projectdefault toegepast.")
+            st.rerun()
 
     # Per-sondering editor
     geclassificeerd = {k: v for k, v in sonderingen.items() if v.get("geclassificeerd")}
@@ -492,8 +517,8 @@ def render():
             key=f"grondopbouw_editor_{selected}",
             column_config={
                 "bovenkant": st.column_config.NumberColumn(
-                    "Bovenkant [m NAP]", format="%.2f", step=0.1,
-                    help="Diepte (m NAP) van de bovenkant van de laag. Onderkant = volgende rij."),
+                    "Bovenkant [m NAP]", format="%.2f", step=0.01,
+                    help="Diepte (m NAP) van de bovenkant van de laag (cm-nauwkeurig). Onderkant = volgende rij."),
                 "laagtype": st.column_config.SelectboxColumn(
                     "Laagtype", options=type_namen, required=False,
                     help="Kies een laagtype uit de bibliotheek (γ/Nkt komen automatisch mee)."),

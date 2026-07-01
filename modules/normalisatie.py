@@ -327,12 +327,12 @@ def render():
         gwl_nap = st.number_input(
             "Grondwaterstand [m NAP]",
             min_value=-10.0, max_value=10.0,
-            value=up.get("dijkopbouw", {}).get("gwl", 0.0), step=0.1,
+            value=up.get("dijkopbouw", {}).get("gwl", 0.0), step=0.01, format="%.2f",
         )
         knik_nap = st.number_input(
             "Knikpunt drukverloop [m NAP]",
             min_value=-30.0, max_value=5.0,
-            value=waterdruk.get("knik_nap", -5.0), step=0.5,
+            value=waterdruk.get("knik_nap", -5.0), step=0.01, format="%.2f",
             help="Einde van het zuiver hydrostatische verloop vanaf GWS; "
                  "begin van de overgangszone naar het zandpakket.",
         )
@@ -340,19 +340,19 @@ def render():
         stijghoogte_nap = st.number_input(
             "Stijghoogte 1e zandpakket [m NAP]",
             min_value=-30.0, max_value=10.0,
-            value=waterdruk.get("stijghoogte_nap", -2.0), step=0.5,
+            value=waterdruk.get("stijghoogte_nap", -2.0), step=0.01, format="%.2f",
             help="Piëzometrisch niveau (P) van het watervoerende zandpakket.",
         )
         top_zand_nap = st.number_input(
             "Top 1e zandpakket [m NAP]",
             min_value=-40.0, max_value=5.0,
-            value=waterdruk.get("top_zand_nap", -12.0), step=0.5,
+            value=waterdruk.get("top_zand_nap", -12.0), step=0.01, format="%.2f",
             help="NAP-niveau van de bovenkant van het 1e watervoerende zandpakket.",
         )
         indringing_m = st.number_input(
             "Indringingslengte [m]",
             min_value=0.0, max_value=5.0,
-            value=waterdruk.get("indringing", 0.0), step=0.1,
+            value=waterdruk.get("indringing", 0.0), step=0.01, format="%.2f",
             help="Tot hoever boven het zand de pakketdruk al gevoeld wordt; "
                  "zandzone start bij (top zand + indringing). Vaak < 1 m.",
         )
@@ -598,7 +598,7 @@ def render():
         new_gwl = st.number_input(
             "Grondwaterstand (GWS) [m NAP]",
             value=float(lokaal.get("gwl", gwl_nap)),
-            min_value=-10.0, max_value=10.0, step=0.1,
+            min_value=-10.0, max_value=10.0, step=0.01, format="%.2f",
             key=f"gwl_local_{selected}",
             help="Lokale freatische waterstand voor deze sondering. "
                  "Beïnvloedt σv0 (γ_droog/γ_nat-splitsing) en u₀.",
@@ -608,26 +608,26 @@ def render():
             new_knik = st.number_input(
                 "Knikpunt [m NAP]",
                 value=float(lokaal.get("knik_nap", knik_nap)),
-                min_value=-30.0, max_value=5.0, step=0.5,
+                min_value=-30.0, max_value=5.0, step=0.01, format="%.2f",
                 key=f"knik_local_{selected}",
             )
             new_stijg = st.number_input(
                 "Stijghoogte 1e zandpakket [m NAP]",
                 value=float(lokaal.get("stijghoogte_nap", stijghoogte_nap)),
-                min_value=-30.0, max_value=10.0, step=0.5,
+                min_value=-30.0, max_value=10.0, step=0.01, format="%.2f",
                 key=f"stijg_local_{selected}",
             )
         with col_o2:
             new_top_zand = st.number_input(
                 "Top 1e zandpakket [m NAP]",
                 value=float(lokaal.get("top_zand_nap", top_zand_nap)),
-                min_value=-40.0, max_value=5.0, step=0.5,
+                min_value=-40.0, max_value=5.0, step=0.01, format="%.2f",
                 key=f"topzand_local_{selected}",
             )
             new_indringing = st.number_input(
                 "Indringingslengte [m]",
                 value=float(lokaal.get("indringing", indringing_m)),
-                min_value=0.0, max_value=5.0, step=0.1,
+                min_value=0.0, max_value=5.0, step=0.01, format="%.2f",
                 key=f"indringing_local_{selected}",
             )
         col_b1, col_b2 = st.columns(2)

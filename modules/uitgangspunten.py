@@ -433,7 +433,7 @@ def render():
                         top_val = laag.get("top_nap")
                         if top_val is not None:
                             lagen[i]["top_nap"] = st.number_input(
-                                f"Top [m NAP]", value=float(top_val), step=0.5,
+                                f"Top [m NAP]", value=float(top_val), step=0.01, format="%.2f",
                                 key=f"top_{i}"
                             )
                         else:
@@ -447,7 +447,7 @@ def render():
                         onder_val = laag.get("onder_nap")
                         if onder_val is not None:
                             lagen[i]["onder_nap"] = st.number_input(
-                                f"Onder [m NAP]", value=float(onder_val), step=0.5,
+                                f"Onder [m NAP]", value=float(onder_val), step=0.01, format="%.2f",
                                 key=f"onder_{i}"
                             )
                         else:
@@ -473,7 +473,7 @@ def render():
                 gwl = st.number_input(
                     "GWS [m NAP] (gebruikt)",
                     value=up.get("dijkopbouw", {}).get("gwl", 0.0),
-                    step=0.1,
+                    step=0.01, format="%.2f",
                     help="Grondwaterstand die wordt gebruikt voor de berekening. "
                          "Kies een waarde binnen de bandbreedte."
                 )
@@ -482,7 +482,7 @@ def render():
                 gwl_max = st.number_input(
                     "GWS max [m NAP]",
                     value=up.get("dijkopbouw", {}).get("gwl_max", 1.0),
-                    step=0.1,
+                    step=0.01, format="%.2f",
                     help="Hoogste grondwaterstand ten tijde van sonderen."
                 )
                 up["dijkopbouw"]["gwl_max"] = gwl_max
@@ -490,7 +490,7 @@ def render():
                 gwl_min = st.number_input(
                     "GWS min [m NAP]",
                     value=up.get("dijkopbouw", {}).get("gwl_min", -0.5),
-                    step=0.1,
+                    step=0.01, format="%.2f",
                     help="Laagste grondwaterstand ten tijde van sonderen."
                 )
                 up["dijkopbouw"]["gwl_min"] = gwl_min
@@ -499,7 +499,7 @@ def render():
             kruinniveau = st.number_input(
                 "Kruinniveau [m NAP]",
                 value=up.get("dijkopbouw", {}).get("kruinniveau", 4.0),
-                step=0.1,
+                step=0.01, format="%.2f",
                 help="Bovenkant van de dijk (wegdek niveau)."
             )
             up["dijkopbouw"]["kruinniveau"] = kruinniveau
@@ -604,8 +604,8 @@ def render():
                 key="grondopbouw_editor",
                 column_config={
                     "bovenkant": st.column_config.NumberColumn(
-                        "Bovenkant [m NAP]", format="%.2f", step=0.1,
-                        help="NAP-niveau van de bovenkant van deze laag."),
+                        "Bovenkant [m NAP]", format="%.2f", step=0.01,
+                        help="NAP-niveau van de bovenkant van deze laag (cm-nauwkeurig)."),
                     "laagtype": st.column_config.SelectboxColumn(
                         "Laagtype", options=type_namen, required=False,
                         help="Kies een laagtype uit de bibliotheek (Tabel 91)."),
@@ -887,21 +887,21 @@ def render():
             water["knik_nap"] = st.number_input(
                 "Knikpunt drukverloop [m NAP]",
                 value=float(water.get("knik_nap", -5.0)),
-                min_value=-30.0, max_value=5.0, step=0.5,
+                min_value=-30.0, max_value=5.0, step=0.01, format="%.2f",
                 help="Einde van het zuiver hydrostatische verloop vanaf GWS; "
                      "begin van de lineaire overgangszone naar het zandpakket."
             )
             water["stijghoogte_nap"] = st.number_input(
                 "Stijghoogte 1e zandpakket [m NAP]",
                 value=float(water.get("stijghoogte_nap", -2.0)),
-                min_value=-30.0, max_value=10.0, step=0.5,
+                min_value=-30.0, max_value=10.0, step=0.01, format="%.2f",
                 help="Piëzometrisch niveau (P) van het watervoerende zandpakket. "
                      "Onder het zand geldt u₀ = γ_w·(stijghoogte − z)."
             )
             water["top_zand_nap"] = st.number_input(
                 "Top 1e zandpakket [m NAP]",
                 value=float(water.get("top_zand_nap", -12.0)),
-                min_value=-40.0, max_value=5.0, step=0.5,
+                min_value=-40.0, max_value=5.0, step=0.01, format="%.2f",
                 help="NAP-niveau van de bovenkant van het 1e watervoerende zandpakket."
             )
             water["indringing"] = st.number_input(
