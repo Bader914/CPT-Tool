@@ -24,3 +24,6 @@ Thumbs.db
 *.csv
 *.xlsx
 data/
+
+# Wachtwoord/omgevingsvariabelen (nooit naar GitHub)
+.env

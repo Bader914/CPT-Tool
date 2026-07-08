@@ -1,5 +1,8 @@
 .git
 webapp
+# Geheimen nooit in de image bakken — die komen bij het starten uit .env
+.streamlit/secrets.toml
+.env
 __pycache__
 *.pyc
 *.zip

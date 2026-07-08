@@ -5,6 +5,8 @@ services:
     container_name: cpt-su-tool
     restart: unless-stopped
     environment:
-      - APP_PASSWORD=hhsk
+      # Wachtwoord komt uit .env (niet in git!). Ontbreekt hij, dan faalt compose
+      # bewust — beter dan stilletjes terugvallen op een zwak standaardwachtwoord.
+      - APP_PASSWORD=${APP_PASSWORD:?zet APP_PASSWORD in /opt/cpt-tool/.env}
     ports:
       - "8080:8501"

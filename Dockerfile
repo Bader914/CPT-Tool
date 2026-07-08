@@ -14,5 +14,5 @@ COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 
 EXPOSE 8501
-ENV APP_PASSWORD=hhsk
+# Bewust GEEN standaard-wachtwoord in de image: APP_PASSWORD komt uit .env.
 ENTRYPOINT ["./docker-entrypoint.sh"]
