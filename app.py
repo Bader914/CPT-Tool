@@ -226,9 +226,17 @@ STEPS = [
     {"module": classificatie, "icon": "🧱", "label": "Classificatie", "full": "Classificatie"},
     {"module": normalisatie, "icon": "📐", "label": "Normalisatie", "full": "Normalisatie"},
     {"module": su_berekening, "icon": "📊", "label": "Su", "full": "Su Berekening"},
-    {"module": validatie, "icon": "✅", "label": "Validatie", "full": "Validatie"},
-    {"module": visualisatie, "icon": "📈", "label": "Rapportage", "full": "Rapportage"},
+    # Voorlopig geblokkeerd: de tool stopt na de Su-berekening. Validatie met
+    # triaxiaalproeven en de rapportage worden later vrijgegeven.
+    {"module": validatie, "icon": "✅", "label": "Validatie", "full": "Validatie",
+     "locked": "Validatie met triaxiaalproeven (Nkt-kalibratie) volgt later."},
+    {"module": visualisatie, "icon": "📈", "label": "Rapportage", "full": "Rapportage",
+     "locked": "Rapportage — incl. het combineren van meerdere sonderingen en de "
+               "vergelijking met de Deltares-tool — volgt later."},
 ]
+
+# Index van de laatste vrijgegeven stap (Su Berekening) — afgeleid, niet hardcoded.
+SU_STEP = next(i for i, s in enumerate(STEPS) if s["module"] is su_berekening)
 
 if "current_step" not in st.session_state:
     st.session_state.current_step = 0
@@ -254,8 +262,11 @@ su_count = sum(1 for v in st.session_state.get("sonderingen", {}).values() if v.
 # === BUILD RADIO LABELS with status icons ===
 radio_labels = []
 for i, s in enumerate(STEPS):
-    check = "✅" if step_done[i] else f"{i}"
-    radio_labels.append(f"{check}  {s['icon']} {s['label']}")
+    if s.get("locked"):
+        radio_labels.append(f"🔒  {s['icon']} {s['label']}")
+    else:
+        check = "✅" if step_done[i] else f"{i}"
+        radio_labels.append(f"{check}  {s['icon']} {s['label']}")
 
 active = st.session_state.current_step
 
@@ -297,4 +308,18 @@ with nav_right:
 
 # === MAIN CONTENT ===
 active = st.session_state.current_step
-STEPS[active]["module"].render()
+_stap = STEPS[active]
+if _stap.get("locked"):
+    # Geblokkeerde stap: de module wordt bewust NIET uitgevoerd.
+    st.markdown(f"""
+    <div class="why-card">
+        <h4>🔒 {_stap['full']} — nog niet beschikbaar</h4>
+        <p>De tool loopt op dit moment tot en met <b>Su Berekening</b>.
+        {_stap['locked']}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("⬅️ Terug naar Su Berekening", type="primary"):
+        st.session_state.current_step = SU_STEP
+        st.rerun()
+else:
+    _stap["module"].render()
