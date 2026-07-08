@@ -197,8 +197,12 @@ def suggereer_grondopbouw(df: pd.DataFrame, cm: dict, bibliotheek: list,
         else:
             samengevoegd.append(s)
 
+    # Su is alleen zinvol in cohesieve grond (klei/veen) → die lagen markeren we
+    # standaard als 'Su berekenen'. Zonder dit blijft Su leeg, want de bibliotheek
+    # zet is_dijkmateriaal alleen op de expliciete dijksmateriaal-lagen.
     rijen = [{"bovenkant": round(float(s[0]), 2),
-              "laagtype": _representatief_laagtype(s[2], bibliotheek)}
+              "laagtype": _representatief_laagtype(s[2], bibliotheek),
+              "is_dijkmateriaal": s[2] in ("klei", "veen")}
              for s in samengevoegd]
     # Bovenste rij op maaiveld zetten: het eerste meetpunt ligt vaak lager
     # (voorboring). Zo staat maaiveld expliciet in de grondopbouw-tabel en telt
@@ -519,7 +523,15 @@ def render():
             seed_rows = [{"bovenkant": g["top_nap"], "laagtype": n}
                          for n, g in grenzen.items() if g.get("top_nap") is not None]
 
-        seed_df = pd.DataFrame(seed_rows, columns=["bovenkant", "laagtype"])
+        # 'Su berekenen' (is_dijkmateriaal) per rij: uit de rij, anders uit de bibliotheek.
+        _biblio = {l["naam"]: l for l in bibliotheek}
+        seed_rows = [dict(r) for r in seed_rows]
+        for _r in seed_rows:
+            if _r.get("is_dijkmateriaal") is None:
+                _r["is_dijkmateriaal"] = bool(
+                    _biblio.get(_r.get("laagtype"), {}).get("is_dijkmateriaal", False))
+
+        seed_df = pd.DataFrame(seed_rows, columns=["bovenkant", "laagtype", "is_dijkmateriaal"])
 
         edited = st.data_editor(
             seed_df,
@@ -534,6 +546,10 @@ def render():
                 "laagtype": st.column_config.SelectboxColumn(
                     "Laagtype", options=type_namen, required=False,
                     help="Kies een laagtype uit de bibliotheek (γ/Nkt komen automatisch mee)."),
+                "is_dijkmateriaal": st.column_config.CheckboxColumn(
+                    "Su berekenen", default=False,
+                    help="Vink aan om Su in deze laag te berekenen. Standaard aangevinkt voor "
+                         "cohesieve lagen (klei/veen); in zand is Su niet zinvol."),
             },
         )
 

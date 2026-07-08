@@ -164,6 +164,7 @@ def render():
         progress = st.progress(0)
         total = len(genormaliseerd)
         resultaten = []
+        spreiding_waarschuwing = []
 
         for i, (name, data) in enumerate(genormaliseerd.items()):
             df = data["df"].copy()
@@ -236,10 +237,25 @@ def render():
                 "OCR gem [-]": f"{ocr_gem:.2f}" if pd.notna(ocr_gem) else "—",
                 "σ'vy gem [kPa]": f"{svy_gem * 1000:.1f}" if pd.notna(svy_gem) else "—",
             })
+            # Te grote spreiding → de karakteristieke waarde wordt 0 (of bijna 0) en is
+            # dan betekenisloos. Meestal: één (te) dikke laag; verdeel hem verder.
+            if kw["n"] and (kw["VC"] > 0.5 or kw["kar"] <= 0.0):
+                spreiding_waarschuwing.append(
+                    f"**{name}** — VC = {kw['VC']:.2f}, Su kar = {kw['kar']:.1f} kPa")
             progress.progress((i + 1) / total)
 
         st.success(f"Su berekend voor {total} sondering(en)")
         st.dataframe(pd.DataFrame(resultaten), use_container_width=True, hide_index=True)
+
+        if spreiding_waarschuwing:
+            st.warning(
+                "⚠️ **Te grote spreiding — de karakteristieke waarde is niet bruikbaar.**\n\n"
+                + "\n".join(f"- {w}" for w in spreiding_waarschuwing)
+                + "\n\nSu_kar = Su_gem·(1 − t·VC) wordt 0 zodra VC ≳ 0,61. Dit gebeurt bijna altijd "
+                  "als één laag te dik is (bijv. één kleilaag over de hele sondering). "
+                  "**Verdeel de laag verder** in Stap 2 — Classificatie (verlaag de min. laagdikte of "
+                  "voeg laaggrenzen toe) en bereken Su opnieuw."
+            )
 
     # Resultaten
     su_berekend = {k: v for k, v in st.session_state.get("sonderingen", {}).items()
