@@ -1,7 +1,16 @@
 """
 Module 5: Su Berekening
-- Su = q_net / Nkt per meetpunt
-- Nkt direct uit SHZ-grondlaag (df["grondlaag"] uit classificatie)
+
+Hoofdroute (zoals de Deltares CPT-tool):
+  1) Su uit de conusweerstand:     Su   = q_net / Nkt            [kPa]
+  2) grensspanning uit SHANSEP:    σ'vy = σ'v0 · (Su/(S·σ'v0))^(1/m)
+     (SHANSEP omgekeerd; OCR = σ'vy/σ'v0)
+
+De Nkt-waarde gebruik je dus voor Su; voor de grensspanning heb je SHANSEP nodig
+— niet andersom. De omgekeerde volgorde (σ'vy = k·q_net, dan Su via SHANSEP) is
+beschikbaar als controleroute.
+
+- Nkt/S/m direct uit de grondlaag (df["grondlaag"] uit classificatie)
 - Alleen voor dijkmateriaal (gemarkeerd in classificatie)
 - Voorboring-data wordt overgeslagen
 """
@@ -18,15 +27,41 @@ def bereken_Su(q_net: pd.Series, Nkt: pd.Series) -> pd.Series:
 
 
 def bereken_grensspanning(q_net: pd.Series, k: float = 0.33) -> pd.Series:
-    """Grensspanning (yield/prekonsolidatiespanning) σ'vy uit de CPT [MPa].
+    """CONTROLEROUTE — grensspanning σ'vy rechtstreeks uit q_net [MPa].
 
         σ'vy = k · q_net      (q_net = qt − σv0)
 
-    Eerste-orde correlatie volgens Mayne (k ≈ 0,3–0,35 voor klei). Conform de
-    'conservatieve correlatie' uit de schematiseringshandleiding macrostabiliteit:
-    de grensspanning bepaalt samen met σ'v0 de OCR en daarmee de SHANSEP-sterkte.
+    Eerste-orde correlatie volgens Mayne (k ≈ 0,3–0,35 voor klei). Let op: dit is
+    NIET de hoofdroute. In de hoofdroute volgt σ'vy uit de gemeten Su via
+    `bereken_ocr_en_grensspanning` (SHANSEP omgekeerd). Deze functie dient als
+    onafhankelijke controle/vergelijking.
     """
     return (k * q_net).clip(lower=0)
+
+
+def bereken_ocr_en_grensspanning(su_kpa: pd.Series, sigma_v0_eff: pd.Series,
+                                 S: pd.Series | float, m: pd.Series | float):
+    """OCR en grensspanning σ'vy door SHANSEP OM TE KEREN, met Su uit de Nkt-methode.
+
+    Dit is de route van de Deltares CPT-tool:
+        1) Su uit de conusweerstand:   Su = q_net / Nkt          [kPa]
+        2) grensspanning uit SHANSEP:  Su = S · σ'v0 · OCRᵐ
+                                    ⇒  OCR  = (Su / (S · σ'v0))^(1/m)
+                                    ⇒  σ'vy = σ'v0 · OCR
+
+    Dus NIET andersom (σ'vy uit een qnet-correlatie en dan Su); de grensspanning
+    is hier een RESULTAAT van de gemeten Su, niet een aanname vooraf.
+
+    Eenheden: su_kpa in kPa, sigma_v0_eff in MPa → σ'vy in MPa. OCR ≥ 1 (geen
+    onderconsolidatie). Retour: (OCR, σ'vy).
+    """
+    sv = sigma_v0_eff.replace(0, np.nan)
+    su_mpa = su_kpa / 1000.0
+    basis = su_mpa / (S * sv)              # = OCRᵐ
+    basis = basis.where(basis > 0)          # negatieve/0-basis → NaN
+    exponent = (1.0 / m.replace(0, np.nan)) if isinstance(m, pd.Series) else (1.0 / m if m else np.nan)
+    ocr = (basis ** exponent).clip(lower=1.0)
+    return ocr, sv * ocr
 
 
 def bereken_su_shansep(sigma_v0_eff: pd.Series, sigma_vy: pd.Series,
@@ -104,15 +139,17 @@ def render():
     with col_m1:
         su_methode = st.radio(
             "Su-methode",
-            ["Nkt (q_net / Nkt)", "SHANSEP (grensspanning uit CPT)"],
+            ["Nkt → Su, SHANSEP → grensspanning", "SHANSEP-voorwaarts (controle, Mayne k)"],
             index=0, key="su_methode",
-            help="Nkt: Su = q_net/Nkt. SHANSEP: Su = S·σ'v0·OCRᵐ met OCR uit de "
-                 "grensspanning σ'vy = k·q_net (S/m per grondlaag, Tabel 91).",
+            help="Hoofdroute (zoals de Deltares CPT-tool): Su = q_net/Nkt uit de conusweerstand; "
+                 "dáárna de grensspanning door SHANSEP om te keren: σ'vy = σ'v0·(Su/(S·σ'v0))^(1/m). "
+                 "De controleroute doet het omgekeerd: σ'vy = k·q_net (Mayne) en dan Su via SHANSEP.",
         )
     with col_m2:
         k_grens = st.number_input(
             "Grensspanning-factor k [-]", min_value=0.1, max_value=0.6, value=0.33, step=0.01,
-            help="σ'vy = k·q_net (Mayne; k ≈ 0,3–0,35 voor klei). Alleen voor SHANSEP.",
+            help="σ'vy = k·q_net (Mayne; k ≈ 0,3–0,35 voor klei). Alleen voor de controleroute "
+                 "'SHANSEP-voorwaarts'; in de hoofdroute volgt σ'vy uit Su.",
         )
     with col_m3:
         t_factor = st.number_input(
@@ -152,23 +189,34 @@ def render():
                 geldig = geldig & df["voorboring_geldig"].astype(bool)
 
             df["Su"] = np.nan
+            df["S_gebruikt"] = df["grondlaag"].map(s_map)
+            df["m_gebruikt"] = df["grondlaag"].map(m_map)
+            sv_eff = df.get("sigma_v0_eff", pd.Series(np.nan, index=df.index))
+
             if is_shansep:
-                df["S_gebruikt"] = df["grondlaag"].map(s_map)
-                df["m_gebruikt"] = df["grondlaag"].map(m_map)
+                # ALTERNATIEVE route (controle): grensspanning uit een qnet-correlatie
+                # (Mayne) en dáárna Su via SHANSEP-voorwaarts.
                 df["sigma_vy"] = bereken_grensspanning(df["q_net"], k_grens)
-                geldig_sh = geldig & df["S_gebruikt"].notna() & df["m_gebruikt"].notna() \
-                    & df.get("sigma_v0_eff", pd.Series(np.nan, index=df.index)).notna()
-                # per-rij SHANSEP (S/m verschillen per laag)
+                geldig_sh = geldig & df["S_gebruikt"].notna() & df["m_gebruikt"].notna() & sv_eff.notna()
                 su_vals = bereken_su_shansep(
                     df["sigma_v0_eff"], df["sigma_vy"],
                     df["S_gebruikt"].fillna(0), df["m_gebruikt"].fillna(1))
                 df.loc[geldig_sh, "Su"] = su_vals[geldig_sh]
-                methode_note = f"SHANSEP (k={k_grens:.2f})"
+                df["OCR"] = (df["sigma_vy"] / sv_eff.replace(0, np.nan)).clip(lower=1.0)
+                methode_note = f"SHANSEP-voorwaarts (k={k_grens:.2f})"
             else:
+                # HOOFDROUTE (zoals de Deltares CPT-tool):
+                #   1) Su uit de conusweerstand:  Su = q_net / Nkt
+                #   2) grensspanning uit SHANSEP omgekeerd: σ'vy = σ'v0·(Su/(S·σ'v0))^(1/m)
                 geldig_nkt = geldig & df["Nkt_gebruikt"].notna()
                 df.loc[geldig_nkt, "Su"] = bereken_Su(
                     df.loc[geldig_nkt, "q_net"], df.loc[geldig_nkt, "Nkt_gebruikt"])
-                methode_note = "Nkt"
+                df.loc[df["Su"] < 0, "Su"] = np.nan
+                ocr, sigma_vy = bereken_ocr_en_grensspanning(
+                    df["Su"], sv_eff, df["S_gebruikt"], df["m_gebruikt"])
+                df["OCR"] = ocr
+                df["sigma_vy"] = sigma_vy
+                methode_note = "Nkt → Su; SHANSEP → grensspanning"
             df.loc[df["Su"] < 0, "Su"] = np.nan
 
             st.session_state.sonderingen[name]["df"] = df
@@ -177,12 +225,16 @@ def render():
             st.session_state.sonderingen[name]["t_factor"] = t_factor
 
             kw = karakteristieke_waarde(df["Su"], t_factor)
+            ocr_gem = df["OCR"].replace([np.inf, -np.inf], np.nan).mean() if "OCR" in df else np.nan
+            svy_gem = df["sigma_vy"].replace([np.inf, -np.inf], np.nan).mean() if "sigma_vy" in df else np.nan
             resultaten.append({
                 "Sondering": name, "Status": "✅", "Methode": methode_note,
                 "Meetpunten": kw["n"],
                 "Su gem [kPa]": f"{kw['gem']:.1f}" if kw["n"] else "—",
                 "VC [-]": f"{kw['VC']:.2f}" if kw["n"] else "—",
                 "Su kar [kPa]": f"{kw['kar']:.1f}" if kw["n"] else "—",
+                "OCR gem [-]": f"{ocr_gem:.2f}" if pd.notna(ocr_gem) else "—",
+                "σ'vy gem [kPa]": f"{svy_gem * 1000:.1f}" if pd.notna(svy_gem) else "—",
             })
             progress.progress((i + 1) / total)
 

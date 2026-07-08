@@ -112,7 +112,7 @@ def _representatief_laagtype(groep: str, bibliotheek: list) -> str:
 
 
 def suggereer_grondopbouw(df: pd.DataFrame, cm: dict, bibliotheek: list,
-                          min_dikte: float = 0.5) -> list:
+                          min_dikte: float = 0.5, maaiveld_nap: float | None = None) -> list:
     """Stel grondopbouw-rijen voor op basis van Robertson (qc/Rf) als startpunt.
 
     De ruwe per-punt Robertson-zones worden vertaald naar grove groepen
@@ -197,9 +197,15 @@ def suggereer_grondopbouw(df: pd.DataFrame, cm: dict, bibliotheek: list,
         else:
             samengevoegd.append(s)
 
-    return [{"bovenkant": round(float(s[0]), 2),
-             "laagtype": _representatief_laagtype(s[2], bibliotheek)}
-            for s in samengevoegd]
+    rijen = [{"bovenkant": round(float(s[0]), 2),
+              "laagtype": _representatief_laagtype(s[2], bibliotheek)}
+             for s in samengevoegd]
+    # Bovenste rij op maaiveld zetten: het eerste meetpunt ligt vaak lager
+    # (voorboring). Zo staat maaiveld expliciet in de grondopbouw-tabel en telt
+    # de grond daarboven mee in σv0.
+    if rijen and maaiveld_nap is not None:
+        rijen[0]["bovenkant"] = round(max(float(rijen[0]["bovenkant"]), float(maaiveld_nap)), 2)
+    return rijen
 
 
 # ───────────────────────────────────────────────────────────────
@@ -278,8 +284,14 @@ def toewijs_grondlaag(diepte_nap: pd.Series, laaggrenzen: dict) -> pd.Series:
     items = [(n, g) for n, g in laaggrenzen.items()
              if g.get("top_nap") is not None and g.get("onder_nap") is not None]
     items.sort(key=lambda kv: -kv[1]["top_nap"])
+    # De diepste laag sluit zijn ONDERRAND in, anders valt het laatste meetpunt
+    # (op precies de sondeerbasis) buiten alle lagen en wordt het 'Onbekend'.
+    diepste_onder = min((g["onder_nap"] for _, g in items), default=None)
     for naam, grens in items:
-        mask = (diepte_nap <= grens["top_nap"]) & (diepte_nap > grens["onder_nap"])
+        if diepste_onder is not None and grens["onder_nap"] == diepste_onder:
+            mask = (diepte_nap <= grens["top_nap"]) & (diepte_nap >= grens["onder_nap"])
+        else:
+            mask = (diepte_nap <= grens["top_nap"]) & (diepte_nap > grens["onder_nap"])
         # Alleen toewijzen waar nog "Onbekend"
         grondlaag[mask & (grondlaag == "Onbekend")] = naam
     return grondlaag
@@ -323,12 +335,12 @@ def _classificeer_sondering(name, data, up, bibliotheek, lagen, default_rows,
 
     rows = data.get("grondopbouw_lokaal")
     if not rows and gebruik_suggestie:
-        rows = suggereer_grondopbouw(df, cm, bibliotheek, min_dikte)
+        rows = suggereer_grondopbouw(df, cm, bibliotheek, min_dikte, maaiveld_nap=mv_nap)
     if not rows:
         rows = [dict(r) for r in default_rows]
 
     basis_nap = float(df["diepte_nap"].min())
-    lagen_lokaal = bouw_lagen_uit_grondopbouw(rows, bibliotheek, basis_nap)
+    lagen_lokaal = bouw_lagen_uit_grondopbouw(rows, bibliotheek, basis_nap, maaiveld_nap=mv_nap)
     grenzen = grenzen_uit_lagen(lagen_lokaal) if lagen_lokaal else default_laaggrenzen(lagen)
     df["grondlaag"] = toewijs_grondlaag(df["diepte_nap"], grenzen)
     dijkmat_lagen = {n for n, gg in grenzen.items() if gg.get("is_dijkmateriaal")}
@@ -480,7 +492,7 @@ def render():
         with col_sug2:
             st.caption("")
             if st.button("🔎 Stel laaggrenzen voor (Robertson)", key=f"suggest_{selected}"):
-                voorstel = suggereer_grondopbouw(df, cm, bibliotheek, min_dikte)
+                voorstel = suggereer_grondopbouw(df, cm, bibliotheek, min_dikte, maaiveld_nap=mv_nap)
                 if voorstel:
                     st.session_state.sonderingen[selected]["grondopbouw_lokaal"] = voorstel
                     st.success(f"Voorstel met {len(voorstel)} lagen geplaatst — pas aan en klik 'Laaggrenzen opslaan'.")
@@ -525,12 +537,15 @@ def render():
             },
         )
 
-        st.caption(f"Onderste laag loopt door tot de sondeerbasis (NAP {basis_nap:+.2f}m).")
+        st.caption(f"Bovenste laag loopt vanaf **maaiveld** (NAP {mv_nap:+.2f}m) — de grond boven het "
+                   f"eerste meetpunt (voorboorzone) telt zo mee in σv0. "
+                   f"Onderste laag loopt door tot de sondeerbasis (NAP {basis_nap:+.2f}m).")
 
         # LIVE preview: leid de laaggrenzen direct af uit de huidige tabel, zodat
         # de grafiek en verdeling rechts altijd de tabel weerspiegelen (ook vóór
         # 'opslaan'). Valt terug op de opgeslagen grenzen als de tabel leeg is.
-        preview_lagen = bouw_lagen_uit_grondopbouw(edited.to_dict("records"), bibliotheek, basis_nap)
+        preview_lagen = bouw_lagen_uit_grondopbouw(edited.to_dict("records"), bibliotheek,
+                                                   basis_nap, maaiveld_nap=mv_nap)
         preview_grenzen = grenzen_uit_lagen(preview_lagen) if preview_lagen else grenzen
         preview_grondlaag = toewijs_grondlaag(df["diepte_nap"], preview_grenzen)
 
@@ -564,7 +579,7 @@ def render():
 
         if st.button("💾 Laaggrenzen opslaan", key=f"save_grenzen_{selected}", type="primary"):
             rows = edited.to_dict("records")
-            lagen_lokaal = bouw_lagen_uit_grondopbouw(rows, bibliotheek, basis_nap)
+            lagen_lokaal = bouw_lagen_uit_grondopbouw(rows, bibliotheek, basis_nap, maaiveld_nap=mv_nap)
             if not lagen_lokaal:
                 st.warning("⚠️ Geen geldige rijen (vul bovenkant én laagtype in).")
             else:
@@ -600,8 +615,10 @@ def render():
         # Boorstaat-kolommen bepalen: één (huidige tabel) of twee (vergelijken).
         if vergelijk:
             robertson_lagen = bouw_lagen_uit_grondopbouw(
-                suggereer_grondopbouw(df, cm, bibliotheek, min_dikte), bibliotheek, basis_nap)
-            shz_lagen = (bouw_lagen_uit_grondopbouw([dict(r) for r in default_rows], bibliotheek, basis_nap)
+                suggereer_grondopbouw(df, cm, bibliotheek, min_dikte, maaiveld_nap=mv_nap),
+                bibliotheek, basis_nap, maaiveld_nap=mv_nap)
+            shz_lagen = (bouw_lagen_uit_grondopbouw([dict(r) for r in default_rows], bibliotheek,
+                                                    basis_nap, maaiveld_nap=mv_nap)
                          if default_rows else [])
             boor_kols = [("Robertson", robertson_lagen), ("SHZ-zones", shz_lagen)]
         else:

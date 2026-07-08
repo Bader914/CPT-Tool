@@ -260,7 +260,8 @@ DEFAULT_UITGANGSPUNTEN = {
 }
 
 
-def bouw_lagen_uit_grondopbouw(rows: list, bibliotheek: list, onderkant_diepste_nap: float) -> list:
+def bouw_lagen_uit_grondopbouw(rows: list, bibliotheek: list, onderkant_diepste_nap: float,
+                               maaiveld_nap: float | None = None) -> list:
     """Zet de grondopbouw-invoertabel om naar een volwaardige `lagen`-lijst.
 
     Elke rij geeft de BOVENKANT (m NAP) van een laag + een gekozen laagtype uit
@@ -268,6 +269,10 @@ def bouw_lagen_uit_grondopbouw(rows: list, bibliotheek: list, onderkant_diepste_
 
     - De ONDERKANT van een laag = de bovenkant van de volgende (gesorteerd, aflopend).
       De diepste laag loopt door tot `onderkant_diepste_nap`.
+    - De BOVENSTE laag loopt door tot `maaiveld_nap` (indien opgegeven), zodat de
+      grondkolom vanaf maaiveld volledig gedefinieerd is. Dat is nodig voor een
+      correcte σv0: de grond bóven het eerste meetpunt (bv. de voorboorzone)
+      weegt wél mee. Zonder maaiveld blijft die zone 'Onbekend'.
     - Bij herhaald laagtype worden unieke namen gemaakt (… #2, #3) zodat de
       naam-gekoppelde rekenketen (laaggrenzen, σv0, Nkt) blijft werken.
     - Overige parameters (S, m, φ, kleur, materiaal) worden uit de bibliotheek
@@ -315,6 +320,11 @@ def bouw_lagen_uit_grondopbouw(rows: list, bibliotheek: list, onderkant_diepste_
         laag.setdefault("kleur", "#888888")
         laag.setdefault("materiaal", type_naam)
         lagen.append(laag)
+
+    # Bovenste laag doortrekken tot maaiveld: de grond boven het eerste meetpunt
+    # (voorboorzone) telt mee in σv0 met de γ van die bovenste laag.
+    if lagen and maaiveld_nap is not None:
+        lagen[0]["top_nap"] = max(float(lagen[0]["top_nap"]), float(maaiveld_nap))
 
     return lagen
 
