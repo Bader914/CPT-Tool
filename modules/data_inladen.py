@@ -447,8 +447,16 @@ def render():
                 if a_factor_gef is not None:
                     st.info(f"ℹ️ **{f.name}**: a-factor uit GEF gelezen: {a_factor_gef:.2f}")
                 if voorboring_gef and voorboring_gef > 0:
-                    st.info(f"ℹ️ **{f.name}**: voorboring uit GEF gelezen: {voorboring_gef:.2f} m "
-                            "(automatisch toegepast)")
+                    _grens = (maaiveld_nap - voorboring_gef) if maaiveld_nap is not None else None
+                    _tot = f" (tot NAP {_grens:+.2f} m)" if _grens is not None else ""
+                    st.info(
+                        f"ℹ️ **{f.name}** — voorboring uit de GEF-header: "
+                        f"**{voorboring_gef:.2f} m onder maaiveld**{_tot}.\n\n"
+                        "• Metingen in die zone zijn onbetrouwbaar → daar wordt **geen Su** berekend.\n"
+                        "• Het **gewicht** van die grond telt wél mee in σv0.\n"
+                        "• Wordt verwerkt bij **Stap 3 — Normalisatie**; overgenomen uit de GEF en "
+                        "daarom niet aanpasbaar."
+                    )
 
                 if has_diepte and has_qc:
                     cols_found = []
@@ -647,24 +655,33 @@ def render():
 
             with tab4:
                 st.markdown("""
-                **Voorboring & funderingslaag** — bovenste meters van een sondering zijn vaak
-                niet representatief (door wegfundering of vooraf-geboord). Geef hier aan welk
-                deel overgeslagen wordt en welke laag eroverheen ligt.
+                **Voorboring & funderingslaag** — de bovenste meters van een sondering zijn vaak
+                niet representatief (wegfundering, of er is voorgeboord). De metingen daar worden
+                **niet gebruikt voor Su**. Het **gewicht** van die grond telt wél mee in σv0.
                 """)
 
                 voorb = st.session_state.sonderingen[selected].get("voorboring", {}) or {}
                 fund = st.session_state.sonderingen[selected].get("funderingslaag", {}) or {}
                 vb_uit_gef = bool(voorb.get("uit_gef"))
+                vb_mv = st.session_state.sonderingen[selected].get("maaiveld_nap")
 
                 col_vb, col_fd = st.columns(2)
 
                 with col_vb:
                     st.markdown("**🕳️ Voorboring**")
                     if vb_uit_gef:
-                        st.success(f"✅ Automatisch uit GEF: **{float(voorb.get('diepte', 0.0)):.2f} m** "
-                                   "voorgeboord (MEASUREMENTVAR 13). Wordt toegepast en is niet aanpasbaar.")
                         voorboring_actief = True
                         voorboring_diepte = float(voorb.get("diepte", 0.0))
+                        _grens = (vb_mv - voorboring_diepte) if vb_mv is not None else None
+                        _grens_txt = (f"Alles **boven NAP {_grens:+.2f} m** valt in de voorboorzone."
+                                      if _grens is not None else "")
+                        st.success(
+                            f"✅ **Uit de GEF gelezen** (MEASUREMENTVAR 13): voorgeboord tot "
+                            f"**{voorboring_diepte:.2f} m onder maaiveld**. {_grens_txt}"
+                        )
+                        st.caption("Daar wordt geen Su berekend (het gewicht telt wél mee in σv0). "
+                                   "Dit wordt verwerkt bij Stap 3 — Normalisatie. "
+                                   "Overgenomen uit de GEF, daarom niet aanpasbaar.")
                         st.number_input(
                             "Voorboring tot [m onder maaiveld]",
                             value=voorboring_diepte, min_value=0.0, max_value=10.0,

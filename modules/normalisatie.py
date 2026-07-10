@@ -470,12 +470,18 @@ def render():
                 df["q_net"] = bereken_q_net(df["qt"], df["sigma_v0"])
                 df["Qt"] = df["q_net"] / df["sigma_v0_eff"].replace(0, np.nan)
 
-                # Voorboring: data in dat dieptebereik ongeldig maken voor Su
+                # Voorboring: metingen in die zone ongeldig maken voor Su.
+                # Let op: het GEWICHT van die grond telt wél mee in σv0 (hierboven al
+                # berekend vanaf maaiveld) — alleen de metingen zijn onbetrouwbaar.
                 if voorboring and voorboring.get("actief"):
                     vb_grens_nap = mv_nap - voorboring["diepte"]
                     df["voorboring_geldig"] = df["diepte_nap"] <= vb_grens_nap
+                    n_uit = int((~df["voorboring_geldig"]).sum())
+                    vb_note = (f"{voorboring['diepte']:.2f} m → boven NAP {vb_grens_nap:+.2f} m "
+                               f"({n_uit} punt{'en' if n_uit != 1 else ''} zonder Su)")
                 else:
                     df["voorboring_geldig"] = True
+                    vb_note = "—"
 
                 st.session_state.sonderingen[name]["df"] = df
                 st.session_state.sonderingen[name]["genormaliseerd"] = True
@@ -486,10 +492,12 @@ def render():
                     "gamma_bron": gamma_bron,
                 }
                 resultaten.append({"Sondering": name, "Status": "✅", "qt": qt_note,
-                                   "γ-bron": gamma_bron, "Metingen": len(df)})
+                                   "γ-bron": gamma_bron, "Metingen": len(df),
+                                   "Voorboring": vb_note})
 
             except Exception as e:
-                resultaten.append({"Sondering": name, "Status": f"❌ {e}", "qt": "—", "Metingen": 0})
+                resultaten.append({"Sondering": name, "Status": f"❌ {e}", "qt": "—",
+                                   "Metingen": 0, "Voorboring": "—"})
 
             progress.progress((i + 1) / total)
 
