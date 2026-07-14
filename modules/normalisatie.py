@@ -346,44 +346,73 @@ def render():
                        "Vul hem in bij *Stap 1 — Upload → 📏 Referentieniveau & conus*. "
                        "Zonder a-factor rekent de tool met de standaard **0,80**.")
 
-    col_p1, col_p2 = st.columns(2)
-    with col_p1:
-        # De GWS wordt HIER vastgesteld — pas nadat de sondering is ingelezen.
-        # Eén waarde volstaat; een min/max-bandbreedte wordt voor sonderingen niet gebruikt.
-        gwl_nap = st.number_input(
-            "Grondwaterstand [m NAP]",
-            min_value=-10.0, max_value=10.0,
-            value=up.get("dijkopbouw", {}).get("gwl", 0.0), step=0.01, format="%.2f",
-            help="Freatische grondwaterstand voor deze berekening. Hieronder per sondering "
-                 "aan te passen als hij lokaal afwijkt.",
-        )
-        knik_nap = st.number_input(
-            "Knikpunt drukverloop [m NAP]",
-            min_value=-30.0, max_value=5.0,
-            value=waterdruk.get("knik_nap", -5.0), step=0.01, format="%.2f",
-            help="Einde van het zuiver hydrostatische verloop vanaf GWS; "
-                 "begin van de overgangszone naar het zandpakket.",
-        )
-    with col_p2:
-        stijghoogte_nap = st.number_input(
-            "Stijghoogte 1e zandpakket [m NAP]",
-            min_value=-30.0, max_value=10.0,
-            value=waterdruk.get("stijghoogte_nap", -2.0), step=0.01, format="%.2f",
-            help="Piëzometrisch niveau (P) van het watervoerende zandpakket.",
-        )
-        top_zand_nap = st.number_input(
-            "Top 1e zandpakket [m NAP]",
-            min_value=-40.0, max_value=5.0,
-            value=waterdruk.get("top_zand_nap", -12.0), step=0.01, format="%.2f",
-            help="NAP-niveau van de bovenkant van het 1e watervoerende zandpakket.",
-        )
-        indringing_m = st.number_input(
-            "Indringingslengte [m]",
-            min_value=0.0, max_value=5.0,
-            value=waterdruk.get("indringing", 0.0), step=0.01, format="%.2f",
-            help="Tot hoever boven het zand de pakketdruk al gevoeld wordt; "
-                 "zandzone start bij (top zand + indringing). Vaak < 1 m.",
-        )
+    # ── Waterdruk PER SONDERING (geen globale waarde) ──
+    # De GWS, het knikpunt en de top van het zandpakket verschillen per locatie en lees
+    # je af uit de sondering zelf. Er is daarom bewust géén projectbrede waarde meer:
+    # elke sondering heeft zijn eigen rij. Zo kan er nooit stilletjes een globale waarde
+    # worden gebruikt die niet bij deze locatie hoort.
+    WD_DEFAULTS = {"gwl": 0.0, "knik_nap": -5.0, "stijghoogte_nap": -2.0,
+                   "top_zand_nap": -12.0, "indringing": 0.0}
+
+    st.markdown("**Waterdruk (u₀) — per sondering**")
+    st.caption("Elke sondering heeft zijn eigen waarden; er is geen projectbrede GWS meer. "
+               "Vul de tabel in en klik op opslaan. Controleer daarna met de grafiek: "
+               "de berekende **u₀** hoort in de buurt van de gemeten **u₂** te liggen.")
+
+    _wd_rows = []
+    for _naam, _d in geclassificeerd.items():
+        _w = _d.get("waterdruk_lokaal") or {}
+        _wd_rows.append({
+            "Sondering": _naam,
+            "GWS [m NAP]": float(_w.get("gwl", WD_DEFAULTS["gwl"])),
+            "Knikpunt [m NAP]": float(_w.get("knik_nap", WD_DEFAULTS["knik_nap"])),
+            "Stijghoogte [m NAP]": float(_w.get("stijghoogte_nap", WD_DEFAULTS["stijghoogte_nap"])),
+            "Top zandpakket [m NAP]": float(_w.get("top_zand_nap", WD_DEFAULTS["top_zand_nap"])),
+            "Indringing [m]": float(_w.get("indringing", WD_DEFAULTS["indringing"])),
+        })
+
+    _num = lambda t: st.column_config.NumberColumn(t, format="%.2f", step=0.01)
+    wd_edit = st.data_editor(
+        pd.DataFrame(_wd_rows), hide_index=True, use_container_width=True,
+        key="waterdruk_editor", disabled=["Sondering"],
+        column_config={
+            "Sondering": st.column_config.TextColumn("Sondering", width="medium"),
+            "GWS [m NAP]": _num("GWS [m NAP]"),
+            "Knikpunt [m NAP]": _num("Knikpunt [m NAP]"),
+            "Stijghoogte [m NAP]": _num("Stijghoogte [m NAP]"),
+            "Top zandpakket [m NAP]": _num("Top zandpakket [m NAP]"),
+            "Indringing [m]": _num("Indringing [m]"),
+        },
+    )
+
+    col_wd1, col_wd2 = st.columns([1, 1])
+    with col_wd1:
+        if st.button("💾 Waterdruk per sondering opslaan", use_container_width=True):
+            for _r in wd_edit.to_dict("records"):
+                st.session_state.sonderingen[_r["Sondering"]]["waterdruk_lokaal"] = {
+                    "gwl": float(_r["GWS [m NAP]"]),
+                    "knik_nap": float(_r["Knikpunt [m NAP]"]),
+                    "stijghoogte_nap": float(_r["Stijghoogte [m NAP]"]),
+                    "top_zand_nap": float(_r["Top zandpakket [m NAP]"]),
+                    "indringing": float(_r["Indringing [m]"]),
+                }
+            st.success(f"✅ Waterdruk opgeslagen voor {len(wd_edit)} sondering(en).")
+            st.rerun()
+    with col_wd2:
+        if st.button("📋 Eerste rij naar alle sonderingen kopiëren", use_container_width=True,
+                     help="Handig als de waterdruk overal (vrijwel) gelijk is."):
+            _eerste = wd_edit.to_dict("records")[0] if len(wd_edit) else None
+            if _eerste:
+                for _naam in geclassificeerd:
+                    st.session_state.sonderingen[_naam]["waterdruk_lokaal"] = {
+                        "gwl": float(_eerste["GWS [m NAP]"]),
+                        "knik_nap": float(_eerste["Knikpunt [m NAP]"]),
+                        "stijghoogte_nap": float(_eerste["Stijghoogte [m NAP]"]),
+                        "top_zand_nap": float(_eerste["Top zandpakket [m NAP]"]),
+                        "indringing": float(_eerste["Indringing [m]"]),
+                    }
+                st.success("✅ Waarden van de eerste rij naar alle sonderingen gekopieerd.")
+                st.rerun()
 
     gamma_w = waterdruk.get("gamma_w", 9.81)
 
@@ -427,13 +456,14 @@ def render():
             # Per-sondering lagen (γ/Nkt) indien aanwezig, anders de globale lagen.
             lagen_eff = data.get("lagen_lokaal") or lagen
 
-            # Lokale waterdruk-override (lege override = globale waarden)
+            # Waterdruk komt PER SONDERING uit de tabel hierboven (geen globale waarde).
+            # Is er nog niets opgeslagen, dan gelden de defaults.
             lokaal = data.get("waterdruk_lokaal") or {}
-            gwl_local = lokaal.get("gwl", gwl_nap)
-            knik_local = lokaal.get("knik_nap", knik_nap)
-            stijghoogte_local = lokaal.get("stijghoogte_nap", stijghoogte_nap)
-            top_zand_local = lokaal.get("top_zand_nap", top_zand_nap)
-            indringing_local = lokaal.get("indringing", indringing_m)
+            gwl_local = lokaal.get("gwl", WD_DEFAULTS["gwl"])
+            knik_local = lokaal.get("knik_nap", WD_DEFAULTS["knik_nap"])
+            stijghoogte_local = lokaal.get("stijghoogte_nap", WD_DEFAULTS["stijghoogte_nap"])
+            top_zand_local = lokaal.get("top_zand_nap", WD_DEFAULTS["top_zand_nap"])
+            indringing_local = lokaal.get("indringing", WD_DEFAULTS["indringing"])
 
             try:
                 # diepte_nap ALTIJD vers afleiden uit het actuele maaiveld, zodat een
@@ -606,19 +636,16 @@ def render():
         fig.add_trace(go.Scatter(x=df["Qt"], y=df["diepte_nap"], name="Qt",
                                   line=dict(color="#8b5cf6", width=1.5)), row=1, col=4)
 
-    # GWS lijn
-    gwl_val = data.get("parameters", {}).get("gwl", gwl_nap)
+    # Referentielijnen: uit de parameters die VOOR DEZE SONDERING zijn gebruikt.
+    _p = data.get("parameters", {})
+    _w = data.get("waterdruk_lokaal") or {}
+    gwl_val = _p.get("gwl", _w.get("gwl", 0.0))
+    knik_val = _p.get("knik_nap", _w.get("knik_nap", -5.0))
+    top_zand_val = _p.get("top_zand_nap", _w.get("top_zand_nap", -12.0))
+
     for col in (1, 2, 3, 4):
         fig.add_hline(y=gwl_val, line=dict(color="#64b5f6", dash="dot", width=1), row=1, col=col)
-
-    # Knik lijn
-    knik_val = data.get("parameters", {}).get("knik_nap", knik_nap)
-    for col in (1, 2, 3, 4):
         fig.add_hline(y=knik_val, line=dict(color="#ff9800", dash="dash", width=1), row=1, col=col)
-
-    # Top zandpakket lijn (onderkant overgangszone)
-    top_zand_val = data.get("parameters", {}).get("top_zand_nap", top_zand_nap)
-    for col in (1, 2, 3, 4):
         fig.add_hline(y=top_zand_val, line=dict(color="#fbc02d", dash="dot", width=1), row=1, col=col)
 
     fig.update_yaxes(title_text="Niveau [m NAP]", row=1, col=1)
@@ -627,59 +654,18 @@ def render():
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # Per-sondering waterdruk override
-    with st.expander("💧 Lokale waterstand- & waterdruk-override (deze sondering)", expanded=False):
-        st.caption("Default = de waarden die je hierboven hebt ingesteld. Laat staan als het "
-                   "overal gelijk is; pas alleen aan als de grondwaterstand, zandlaag of "
-                   "pakketdruk op déze locatie afwijkt.")
-        lokaal = data.get("waterdruk_lokaal") or {}
-        new_gwl = st.number_input(
-            "Grondwaterstand (GWS) [m NAP]",
-            value=float(lokaal.get("gwl", gwl_nap)),
-            min_value=-10.0, max_value=10.0, step=0.01, format="%.2f",
-            key=f"gwl_local_{selected}",
-            help="Lokale freatische waterstand voor deze sondering. "
-                 "Beïnvloedt σv0 (γ_droog/γ_nat-splitsing) en u₀.",
+    # Waarden die voor DEZE sondering zijn gebruikt (invoer staat in de tabel bovenaan).
+    _wl = data.get("waterdruk_lokaal") or {}
+    if _wl:
+        st.caption(
+            f"💧 Gebruikte waterdruk voor **{selected}** — GWS NAP {_wl.get('gwl', 0.0):+.2f} m · "
+            f"knik {_wl.get('knik_nap', 0.0):+.2f} · stijghoogte {_wl.get('stijghoogte_nap', 0.0):+.2f} · "
+            f"top zand {_wl.get('top_zand_nap', 0.0):+.2f} · indringing {_wl.get('indringing', 0.0):.2f} m. "
+            "Aanpassen? Gebruik de tabel **Waterdruk (u₀) — per sondering** bovenaan."
         )
-        col_o1, col_o2 = st.columns(2)
-        with col_o1:
-            new_knik = st.number_input(
-                "Knikpunt [m NAP]",
-                value=float(lokaal.get("knik_nap", knik_nap)),
-                min_value=-30.0, max_value=5.0, step=0.01, format="%.2f",
-                key=f"knik_local_{selected}",
-            )
-            new_stijg = st.number_input(
-                "Stijghoogte 1e zandpakket [m NAP]",
-                value=float(lokaal.get("stijghoogte_nap", stijghoogte_nap)),
-                min_value=-30.0, max_value=10.0, step=0.01, format="%.2f",
-                key=f"stijg_local_{selected}",
-            )
-        with col_o2:
-            new_top_zand = st.number_input(
-                "Top 1e zandpakket [m NAP]",
-                value=float(lokaal.get("top_zand_nap", top_zand_nap)),
-                min_value=-40.0, max_value=5.0, step=0.01, format="%.2f",
-                key=f"topzand_local_{selected}",
-            )
-            new_indringing = st.number_input(
-                "Indringingslengte [m]",
-                value=float(lokaal.get("indringing", indringing_m)),
-                min_value=0.0, max_value=5.0, step=0.01, format="%.2f",
-                key=f"indringing_local_{selected}",
-            )
-        col_b1, col_b2 = st.columns(2)
-        with col_b1:
-            if st.button("💾 Override opslaan", key=f"save_water_{selected}"):
-                st.session_state.sonderingen[selected]["waterdruk_lokaal"] = {
-                    "gwl": new_gwl, "knik_nap": new_knik, "stijghoogte_nap": new_stijg,
-                    "top_zand_nap": new_top_zand, "indringing": new_indringing,
-                }
-                st.success("Opgeslagen. Klik nogmaals op ‘Bereken’ bovenaan om door te rekenen.")
-        with col_b2:
-            if st.button("🔄 Reset naar globaal", key=f"reset_water_{selected}"):
-                st.session_state.sonderingen[selected]["waterdruk_lokaal"] = None
-                st.success("Reset.")
+    else:
+        st.caption("💧 Nog geen waterdruk opgeslagen voor deze sondering — de defaults zijn gebruikt. "
+                   "Vul de tabel **Waterdruk (u₀) — per sondering** bovenaan in.")
 
     # Data tabel
     with st.expander("📋 Genormaliseerde data", expanded=False):
