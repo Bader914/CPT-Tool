@@ -64,7 +64,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 37.6,
             "S_ratio": 0.44,
             "m_factor": 0.80,
-            "Nkt": 17.1,
+            "Nkt": 17.1, "VC_su": 0.25,
             "aantal_proeven": 46,
             "beschrijving": "Veenlaag. S-ratio en m-factor bepaald uit 46 proeven.",
         },
@@ -80,7 +80,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 35.7,
             "S_ratio": 0.41,
             "m_factor": 0.66,
-            "Nkt": 16.7,
+            "Nkt": 16.7, "VC_su": 0.25,
             "aantal_proeven": 22,
             "beschrijving": "Kleiig veen. S-ratio en m-factor bepaald uit 22 proeven.",
         },
@@ -96,7 +96,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": None,
             "S_ratio": None,
             "m_factor": None,
-            "Nkt": 20.0,
+            "Nkt": 20.0, "VC_su": 0.25,
             "beschrijving": "Basisveen. Nkt is default waarde uit schematiseringshandleiding.",
         },
         {
@@ -111,7 +111,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 45.4,
             "S_ratio": 0.33,
             "m_factor": 0.84,
-            "Nkt": 16.8,
+            "Nkt": 16.8, "VC_su": 0.25,
             "aantal_proeven": 23,
             "beschrijving": "Humeuze klei. S-ratio en m-factor bepaald uit 23 proeven.",
         },
@@ -127,7 +127,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 37.8,
             "S_ratio": 0.32,
             "m_factor": 1.00,
-            "Nkt": 18.2,
+            "Nkt": 18.2, "VC_su": 0.25,
             "aantal_proeven": 35,
             "beschrijving": "Siltige klei. S-ratio en m-factor bepaald uit 35 proeven.",
         },
@@ -143,7 +143,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 30.0,
             "S_ratio": 0.28,
             "m_factor": 0.80,
-            "Nkt": 20.0,
+            "Nkt": 20.0, "VC_su": 0.25,
             "beschrijving": "Zandige klei. Nkt is default waarde uit schematiseringshandleiding.",
         },
         {
@@ -158,7 +158,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 32.9,
             "S_ratio": 0.41,
             "m_factor": 0.88,
-            "Nkt": 14.5,
+            "Nkt": 14.5, "VC_su": 0.25,
             "aantal_proeven": 28,
             "beschrijving": "Kleiig dijksmateriaal boven de dagelijkse grondwaterstand. "
                            "S-ratio en m-factor bepaald uit 28 proeven.",
@@ -175,7 +175,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 33.4,
             "S_ratio": 0.35,
             "m_factor": 0.79,
-            "Nkt": 14.1,
+            "Nkt": 14.1, "VC_su": 0.25,
             "aantal_proeven": 40,
             "beschrijving": "Kleiig dijksmateriaal onder de dagelijkse grondwaterstand tot NAP -3m. "
                            "Dit is de primaire zone voor Su-bepaling. "
@@ -208,7 +208,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 30.0,
             "S_ratio": 0.38,
             "m_factor": 0.80,
-            "Nkt": 20.0,
+            "Nkt": 20.0, "VC_su": 0.25,
             "beschrijving": "Diepe kleilaag. Nkt is default waarde uit schematiseringshandleiding.",
         },
         {
@@ -248,6 +248,19 @@ DEFAULT_UITGANGSPUNTEN = {
         "bron": "Tabel 71 — NKT factoren traject 14-1",
         "toelichting": "Nkt-waarden zijn per grondlaag bepaald. Lagen met * zijn default waarden "
                       "uit de schematiseringshandleiding (onvoldoende proeven beschikbaar).",
+    },
+    # Karakteristieke waarde: Su_kar = Su_gem·(1 − t·VC). Dit zijn UITGANGSPUNTEN,
+    # geen rekenknoppen — daarom hier en niet pas bij de Su-berekening.
+    "karakteristiek": {
+        # 'materiaal' = VC per grondsoort uit de materialentabel (VC_su). Aanbevolen:
+        # de VC hoort een bewuste keuze te zijn over de onzekerheid in de grondsterkte.
+        # 'data' = VC uit de spreiding van de Su-punten. Dat meet vooral de punt-op-punt-
+        # ruis van de conus (meting per 2 cm) en geeft onrealistisch hoge VC (→ Su_kar = 0).
+        "vc_bron": "materiaal",
+        "t_factor": 1.645,   # 5%-ondergrens (eenzijdig 95%)
+        "toelichting": "Su_kar = Su_gem·(1 − t·VC). VC per materiaal is leidend; de VC uit de "
+                       "data wordt als controlegetal getoond (wijkt die sterk af, dan is de "
+                       "laagindeling waarschijnlijk te grof).",
     },
     "su_berekening": {
         "formule": "Su = q_net / Nkt",
@@ -821,7 +834,40 @@ def render():
     # ─── TAB 3: NKT-FACTOREN PER GRONDLAAG (TABEL 71) ───
     with tab4:
         st.caption("Su = q_net / Nkt  —  * = default waarde uit schematiseringshandleiding")
-        
+
+        # ── Karakteristieke waarde (uitgangspunt, niet pas bij de Su-berekening) ──
+        st.markdown("**Karakteristieke waarde — Su_kar = Su_gem · (1 − t · VC)**")
+        kar = up.setdefault("karakteristiek", dict(DEFAULT_UITGANGSPUNTEN["karakteristiek"]))
+        c_k1, c_k2 = st.columns([1.6, 1])
+        with c_k1:
+            _opties = ["VC per materiaal (aanbevolen)", "VC uit de data (spreiding Su-punten)"]
+            _idx = 0 if kar.get("vc_bron", "materiaal") == "materiaal" else 1
+            _keuze = st.radio(
+                "VC-bron", _opties, index=_idx, key="vc_bron_radio",
+                help="VC per materiaal: je voert de variatiecoëfficiënt per grondsoort in "
+                     "(kolom VC_su in de materialentabel). Dit is een bewuste keuze over de "
+                     "onzekerheid in de grondsterkte — de aanbevolen route.\n\n"
+                     "VC uit de data: berekend uit de spreiding van de Su-punten in een laag. "
+                     "Die spreiding is grotendeels punt-op-punt-ruis van de conus (meting per "
+                     "2 cm) en geeft vaak VC > 0,6, waardoor Su_kar op 0 uitkomt.",
+            )
+            kar["vc_bron"] = "materiaal" if _keuze.startswith("VC per materiaal") else "data"
+        with c_k2:
+            kar["t_factor"] = st.number_input(
+                "t-factor [-]", min_value=0.0, max_value=3.0,
+                value=float(kar.get("t_factor", 1.645)), step=0.005, format="%.3f",
+                help="1,645 = 5%-ondergrens (eenzijdig 95%). Projectkeuze, geen rekenknop.",
+            )
+        if kar["vc_bron"] == "materiaal":
+            st.caption("✅ VC komt uit de kolom **VC_su** in de materialentabel "
+                       "(tab 'Grondopbouw (invoer)' → Materiaaleigenschappen). "
+                       "De VC uit de data wordt bij de Su-berekening als **controlegetal** getoond.")
+        else:
+            st.warning("⚠️ VC uit de data geeft bij CPT-metingen vaak een onrealistisch hoge VC "
+                       "(punt-op-punt-ruis), waardoor Su_kar naar 0 kan zakken. Alleen gebruiken "
+                       "als je bewust de spreiding van de meting wilt meenemen.")
+        st.markdown("---")
+
         lagen = up.get("lagen", DEFAULT_UITGANGSPUNTEN["lagen"])
         
         # Nkt overzichtstabel

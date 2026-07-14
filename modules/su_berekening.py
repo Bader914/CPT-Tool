@@ -78,24 +78,42 @@ def bereken_su_shansep(sigma_v0_eff: pd.Series, sigma_vy: pd.Series,
     return S * sigma_v0_eff * (ocr ** m) * 1000.0
 
 
-def karakteristieke_waarde(su_punten: pd.Series, t_factor: float = 1.645) -> dict:
+def karakteristieke_waarde(su_punten: pd.Series, t_factor: float = 1.645,
+                           vc_materiaal: float | None = None) -> dict:
     """Karakteristieke (voorzichtige lage) waarde van Su per laag.
 
-        Su_kar = Su_gem · (1 − t · VC) ,  VC = std / gem
+        Su_kar = Su_gem · (1 − t · VC)
 
-    t_factor = 1,645 → 5%-ondergrens (eenzijdig 95%). Geeft gem, std, VC, n en de
-    karakteristieke waarde terug. Eerste-orde benadering (NEN-stijl); voor een
-    formele toets kan een Student-t per n en ruimtelijke middeling nodig zijn.
+    De VC is een UITGANGSPUNT, geen uitkomst van de meting:
+
+    - `vc_materiaal` (aanbevolen): de variatiecoëfficiënt die je per grondsoort
+      invoert (VC_su in de materialentabel). Dit drukt de onzekerheid in de
+      GRONDSTERKTE uit — de bewuste keuze die de schematiseringshandleiding vraagt.
+    - VC uit de data (std/gem van de Su-punten): dit meet vooral de punt-op-punt-
+      ruis van de conus (meting per 2 cm), niet de onzekerheid over de laagsterkte.
+      Die VC wordt daarom als CONTROLEGETAL teruggegeven ('VC_data'), niet gebruikt
+      tenzij `vc_materiaal` None is.
+
+    Retour: n, gem, std, VC_data, VC (gebruikt), VC_bron, kar.
+    t_factor = 1,645 → 5%-ondergrens (eenzijdig 95%).
     """
     s = su_punten.dropna()
     n = int(s.size)
     if n == 0:
-        return {"n": 0, "gem": np.nan, "std": np.nan, "VC": np.nan, "kar": np.nan}
+        return {"n": 0, "gem": np.nan, "std": np.nan, "VC_data": np.nan,
+                "VC": np.nan, "VC_bron": "—", "kar": np.nan}
     gem = float(s.mean())
     std = float(s.std(ddof=1)) if n > 1 else 0.0
-    vc = std / gem if gem else 0.0
+    vc_data = std / gem if gem else 0.0
+
+    if vc_materiaal is not None:
+        vc, bron = float(vc_materiaal), "materiaal"
+    else:
+        vc, bron = vc_data, "data"
+
     kar = gem * (1 - t_factor * vc)
-    return {"n": n, "gem": gem, "std": std, "VC": vc, "kar": max(kar, 0.0)}
+    return {"n": n, "gem": gem, "std": std, "VC_data": vc_data,
+            "VC": vc, "VC_bron": bron, "kar": max(kar, 0.0)}
 
 
 def render():
@@ -152,10 +170,15 @@ def render():
                  "'SHANSEP-voorwaarts'; in de hoofdroute volgt σ'vy uit Su.",
         )
     with col_m3:
-        t_factor = st.number_input(
-            "t-factor karakteristiek [-]", min_value=0.0, max_value=3.0, value=1.645, step=0.005,
-            help="Su_kar = Su_gem·(1 − t·VC). 1,645 = 5%-ondergrens.",
-        )
+        # Karakteristieke waarde is een UITGANGSPUNT (Stap 0 → tab 'Nkt-factoren'),
+        # geen rekenknop hier. We tonen alleen wat daar is ingesteld.
+        kar_cfg = st.session_state.get("uitgangspunten", {}).get("karakteristiek", {})
+        t_factor = float(kar_cfg.get("t_factor", 1.645))
+        vc_bron = kar_cfg.get("vc_bron", "materiaal")
+        _bron_txt = "VC per materiaal" if vc_bron == "materiaal" else "VC uit de data"
+        st.markdown("**Karakteristieke waarde**")
+        st.caption(f"t = {t_factor:.3f} · {_bron_txt}\n\nIn te stellen bij "
+                   f"**Stap 0 — Uitgangspunten → 🔢 Nkt-factoren**.")
     is_shansep = su_methode.startswith("SHANSEP")
 
     st.markdown("---")
@@ -225,23 +248,44 @@ def render():
             st.session_state.sonderingen[name]["su_methode"] = methode_note
             st.session_state.sonderingen[name]["t_factor"] = t_factor
 
-            kw = karakteristieke_waarde(df["Su"], t_factor)
+            # Karakteristieke waarde PER LAAG (elke laag heeft zijn eigen VC_su),
+            # daarna gewogen naar de sondering. Eén VC over alle lagen zou de
+            # materiaal-VC's door elkaar husselen.
+            vc_map = {l["naam"]: l.get("VC_su") for l in lagen_eff} if vc_bron == "materiaal" else {}
+            per_laag = []
+            for _laag, _sub in df.dropna(subset=["Su"]).groupby("grondlaag"):
+                per_laag.append(karakteristieke_waarde(
+                    _sub["Su"], t_factor, vc_materiaal=vc_map.get(_laag)))
+            n_tot = sum(k["n"] for k in per_laag)
+            if n_tot:
+                su_gem = sum(k["gem"] * k["n"] for k in per_laag) / n_tot
+                su_kar = sum(k["kar"] * k["n"] for k in per_laag) / n_tot
+                vc_geb = sum(k["VC"] * k["n"] for k in per_laag) / n_tot
+                vc_dat = sum(k["VC_data"] * k["n"] for k in per_laag) / n_tot
+            else:
+                su_gem = su_kar = vc_geb = vc_dat = np.nan
+
             ocr_gem = df["OCR"].replace([np.inf, -np.inf], np.nan).mean() if "OCR" in df else np.nan
             svy_gem = df["sigma_vy"].replace([np.inf, -np.inf], np.nan).mean() if "sigma_vy" in df else np.nan
             resultaten.append({
                 "Sondering": name, "Status": "✅", "Methode": methode_note,
-                "Meetpunten": kw["n"],
-                "Su gem [kPa]": f"{kw['gem']:.1f}" if kw["n"] else "—",
-                "VC [-]": f"{kw['VC']:.2f}" if kw["n"] else "—",
-                "Su kar [kPa]": f"{kw['kar']:.1f}" if kw["n"] else "—",
+                "Meetpunten": n_tot,
+                "Su gem [kPa]": f"{su_gem:.1f}" if n_tot else "—",
+                "VC gebruikt [-]": f"{vc_geb:.2f}" if n_tot else "—",
+                "VC data (controle) [-]": f"{vc_dat:.2f}" if n_tot else "—",
+                "Su kar [kPa]": f"{su_kar:.1f}" if n_tot else "—",
                 "OCR gem [-]": f"{ocr_gem:.2f}" if pd.notna(ocr_gem) else "—",
                 "σ'vy gem [kPa]": f"{svy_gem * 1000:.1f}" if pd.notna(svy_gem) else "—",
             })
-            # Te grote spreiding → de karakteristieke waarde wordt 0 (of bijna 0) en is
-            # dan betekenisloos. Meestal: één (te) dikke laag; verdeel hem verder.
-            if kw["n"] and (kw["VC"] > 0.5 or kw["kar"] <= 0.0):
+            st.session_state.sonderingen[name]["vc_bron"] = vc_bron
+
+            # Controle: wijkt de data-VC ver af van de gebruikte VC, dan is de
+            # laagindeling waarschijnlijk te grof (één laag over te veel variatie).
+            if n_tot and (su_kar <= 0.0 or (vc_bron == "materiaal" and vc_dat > 2 * max(vc_geb, 0.01))
+                          or (vc_bron == "data" and vc_geb > 0.5)):
                 spreiding_waarschuwing.append(
-                    f"**{name}** — VC = {kw['VC']:.2f}, Su kar = {kw['kar']:.1f} kPa")
+                    f"**{name}** — VC gebruikt {vc_geb:.2f}, VC uit data {vc_dat:.2f}, "
+                    f"Su kar {su_kar:.1f} kPa")
             progress.progress((i + 1) / total)
 
         st.success(f"Su berekend voor {total} sondering(en)")
@@ -249,12 +293,14 @@ def render():
 
         if spreiding_waarschuwing:
             st.warning(
-                "⚠️ **Te grote spreiding — de karakteristieke waarde is niet bruikbaar.**\n\n"
+                "⚠️ **Grote spreiding in de Su-punten — controleer de laagindeling.**\n\n"
                 + "\n".join(f"- {w}" for w in spreiding_waarschuwing)
-                + "\n\nSu_kar = Su_gem·(1 − t·VC) wordt 0 zodra VC ≳ 0,61. Dit gebeurt bijna altijd "
-                  "als één laag te dik is (bijv. één kleilaag over de hele sondering). "
-                  "**Verdeel de laag verder** in Stap 2 — Classificatie (verlaag de min. laagdikte of "
-                  "voeg laaggrenzen toe) en bereken Su opnieuw."
+                + "\n\nDe **VC uit de data** ligt fors boven de **VC die je gebruikt**. Dat betekent "
+                  "meestal dat één laag te dik is (bijv. één kleilaag over de hele sondering) en "
+                  "daardoor te veel variatie omvat. **Verdeel de laag verder** in Stap 2 — "
+                  "Classificatie (verlaag de min. laagdikte of voeg laaggrenzen toe).\n\n"
+                  "*Let op: de karakteristieke waarde zelf is hierdoor niet fout — die volgt de "
+                  "VC uit je materialentabel. De data-VC is een **controlegetal**.*"
             )
 
     # Resultaten
@@ -282,39 +328,46 @@ def _render_per_sondering(su_berekend: dict):
     df = data["df"]
     cm = data["col_mapping"]
 
-    t_factor = data.get("t_factor", 1.645)
+    up = st.session_state.get("uitgangspunten", {})
+    kar_cfg = up.get("karakteristiek", {})
+    t_factor = float(kar_cfg.get("t_factor", data.get("t_factor", 1.645)))
+    vc_bron = kar_cfg.get("vc_bron", "materiaal")
+
     su_data = df["Su"].dropna()
     if not su_data.empty:
-        kw = karakteristieke_waarde(df["Su"], t_factor)
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Gemiddeld", f"{kw['gem']:.1f} kPa")
-        c2.metric("VC", f"{kw['VC']:.2f}")
-        c3.metric("Karakteristiek", f"{kw['kar']:.1f} kPa")
-        c4.metric("Methode", data.get("su_methode", "Nkt"))
-
-        # VC per materiaal (uit de materialentabel), zoals Deltares de ingevoerde VC gebruikt
-        up = st.session_state.get("uitgangspunten", {})
         lagen_eff = data.get("lagen_lokaal") or up.get("lagen", [])
         vc_mat_map = {l["naam"]: l.get("VC_su") for l in lagen_eff if l.get("VC_su") is not None}
 
-        # Karakteristieke waarde per grondlaag
-        rijen = []
+        # Karakteristieke waarde per grondlaag — elke laag met zijn eigen VC.
+        rijen, kars, gems, ns = [], [], [], []
         for laag, sub in df.dropna(subset=["Su"]).groupby("grondlaag"):
-            kwl = karakteristieke_waarde(sub["Su"], t_factor)
-            vc_mat = vc_mat_map.get(laag)
-            kar_mat = round(kwl["gem"] * (1 - t_factor * vc_mat), 1) if vc_mat is not None else "—"
+            vc_mat = vc_mat_map.get(laag) if vc_bron == "materiaal" else None
+            kwl = karakteristieke_waarde(sub["Su"], t_factor, vc_materiaal=vc_mat)
             rijen.append({
                 "Grondlaag": laag, "n": kwl["n"],
                 "Su gem [kPa]": round(kwl["gem"], 1),
-                "VC data [-]": round(kwl["VC"], 2),
-                "Su kar (data-VC) [kPa]": round(kwl["kar"], 1),
-                "VC materiaal [-]": round(vc_mat, 2) if vc_mat is not None else "—",
-                "Su kar (mat-VC) [kPa]": kar_mat,
+                "VC gebruikt [-]": round(kwl["VC"], 2),
+                "bron VC": "materiaal" if kwl["VC_bron"] == "materiaal" else "data",
+                "VC data (controle) [-]": round(kwl["VC_data"], 2),
+                "Su kar [kPa]": round(kwl["kar"], 1),
             })
+            kars.append(kwl["kar"] * kwl["n"]); gems.append(kwl["gem"] * kwl["n"]); ns.append(kwl["n"])
+
+        n_tot = sum(ns)
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Su gemiddeld", f"{sum(gems)/n_tot:.1f} kPa" if n_tot else "—")
+        c2.metric("VC-bron", "materiaal" if vc_bron == "materiaal" else "data")
+        c3.metric("Su karakteristiek", f"{sum(kars)/n_tot:.1f} kPa" if n_tot else "—")
+        c4.metric("Methode", data.get("su_methode", "Nkt"))
+
         if rijen:
-            st.markdown(f"**Karakteristieke waarde per grondlaag** "
-                        f"(Su_kar = Su_gem·(1 − {t_factor:.3f}·VC); data-VC uit de spreiding, "
-                        f"materiaal-VC uit de materialentabel):")
+            _uitleg = ("VC per **materiaal** (uit de materialentabel) is leidend; de VC uit de data "
+                       "staat ernaast als **controlegetal**."
+                       if vc_bron == "materiaal" else
+                       "VC uit de **data** (spreiding van de Su-punten) wordt gebruikt.")
+            st.markdown(f"**Karakteristieke waarde per grondlaag** — "
+                        f"Su_kar = Su_gem·(1 − {t_factor:.3f}·VC). {_uitleg} "
+                        f"Instelbaar bij *Stap 0 → 🔢 Nkt-factoren*.")
             st.dataframe(pd.DataFrame(rijen), use_container_width=True, hide_index=True)
 
     toon_lagen = st.checkbox("Toon SHZ-laagverdeling op achtergrond", value=True,
