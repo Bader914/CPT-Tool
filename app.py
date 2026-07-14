@@ -157,19 +157,48 @@ if not st.session_state.authenticated:
 from modules import uitgangspunten, data_inladen, normalisatie, classificatie, su_berekening, validatie, visualisatie
 
 STEPS = [
-    {"module": uitgangspunten, "icon": "⚙️", "label": "Parameters", "full": "Uitgangspunten"},
-    {"module": data_inladen, "icon": "📁", "label": "Upload", "full": "Data Inladen"},
-    {"module": classificatie, "icon": "🧱", "label": "Classificatie", "full": "Classificatie"},
-    {"module": normalisatie, "icon": "📐", "label": "Normalisatie", "full": "Normalisatie"},
-    {"module": su_berekening, "icon": "📊", "label": "Su", "full": "Su Berekening"},
-    # Voorlopig geblokkeerd: de tool stopt na de Su-berekening. Validatie met
-    # triaxiaalproeven en de rapportage worden later vrijgegeven.
+    {"module": uitgangspunten, "icon": "⚙️", "label": "Parameters", "full": "Uitgangspunten",
+     "titel": "Projectparameters",
+     "wat": "We leggen eenmalig de vaste projectgegevens vast: de grondsoorten met hun "
+            "sterkte-eigenschappen (Tabel 91), het conustype en de rekenmethode.",
+     "waarom": "Dit zijn de gegevens die voor het hele project gelden. Alles wat pér sondering "
+               "verschilt (grondlagen, waterstand) doe je later, bij de sondering zelf."},
+    {"module": data_inladen, "icon": "📁", "label": "Upload", "full": "Data Inladen",
+     "titel": "Sonderingen inladen",
+     "wat": "Upload je GEF-bestanden. De tool leest automatisch de meetwaarden, het maaiveld, "
+            "de a-factor en de voorboordiepte uit de bestanden.",
+     "waarom": "Zo begint elke sondering met de juiste gegevens uit het bestand zelf — je hoeft "
+               "niets over te typen. Hier open of bewaar je ook een eerdere analyse."},
+    {"module": classificatie, "icon": "🧱", "label": "Grondlagen", "full": "Classificatie",
+     "titel": "Grondlagen per sondering",
+     "wat": "Per sondering bepalen we de grondopbouw. De tool stelt de lagen automatisch voor "
+            "(op basis van de sondering); jij past ze aan waar nodig.",
+     "waarom": "De laagindeling bepaalt welke grond waar zit — en dus welke sterkte en gewichten "
+               "straks worden gebruikt."},
+    {"module": normalisatie, "icon": "📐", "label": "Waterdruk", "full": "Normalisatie",
+     "titel": "Waterdruk & spanningen",
+     "wat": "Per sondering stel je de grondwaterstand en het waterdrukverloop in. De tool "
+            "berekent daarmee de spanningen in de grond (σv0, σ′v0).",
+     "waarom": "De korrelspanning σ′v0 is nodig voor de sterkte. Controleer met de grafiek: de "
+               "berekende u₀ hoort in de buurt van de gemeten u₂ te liggen."},
+    {"module": su_berekening, "icon": "📊", "label": "Sterkte Su", "full": "Su Berekening",
+     "titel": "Ongedraineerde sterkte Su",
+     "wat": "We berekenen de sterkte Su uit de sondering (Su = qnet / Nkt) en daaruit de "
+            "grensspanning, plus een voorzichtige (karakteristieke) waarde.",
+     "waarom": "Su is het eindresultaat: hoe sterk de grond is, wat je nodig hebt voor de "
+               "dijkbeoordeling."},
+    # Voorlopig geblokkeerd: de tool stopt na de Su-berekening.
     {"module": validatie, "icon": "✅", "label": "Validatie", "full": "Validatie",
+     "titel": "Validatie", "wat": "", "waarom": "",
      "locked": "Validatie met triaxiaalproeven (Nkt-kalibratie) volgt later."},
     {"module": visualisatie, "icon": "📈", "label": "Rapportage", "full": "Rapportage",
+     "titel": "Rapportage", "wat": "", "waarom": "",
      "locked": "Rapportage — incl. het combineren van meerdere sonderingen en de "
                "vergelijking met de Deltares-tool — volgt later."},
 ]
+
+# Aantal actieve (niet-geblokkeerde) stappen — voor de 'Stap X van Y'-teller.
+ACTIEVE_STAPPEN = [i for i, s in enumerate(STEPS) if not s.get("locked")]
 
 # Index van de laatste vrijgegeven stap (Su Berekening) — afgeleid, niet hardcoded.
 SU_STEP = next(i for i, s in enumerate(STEPS) if s["module"] is su_berekening)
@@ -206,6 +235,22 @@ for i, s in enumerate(STEPS):
 
 active = st.session_state.current_step
 
+
+# Navigatie loopt via ÉÉN bron van waarheid: current_step. De radio gebruikt
+# integer-opties (stabiel, los van de labeltekst) en een callback; knoppen elders
+# (Volgende / terug) zetten current_step via _ga_naar(). Zo overschrijft de radio
+# de knoppen niet meer.
+def _ga_naar(step_index):
+    # Zet zowel de bron van waarheid als de radio-waarde (moet in een callback,
+    # anders klaagt Streamlit dat de widget al is aangemaakt).
+    st.session_state.current_step = step_index
+    st.session_state.step_radio = step_index
+
+
+def _on_nav_change():
+    st.session_state.current_step = st.session_state.step_radio
+
+
 # === SINGLE NAV ROW: brand + radio + stats ===
 nav_left, nav_mid, nav_right = st.columns([1.5, 8, 1.5])
 with nav_left:
@@ -216,16 +261,12 @@ with nav_left:
     </div>
     """, unsafe_allow_html=True)
 with nav_mid:
-    selection = st.radio(
-        "nav", radio_labels, index=active,
+    st.radio(
+        "nav", options=list(range(len(STEPS))), index=active,
+        format_func=lambda i: radio_labels[i],
         horizontal=True, label_visibility="collapsed",
-        key="step_radio"
+        key="step_radio", on_change=_on_nav_change,
     )
-    # Sync back
-    new_step = radio_labels.index(selection)
-    if new_step != active:
-        st.session_state.current_step = new_step
-        st.rerun()
 with nav_right:
     st.markdown(f"""
     <div style="display:flex; gap:16px; justify-content:flex-end; padding:6px 0;">
@@ -243,6 +284,7 @@ with nav_right:
 # === MAIN CONTENT ===
 active = st.session_state.current_step
 _stap = STEPS[active]
+
 if _stap.get("locked"):
     # Geblokkeerde stap: de module wordt bewust NIET uitgevoerd.
     st.markdown(f"""
@@ -252,8 +294,30 @@ if _stap.get("locked"):
         {_stap['locked']}</p>
     </div>
     """, unsafe_allow_html=True)
-    if st.button("⬅️ Terug naar Su Berekening", type="primary"):
-        st.session_state.current_step = SU_STEP
-        st.rerun()
+    st.button("⬅️ Terug naar Su Berekening", type="primary",
+              on_click=_ga_naar, args=(SU_STEP,))
 else:
+    # ── Wizard-kader: 'wat doen we nu + waarom' met voortgang ──
+    _pos = ACTIEVE_STAPPEN.index(active) + 1
+    _tot = len(ACTIEVE_STAPPEN)
+    st.markdown(f"""
+    <div class="why-card">
+        <h4>{_stap['icon']} Stap {_pos} van {_tot} · {_stap.get('titel', _stap['full'])}</h4>
+        <p><b>Wat doen we hier?</b> {_stap.get('wat', '')}</p>
+        <p style="opacity:.85;"><b>Waarom?</b> {_stap.get('waarom', '')}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
     _stap["module"].render()
+
+    # ── Volgende-stap knop (behalve op de laatste actieve stap) ──
+    _idx = ACTIEVE_STAPPEN.index(active)
+    if _idx + 1 < len(ACTIEVE_STAPPEN):
+        _volgende = ACTIEVE_STAPPEN[_idx + 1]
+        _v = STEPS[_volgende]
+        st.markdown("<hr>", unsafe_allow_html=True)
+        _c1, _c2 = st.columns([3, 1])
+        with _c2:
+            st.button(f"Volgende: {_v.get('titel', _v['full'])}  ➜",
+                      type="primary", use_container_width=True, key="wizard_next",
+                      on_click=_ga_naar, args=(_volgende,))
