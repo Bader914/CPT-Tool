@@ -225,21 +225,23 @@ def bereken_sigma_v0_uit_gamma(
     mv_nap: float,
     gwl_nap: float,
     funderingslaag: dict | None = None,
-    boven_gws_reductie: float = 2.0,
+    boven_gws_reductie: float = 0.0,
 ) -> pd.Series:
     """Verticale totaalspanning σv0 [kPa] door integratie van een γ-profiel per punt.
 
-    Gebruikt het uit qc/Rf afgeleide γ_sat per meetpunt (zie bereken_gamma_sat):
-        - ONDER de GWS: γ_sat (verzadigd)
-        - BOVEN de GWS: γ_moist ≈ γ_sat − boven_gws_reductie (vochtig, niet verzadigd)
-          conform de standaard: moist boven, saturated onder het grondwater.
+    Gebruikt het uit qc/Rf afgeleide γ per meetpunt (zie bereken_gamma_sat).
+
+    `boven_gws_reductie` verlaagt γ bóven de GWS (vochtig i.p.v. verzadigd). In de
+    praktijk wordt die reductie voor waterkeringen doorgaans NIET toegepast, daarom
+    staat hij standaard op 0 en is hij niet meer in te stellen in de tool. De
+    parameter blijft bestaan zodat de formule volledig is, maar hij is niet actief.
 
     Integratie van maaiveld naar beneden; optioneel een funderingslaag bovenop
     (eigen γ). γ in kN/m³, dz in m → σ in kPa.
     """
     z = diepte_nap.values.astype(float)
     g = pd.to_numeric(gamma_sat, errors="coerce").fillna(17.0).values.astype(float)
-    # Boven GWS: vochtig volumegewicht (verzadigd minus reductie, niet negatief).
+    # Boven GWS: eventueel vochtig volumegewicht. Default 0 → geen reductie.
     g_eff = np.where(z > gwl_nap, np.maximum(g - boven_gws_reductie, 0.0), g)
 
     sort_idx = np.argsort(-z)
@@ -418,22 +420,17 @@ def render():
 
     # γ-bron voor σv0: handmatige SHZ-laag-γ (default) of qc-correlatie.
     st.markdown("**Volumegewicht (γ) voor σ-spanningen**")
-    col_g1, col_g2 = st.columns([1.4, 1])
-    with col_g1:
-        gamma_bron = st.radio(
-            "γ-bron",
-            ["SHZ-laag (Tabel 91)", "qc-correlatie (Lengkeek 2018)",
-             "qc-correlatie (Robertson 2010)", "qc-correlatie (NEN simpel)"],
-            index=0, horizontal=False, key="gamma_bron",
-            help="SHZ: γ per grondlaag uit de uitgangspunten. qc-correlatie: γ_sat "
-                 "per meetpunt afgeleid uit qt en Rf.",
-        )
-    with col_g2:
-        gws_reductie = st.number_input(
-            "γ-reductie boven GWS [kN/m³]", min_value=0.0, max_value=5.0, value=2.0, step=0.5,
-            help="Boven de grondwaterstand is grond niet verzadigd: γ_moist ≈ γ_sat − reductie. "
-                 "Alleen voor de qc-correlatie.",
-        )
+    gamma_bron = st.radio(
+        "γ-bron",
+        ["SHZ-laag (Tabel 91)", "qc-correlatie (Lengkeek 2018)",
+         "qc-correlatie (Robertson 2010)", "qc-correlatie (NEN simpel)"],
+        index=0, horizontal=False, key="gamma_bron",
+        help="SHZ: γ per grondlaag uit de materialentabel. qc-correlatie: γ "
+             "per meetpunt afgeleid uit qt en Rf.",
+    )
+    # γ-reductie boven de GWS wordt voor waterkeringen doorgaans niet toegepast.
+    # Daarom geen invoerveld meer: vast op 0 (geen reductie).
+    gws_reductie = 0.0
     _bron_map = {"qc-correlatie (Lengkeek 2018)": "lengkeek",
                  "qc-correlatie (Robertson 2010)": "robertson",
                  "qc-correlatie (NEN simpel)": "simple"}
