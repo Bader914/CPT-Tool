@@ -48,7 +48,7 @@ def render():
         st.markdown("""
         <div class="why-card">
             <h4>⚠️ Su nog niet berekend</h4>
-            <p>Ga eerst naar <b>Stap 5 — Su Berekening</b>.</p>
+            <p>Ga eerst naar <b>Stap 5 — Sterkte Su</b>.</p>
         </div>
         """, unsafe_allow_html=True)
         return

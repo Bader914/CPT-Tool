@@ -281,7 +281,6 @@ def bereken_sigma_v0_uit_gamma(
 # Render
 # ───────────────────────────────────────────────────────────────
 def render():
-    st.caption("Stap 4 — qt-correctie, u₀-verloop met knikpunt, σ-spanningen")
 
     sonderingen = st.session_state.get("sonderingen", {})
     up = st.session_state.get("uitgangspunten", {})
@@ -295,13 +294,13 @@ def render():
         st.markdown("""
         <div class="why-card">
             <h4>⚠️ Classificatie nog niet uitgevoerd</h4>
-            <p>Ga eerst naar <b>Stap 3 — Classificatie</b> en stel de laaggrenzen per sondering in.</p>
+            <p>Ga eerst naar <b>Stap 3 — Grondlagen</b> en stel de laaggrenzen per sondering in.</p>
         </div>
         """, unsafe_allow_html=True)
         return
 
     if not lagen:
-        st.error("❌ Geen grondlagen gevonden. Ga eerst naar Stap 0 — Uitgangspunten.")
+        st.error("❌ Geen grondlagen gevonden. Ga eerst naar Stap 1 — Parameters.")
         return
 
     # Status
@@ -340,12 +339,12 @@ def render():
     _ontbreekt = [r["Sondering"] for r in _a_rijen if r["a-factor"].startswith("⚠️")]
     with st.expander("📐 Nettoquotiënt conus (a-factor) — per sondering", expanded=bool(_ontbreekt)):
         st.caption("De a-factor komt uit de GEF-header (MEASUREMENTVAR 3) of is bij "
-                   "**Stap 1 — Upload** ingevuld. Hier niet meer aanpasbaar, om verwarring te "
+                   "**Stap 2 — Upload** ingevuld. Hier niet meer aanpasbaar, om verwarring te "
                    "voorkomen. Gebruikt voor: qt = qc + (1 − a)·u₂.")
         st.dataframe(pd.DataFrame(_a_rijen), use_container_width=True, hide_index=True)
         if _ontbreekt:
             st.warning("⚠️ Geen a-factor voor: **" + "**, **".join(_ontbreekt) + "**. "
-                       "Vul hem in bij *Stap 1 — Upload → 📏 Referentieniveau & conus*. "
+                       "Vul hem in bij *Stap 2 — Upload → 📏 Referentieniveau & conus*. "
                        "Zonder a-factor rekent de tool met de standaard **0,80**.")
 
     # ── Waterdruk PER SONDERING (geen globale waarde) ──

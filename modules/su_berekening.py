@@ -117,7 +117,6 @@ def karakteristieke_waarde(su_punten: pd.Series, t_factor: float = 1.645,
 
 
 def render():
-    st.caption("Stap 5 — Su = q_net / Nkt per grondlaag")
 
     genormaliseerd = {k: v for k, v in st.session_state.get("sonderingen", {}).items()
                        if v.get("genormaliseerd")}
@@ -126,7 +125,7 @@ def render():
         st.markdown("""
         <div class="why-card">
             <h4>⚠️ Normalisatie nog niet uitgevoerd</h4>
-            <p>Ga eerst naar <b>Stap 4 — Normalisatie</b>.</p>
+            <p>Ga eerst naar <b>Stap 4 — Waterdruk</b>.</p>
         </div>
         """, unsafe_allow_html=True)
         return
@@ -135,7 +134,7 @@ def render():
     lagen = up.get("lagen", [])
 
     if not lagen:
-        st.error("❌ Geen grondlagen. Ga naar Stap 0 — Uitgangspunten.")
+        st.error("❌ Geen grondlagen. Ga naar Stap 1 — Parameters.")
         return
 
     # Nkt per SHZ-grondlaag (direct uit uitgangspunten)
@@ -149,7 +148,7 @@ def render():
                            if l.get("is_dijkmateriaal") and l.get("Nkt") is None]
     if missing_dijkmat_nkt:
         st.warning(f"⚠️ Nkt ontbreekt voor dijkmateriaal-lagen: {', '.join(missing_dijkmat_nkt)}. "
-                    "Vul aan in Stap 0.")
+                    "Vul aan in Stap 1 — Parameters.")
 
     # Su-methode + parameters
     st.markdown("**Methode & karakteristieke waarde**")
@@ -166,14 +165,14 @@ def render():
     is_shansep = su_methode.startswith("SHANSEP")
 
     with col_m2:
-        # Karakteristieke waarde is een UITGANGSPUNT (Stap 0), geen rekenknop hier.
+        # Karakteristieke waarde is een UITGANGSPUNT (Stap 1 — Parameters), geen rekenknop hier.
         kar_cfg = st.session_state.get("uitgangspunten", {}).get("karakteristiek", {})
         t_factor = float(kar_cfg.get("t_factor", 1.645))
         vc_bron = kar_cfg.get("vc_bron", "materiaal")
         _bron_txt = "VC per materiaal" if vc_bron == "materiaal" else "VC uit de data"
         st.markdown("**Karakteristieke waarde**")
         st.caption(f"t = {t_factor:.3f} · {_bron_txt} — in te stellen bij "
-                   f"**Stap 0 → 🔢 Nkt-factoren**.")
+                   f"**Stap 1 → Karakteristieke waarde**.")
 
     # ── Openstaand punt: de aanpak van k en t is nog niet afgestemd. ──
     # Een vaste t = 1,645 is de 95%-fractiel van de NORMALE verdeling (σ bekend).
@@ -392,7 +391,7 @@ def _render_per_sondering(su_berekend: dict):
                        "VC uit de **data** (spreiding van de Su-punten) wordt gebruikt.")
             st.markdown(f"**Karakteristieke waarde per grondlaag** — "
                         f"Su_kar = Su_gem·(1 − {t_factor:.3f}·VC). {_uitleg} "
-                        f"Instelbaar bij *Stap 0 → 🔢 Nkt-factoren*.")
+                        f"Instelbaar bij *Stap 1 → Karakteristieke waarde*.")
             st.dataframe(pd.DataFrame(rijen), use_container_width=True, hide_index=True)
 
     toon_lagen = st.checkbox("Toon SHZ-laagverdeling op achtergrond", value=True,

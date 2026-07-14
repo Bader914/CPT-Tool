@@ -361,8 +361,6 @@ def _classificeer_sondering(name, data, up, bibliotheek, lagen, default_rows,
 # UI
 # ───────────────────────────────────────────────────────────────
 def render():
-    st.caption("Stap 3 — Laagindeling per sondering: automatisch voorgesteld uit de sondering "
-               "(Robertson); daarna vrij aan te passen.")
 
     up = st.session_state.get("uitgangspunten", {})
     lagen = up.get("lagen", [])
@@ -372,13 +370,13 @@ def render():
         st.markdown("""
         <div class="why-card">
             <h4>⚠️ Geen sonderingen geladen</h4>
-            <p>Ga eerst naar <b>Stap 1 — Data Inladen</b> om sonderingen te uploaden.</p>
+            <p>Ga eerst naar <b>Stap 2 — Upload</b> om sonderingen te uploaden.</p>
         </div>
         """, unsafe_allow_html=True)
         return
 
     if not lagen:
-        st.error("❌ **Geen grondlagen gevonden.** Ga eerst naar Stap 0 — Uitgangspunten.")
+        st.error("❌ **Geen grondlagen gevonden.** Ga eerst naar Stap 1 — Parameters.")
         return
 
     # Filter sonderingen die bruikbaar zijn (diepte + qc kolommen)
@@ -474,7 +472,7 @@ def render():
     with col_edit:
         st.markdown("**Grondopbouw (bovenkant per laag, m NAP):**")
         st.caption(f"Maaiveld: NAP {mv_nap:+.2f}m · Sondeerbereik: NAP {z_top:+.2f} → "
-                   f"{basis_nap:+.2f}m · Default uit de Grondopbouw-tab; pas hier per sondering aan.")
+                   f"{basis_nap:+.2f}m · Pas de lagen hieronder aan.")
 
         # Robertson-suggestie als startpunt
         col_sug1, col_sug2 = st.columns([1, 1])
@@ -682,6 +680,6 @@ def render():
     <div class="next-step">
         <span class="arrow">➡</span>
         <p>Wanneer alle sonderingen een goede laagindeling hebben, ga naar
-        <b>Stap 4 — Normalisatie</b> voor qt-correctie en σ-spanningen.</p>
+        <b>Stap 4 — Waterdruk</b> voor qt-correctie en σ-spanningen.</p>
     </div>
     """, unsafe_allow_html=True)

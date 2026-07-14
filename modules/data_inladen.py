@@ -443,7 +443,6 @@ def _render_project_io():
 
 
 def render():
-    st.caption("Stap 1 — Upload GEF/CSV/Excel, automatische kolomherkenning")
     
     # --- Initialiseer session state ---
     if "sonderingen" not in st.session_state:
@@ -547,7 +546,7 @@ def render():
                         f"**{voorboring_gef:.2f} m onder maaiveld**{_tot}.\n\n"
                         "• Metingen in die zone zijn onbetrouwbaar → daar wordt **geen Su** berekend.\n"
                         "• Het **gewicht** van die grond telt wél mee in σv0.\n"
-                        "• Wordt verwerkt bij **Stap 3 — Normalisatie**; overgenomen uit de GEF en "
+                        "• Wordt verwerkt bij **Stap 4 — Waterdruk**; overgenomen uit de GEF en "
                         "daarom niet aanpasbaar."
                     )
 
@@ -601,7 +600,7 @@ def render():
         elif ready == total:
             st.success(
                 f"✅ **Alle {total} sonderingen gereed** voor de volgende stap! "
-                f"Ga naar **Stap 2 — Normalisatie** in het zijmenu."
+                f"Ga naar **Stap 4 — Waterdruk** in het zijmenu."
             )
         
         # Overzichtstabel
@@ -805,7 +804,7 @@ def render():
                             f"**{voorboring_diepte:.2f} m onder maaiveld**. {_grens_txt}"
                         )
                         st.caption("Daar wordt geen Su berekend (het gewicht telt wél mee in σv0). "
-                                   "Dit wordt verwerkt bij Stap 3 — Normalisatie. "
+                                   "Dit wordt verwerkt bij Stap 4 — Waterdruk. "
                                    "Overgenomen uit de GEF, daarom niet aanpasbaar.")
                         st.number_input(
                             "Voorboring tot [m onder maaiveld]",

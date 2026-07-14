@@ -25,7 +25,7 @@ DEFAULT_UITGANGSPUNTEN = {
         "funderingslaag_materiaal": "Puin en zand",
         # GWS staat hier BEWUST niet meer. Er is één waarde nodig (geen bandbreedte:
         # min/max wordt voor sonderingen niet gebruikt), en die stel je pas vast
-        # nadat de sondering is ingelezen → Stap 3 — Normalisatie.
+        # nadat de sondering is ingelezen → Stap 4 — Waterdruk.
         "gwl": 0.0,                  # alleen startwaarde voor Stap 3; niet hier instelbaar
         "dijkmateriaal_droog_top": None,  # Wordt berekend: kruin - funderingslaag
         "dijkmateriaal_droog_onder": 0.0,  # NAP 0m (= GWS)
@@ -401,63 +401,66 @@ def maak_dijkprofiel_figuur(lagen: list) -> go.Figure:
 
 
 def _render_materialen(up: dict):
-    """Materiaaleigenschappen (Tabel 91) — projectparameters, los van elke sondering."""
+    """Materiaaleigenschappen (Tabel 91) — projectparameters, los van elke sondering.
+
+    Geen eigen expander meer: render() plaatst dit al in een opvouwbare sectie.
+    (Een expander in een expander gaf een dubbele, lege sectiekop.)
+    """
     lagen_biblio = get_lagen_bibliotheek(up)
-    # === Materiaaleigenschappen (bewerkbaar, à la Deltares CPT-tool) ===
-    with st.expander("🧪 Materiaaleigenschappen (γ, S, m, Nkt, VC) — bewerken/toevoegen",
-                     expanded=False):
-        st.caption("Bewerk de materialen of voeg er toe. Deze lijst voedt de laagtype-keuze "
-                   "hieronder en de berekening (γ voor σ, S/m voor SHANSEP, Nkt, VC voor karakteristiek).")
-        mat_df = pd.DataFrame([{
-            "Materiaal": l["naam"],
-            "γ_sat": l.get("gamma_nat"), "γ_unsat": l.get("gamma_droog"),
-            "S": l.get("S_ratio"), "m": l.get("m_factor"),
-            "Nkt": l.get("Nkt"), "VC_su": l.get("VC_su", 0.25),
-            "Dijkmateriaal": bool(l.get("is_dijkmateriaal", False)),
-        } for l in lagen_biblio])
-        mat_edit = st.data_editor(
-            mat_df, num_rows="dynamic", hide_index=True, use_container_width=True,
-            key="materialen_editor",
-            column_config={
-                "Materiaal": st.column_config.TextColumn("Materiaal", width="large"),
-                "γ_sat": st.column_config.NumberColumn("γ_sat [kN/m³]", format="%.2f", step=0.1),
-                "γ_unsat": st.column_config.NumberColumn("γ_unsat [kN/m³]", format="%.2f", step=0.1),
-                "S": st.column_config.NumberColumn("S [-]", format="%.2f", step=0.01),
-                "m": st.column_config.NumberColumn("m [-]", format="%.2f", step=0.01),
-                "Nkt": st.column_config.NumberColumn("Nkt [-]", format="%.1f", step=0.1),
-                "VC_su": st.column_config.NumberColumn("VC_su [-]", format="%.2f", step=0.01),
-                "Dijkmateriaal": st.column_config.CheckboxColumn("Dijkmateriaal (Su)"),
-            },
-        )
-        if st.button("💾 Materialen opslaan", key="save_materialen", type="primary"):
-            def _f(v):
-                return float(v) if pd.notna(v) else None
-            nieuwe = []
-            for r in mat_edit.to_dict("records"):
-                naam = r.get("Materiaal")
-                if not naam or str(naam).strip() == "":
-                    continue
-                laag = next((dict(l) for l in lagen_biblio if l["naam"] == naam), {})
-                laag.update({
-                    "naam": str(naam), "gamma_nat": _f(r.get("γ_sat")),
-                    "gamma_droog": _f(r.get("γ_unsat")), "S_ratio": _f(r.get("S")),
-                    "m_factor": _f(r.get("m")), "Nkt": _f(r.get("Nkt")),
-                    "VC_su": _f(r.get("VC_su")), "is_dijkmateriaal": bool(r.get("Dijkmateriaal")),
-                })
-                laag.setdefault("kleur", "#888888")
-                laag.setdefault("materiaal", str(naam))
-                nieuwe.append(laag)
-            if nieuwe:
-                up["lagen_bibliotheek"] = nieuwe
-                st.session_state.uitgangspunten = up
-                st.success(f"✅ {len(nieuwe)} materialen opgeslagen.")
-                st.rerun()
-            else:
-                st.warning("Geen geldige materialen (vul minstens een naam in).")
+    st.caption("Bewerk de materialen of voeg er toe. Deze lijst voedt de laagtype-keuze per "
+               "sondering én de berekening: γ voor de spanningen, S/m voor SHANSEP, Nkt voor Su "
+               "en VC voor de karakteristieke waarde.")
+    mat_df = pd.DataFrame([{
+        "Materiaal": l["naam"],
+        "γ_sat": l.get("gamma_nat"), "γ_unsat": l.get("gamma_droog"),
+        "S": l.get("S_ratio"), "m": l.get("m_factor"),
+        "Nkt": l.get("Nkt"), "VC_su": l.get("VC_su", 0.25),
+        "Dijkmateriaal": bool(l.get("is_dijkmateriaal", False)),
+    } for l in lagen_biblio])
+    mat_edit = st.data_editor(
+        mat_df, num_rows="dynamic", hide_index=True, use_container_width=True,
+        key="materialen_editor",
+        column_config={
+            "Materiaal": st.column_config.TextColumn("Materiaal", width="large"),
+            "γ_sat": st.column_config.NumberColumn("γ_sat [kN/m³]", format="%.2f", step=0.1),
+            "γ_unsat": st.column_config.NumberColumn("γ_unsat [kN/m³]", format="%.2f", step=0.1),
+            "S": st.column_config.NumberColumn("S [-]", format="%.2f", step=0.01),
+            "m": st.column_config.NumberColumn("m [-]", format="%.2f", step=0.01),
+            "Nkt": st.column_config.NumberColumn("Nkt [-]", format="%.1f", step=0.1),
+            "VC_su": st.column_config.NumberColumn("VC_su [-]", format="%.2f", step=0.01),
+            "Dijkmateriaal": st.column_config.CheckboxColumn("Dijkmateriaal (Su)"),
+        },
+    )
+    if st.button("💾 Materialen opslaan", key="save_materialen", type="primary"):
+        def _f(v):
+            return float(v) if pd.notna(v) else None
+        nieuwe = []
+        for r in mat_edit.to_dict("records"):
+            naam = r.get("Materiaal")
+            if not naam or str(naam).strip() == "":
+                continue
+            laag = next((dict(l) for l in lagen_biblio if l["naam"] == naam), {})
+            laag.update({
+                "naam": str(naam), "gamma_nat": _f(r.get("γ_sat")),
+                "gamma_droog": _f(r.get("γ_unsat")), "S_ratio": _f(r.get("S")),
+                "m_factor": _f(r.get("m")), "Nkt": _f(r.get("Nkt")),
+                "VC_su": _f(r.get("VC_su")), "is_dijkmateriaal": bool(r.get("Dijkmateriaal")),
+            })
+            laag.setdefault("kleur", "#888888")
+            laag.setdefault("materiaal", str(naam))
+            nieuwe.append(laag)
+        if nieuwe:
+            up["lagen_bibliotheek"] = nieuwe
+            st.session_state.uitgangspunten = up
+            st.success(f"✅ {len(nieuwe)} materialen opgeslagen.")
+            st.rerun()
+        else:
+            st.warning("Geen geldige materialen (vul minstens een naam in).")
+
 
 def render():
-    st.caption("Stap 0 — Alle projectparameters op één plek")
-    
+    # Geen eigen kop: het wizard-kader in app.py toont al 'Stap 1 van 5'.
+
     # Initialiseer uitgangspunten in session state
     if "uitgangspunten" not in st.session_state:
         st.session_state.uitgangspunten = DEFAULT_UITGANGSPUNTEN.copy()
@@ -482,21 +485,34 @@ def render():
         if "gamma_w" not in _w:
             _w["gamma_w"] = 9.81
 
-    # === TABS ===
-    # Let op: 'Grondopbouw (invoer)' en 'Waterdruk (u₀)' staan hier bewust NIET meer.
-    # Die horen niet bij de projectuitgangspunten:
-    #   - de grondopbouw bepaal je pas als je een sondering hebt ingelezen  → Stap 2 Classificatie
-    #   - het waterdrukverloop stel je pas in als de grondlagen bekend zijn → Stap 3 Normalisatie
-    # De materiaal-/sterkteparameters (Tabel 91) zijn wél projectbreed en blijven hier.
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "🏗️ Dijkopbouw",
-        "💪 Sterkteparameters (Tabel 91)",
-        "📐 Conustype & Correctie",
-        "🔢 Nkt-factoren",
-        "📊 Formules & Methode",
-        "📝 Samenvatting"
-    ])
-    
+    # ── Rustig scherm: geen zes tabbladen tegelijk, maar één duidelijke boodschap
+    # en opvouwbare secties. Standaard staat alles dicht — je opent alleen wat je wilt
+    # aanpassen. De rekenwaardes worden nog steeds gezet: Streamlit voert de inhoud van
+    # een expander ook uit als hij dichtgeklapt is.
+    _kar = up.get("karakteristiek", DEFAULT_UITGANGSPUNTEN["karakteristiek"])
+    _vc_txt = "VC per materiaal" if _kar.get("vc_bron", "materiaal") == "materiaal" else "VC uit de data"
+
+    st.success(
+        "✅ **De standaardwaarden voor traject 14-1 staan al ingevuld.** "
+        "Je kunt meteen door naar de volgende stap — open hieronder alleen iets als je het "
+        "wilt aanpassen."
+    )
+    _c1, _c2, _c3 = st.columns(3)
+    _c1.metric("Grondsoorten", len(get_lagen_bibliotheek(up)))
+    _c2.metric("Karakteristieke waarde", f"t = {_kar.get('t_factor', 1.645):.3f}", _vc_txt)
+    _c3.metric("Conustype", up.get("conustype", {}).get("type", "—"))
+
+    st.markdown("---")
+    st.markdown("**Aanpassen — alleen als het nodig is**")
+    tab2 = st.expander("🧪 Materiaaleigenschappen — γ, Nkt, S, m, VC (Tabel 91)", expanded=False)
+    tab4 = st.expander("📉 Karakteristieke waarde — VC-bron en t-factor", expanded=False)
+
+    st.markdown("**Naslag**")
+    tab1 = st.expander("🏗️ Dijkopbouw (overzicht)", expanded=False)
+    tab3 = st.expander("📐 Conustype & correctie", expanded=False)
+    tab5 = st.expander("📊 Formules & methode", expanded=False)
+    tab6 = st.expander("📝 Samenvatting", expanded=False)
+
     # ─── TAB 1: DIJKOPBOUW ───
     with tab1:
         col1, col2 = st.columns([1, 1])
@@ -530,7 +546,7 @@ def render():
             st.markdown("---")
             st.info(
                 "💧 **De grondwaterstand stel je hier niet in.** Er is één waarde nodig, en die "
-                "bepaal je pas nadat de sondering is ingelezen: bij **Stap 3 — Normalisatie** "
+                "bepaal je pas nadat de sondering is ingelezen: bij **Stap 4 — Waterdruk** "
                 "(globaal, en per sondering aanpasbaar)."
             )
 
@@ -663,7 +679,7 @@ def render():
             "📐 **De nettoquotiënt (a-factor) stel je hier niet in.**\n\n"
             "Hij is een eigenschap van de gebruikte conus en wordt **automatisch uit de "
             "GEF-header gelezen** (`MEASUREMENTVAR 3`). Staat hij er niet in, dan vul je hem "
-            "één keer in bij **Stap 1 — Upload → 📏 Referentieniveau & conus**. Daarna wordt "
+            "één keer in bij **Stap 2 — Upload → 📏 Referentieniveau & conus**. Daarna wordt "
             "hij overal gebruikt en is hij niet meer te wijzigen.\n\n"
             "Zo kan er nooit verschil ontstaan tussen wat je instelt en waarmee de tool rekent."
         )
@@ -848,7 +864,7 @@ def render():
             # Project + Dijkopbouw
             st.markdown(f"**{up['project']['naam']}** — {up['project']['beschrijving']}")
             st.markdown(f"Kruin NAP {up['dijkopbouw']['kruinniveau']:+.1f}m · "
-                        f"GWS: *per sondering, Stap 3 — Normalisatie*")
+                        f"GWS: *per sondering, Stap 4 — Waterdruk*")
             st.markdown(f"Conus: {up['conustype']['type']} · "
                         f"a-factor: *per sondering uit de GEF (Stap 1)*")
         
