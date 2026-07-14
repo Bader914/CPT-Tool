@@ -400,6 +400,62 @@ def maak_dijkprofiel_figuur(lagen: list) -> go.Figure:
     return fig
 
 
+
+def _render_materialen(up: dict):
+    """Materiaaleigenschappen (Tabel 91) — projectparameters, los van elke sondering."""
+    lagen_biblio = get_lagen_bibliotheek(up)
+    # === Materiaaleigenschappen (bewerkbaar, à la Deltares CPT-tool) ===
+    with st.expander("🧪 Materiaaleigenschappen (γ, S, m, Nkt, VC) — bewerken/toevoegen",
+                     expanded=False):
+        st.caption("Bewerk de materialen of voeg er toe. Deze lijst voedt de laagtype-keuze "
+                   "hieronder en de berekening (γ voor σ, S/m voor SHANSEP, Nkt, VC voor karakteristiek).")
+        mat_df = pd.DataFrame([{
+            "Materiaal": l["naam"],
+            "γ_sat": l.get("gamma_nat"), "γ_unsat": l.get("gamma_droog"),
+            "S": l.get("S_ratio"), "m": l.get("m_factor"),
+            "Nkt": l.get("Nkt"), "VC_su": l.get("VC_su", 0.25),
+            "Dijkmateriaal": bool(l.get("is_dijkmateriaal", False)),
+        } for l in lagen_biblio])
+        mat_edit = st.data_editor(
+            mat_df, num_rows="dynamic", hide_index=True, use_container_width=True,
+            key="materialen_editor",
+            column_config={
+                "Materiaal": st.column_config.TextColumn("Materiaal", width="large"),
+                "γ_sat": st.column_config.NumberColumn("γ_sat [kN/m³]", format="%.2f", step=0.1),
+                "γ_unsat": st.column_config.NumberColumn("γ_unsat [kN/m³]", format="%.2f", step=0.1),
+                "S": st.column_config.NumberColumn("S [-]", format="%.2f", step=0.01),
+                "m": st.column_config.NumberColumn("m [-]", format="%.2f", step=0.01),
+                "Nkt": st.column_config.NumberColumn("Nkt [-]", format="%.1f", step=0.1),
+                "VC_su": st.column_config.NumberColumn("VC_su [-]", format="%.2f", step=0.01),
+                "Dijkmateriaal": st.column_config.CheckboxColumn("Dijkmateriaal (Su)"),
+            },
+        )
+        if st.button("💾 Materialen opslaan", key="save_materialen", type="primary"):
+            def _f(v):
+                return float(v) if pd.notna(v) else None
+            nieuwe = []
+            for r in mat_edit.to_dict("records"):
+                naam = r.get("Materiaal")
+                if not naam or str(naam).strip() == "":
+                    continue
+                laag = next((dict(l) for l in lagen_biblio if l["naam"] == naam), {})
+                laag.update({
+                    "naam": str(naam), "gamma_nat": _f(r.get("γ_sat")),
+                    "gamma_droog": _f(r.get("γ_unsat")), "S_ratio": _f(r.get("S")),
+                    "m_factor": _f(r.get("m")), "Nkt": _f(r.get("Nkt")),
+                    "VC_su": _f(r.get("VC_su")), "is_dijkmateriaal": bool(r.get("Dijkmateriaal")),
+                })
+                laag.setdefault("kleur", "#888888")
+                laag.setdefault("materiaal", str(naam))
+                nieuwe.append(laag)
+            if nieuwe:
+                up["lagen_bibliotheek"] = nieuwe
+                st.session_state.uitgangspunten = up
+                st.success(f"✅ {len(nieuwe)} materialen opgeslagen.")
+                st.rerun()
+            else:
+                st.warning("Geen geldige materialen (vul minstens een naam in).")
+
 def render():
     st.caption("Stap 0 — Alle projectparameters op één plek")
     
@@ -428,13 +484,16 @@ def render():
             _w["gamma_w"] = 9.81
 
     # === TABS ===
-    tab1, tab_grond, tab2, tab3, tab4, tab_water, tab5, tab6 = st.tabs([
+    # Let op: 'Grondopbouw (invoer)' en 'Waterdruk (u₀)' staan hier bewust NIET meer.
+    # Die horen niet bij de projectuitgangspunten:
+    #   - de grondopbouw bepaal je pas als je een sondering hebt ingelezen  → Stap 2 Classificatie
+    #   - het waterdrukverloop stel je pas in als de grondlagen bekend zijn → Stap 3 Normalisatie
+    # De materiaal-/sterkteparameters (Tabel 91) zijn wél projectbreed en blijven hier.
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "🏗️ Dijkopbouw",
-        "📋 Grondopbouw (invoer)",
         "💪 Sterkteparameters (Tabel 91)",
         "📐 Conustype & Correctie",
         "🔢 Nkt-factoren",
-        "💧 Waterdruk (u₀)",
         "📊 Formules & Methode",
         "📝 Samenvatting"
     ])
@@ -445,50 +504,27 @@ def render():
         
         with col1:
             lagen = up.get("lagen", DEFAULT_UITGANGSPUNTEN["lagen"])
-            
-            for i, laag in enumerate(lagen):
-                dijk_label = "[Su]" if laag['is_dijkmateriaal'] else ""
-                with st.expander(f"{laag['naam']}  {dijk_label}", expanded=False):
-                    st.markdown(f"*{laag['beschrijving']}*")
-                    
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        top_val = laag.get("top_nap")
-                        if top_val is not None:
-                            lagen[i]["top_nap"] = st.number_input(
-                                f"Top [m NAP]", value=float(top_val), step=0.01, format="%.2f",
-                                key=f"top_{i}"
-                            )
-                        else:
-                            st.caption("Top: variabel per locatie")
-                        
-                        lagen[i]["gamma_droog"] = st.number_input(
-                            f"γ droog [kN/m³]", value=float(laag["gamma_droog"]), step=0.5,
-                            key=f"gd_{i}"
-                        )
-                    with c2:
-                        onder_val = laag.get("onder_nap")
-                        if onder_val is not None:
-                            lagen[i]["onder_nap"] = st.number_input(
-                                f"Onder [m NAP]", value=float(onder_val), step=0.01, format="%.2f",
-                                key=f"onder_{i}"
-                            )
-                        else:
-                            st.caption("Onder: variabel per locatie")
-                        
-                        lagen[i]["gamma_nat"] = st.number_input(
-                            f"γ nat [kN/m³]", value=float(laag["gamma_nat"]), step=0.5,
-                            key=f"gn_{i}"
-                        )
-                    
-                    lagen[i]["is_dijkmateriaal"] = st.checkbox(
-                        "Is dijkmateriaal (Su berekenen)", 
-                        value=laag["is_dijkmateriaal"],
-                        key=f"dijkmat_{i}"
-                    )
-            
-            up["lagen"] = lagen
-            
+
+            # Alleen ter oriëntatie: de algemene SHZ-dijkopbouw. Dit is GEEN invoer.
+            # - de laagdieptes bepaal je per sondering (Stap 2 — Classificatie)
+            # - γ/Nkt/S/m/VC bewerk je in de materialentabel (tab 'Sterkteparameters')
+            # Eerder stonden hier invoervelden voor top/onder NAP en γ. Die schreven naar
+            # up["lagen"], terwijl de berekening de materialenbibliotheek gebruikt — ze
+            # hadden dus geen effect. Nu read-only, zodat er één bron van waarheid is.
+            st.markdown("**Algemene dijkopbouw (SHZ) — ter oriëntatie**")
+            st.caption("Dit is een typerend profiel, géén invoer. De **laagdieptes** bepaal je "
+                       "per sondering bij **Stap 2 — Classificatie**; de **materiaalparameters** "
+                       "(γ, Nkt, S, m, VC) bewerk je bij **💪 Sterkteparameters**.")
+            overzicht = pd.DataFrame([{
+                "Grondlaag": l["naam"],
+                "Top [m NAP]": l["top_nap"] if l.get("top_nap") is not None else "variabel",
+                "Onder [m NAP]": l["onder_nap"] if l.get("onder_nap") is not None else "variabel",
+                "γ droog": l.get("gamma_droog"),
+                "γ nat": l.get("gamma_nat"),
+                "Su?": "✅" if l.get("is_dijkmateriaal") else "—",
+            } for l in lagen])
+            st.dataframe(overzicht, use_container_width=True, hide_index=True)
+
             # Grondwaterstand
             st.markdown("---")
             c_gwl1, c_gwl2, c_gwl3 = st.columns(3)
@@ -532,171 +568,14 @@ def render():
             st.plotly_chart(fig, use_container_width=True)
             st.caption("[Su] = Dijkmateriaal · Blauw = GWS")
 
-    # ─── TAB GRONDOPBOUW: vrije invoer van de grondopbouw per laag ───
-    with tab_grond:
-        st.caption("Vul de grondopbouw zelf in: per rij de BOVENKANT (m NAP) en het laagtype. "
-                   "De onderkant van een laag = de bovenkant van de volgende rij; de diepste "
-                   "laag loopt door tot de opgegeven basis.")
-
-        # Stabiele laag-bibliotheek (gedeeld met de per-sondering interpretatie).
-        lagen_biblio = get_lagen_bibliotheek(up)
-
-        # === Materiaaleigenschappen (bewerkbaar, à la Deltares CPT-tool) ===
-        with st.expander("🧪 Materiaaleigenschappen (γ, S, m, Nkt, VC) — bewerken/toevoegen",
-                         expanded=False):
-            st.caption("Bewerk de materialen of voeg er toe. Deze lijst voedt de laagtype-keuze "
-                       "hieronder en de berekening (γ voor σ, S/m voor SHANSEP, Nkt, VC voor karakteristiek).")
-            mat_df = pd.DataFrame([{
-                "Materiaal": l["naam"],
-                "γ_sat": l.get("gamma_nat"), "γ_unsat": l.get("gamma_droog"),
-                "S": l.get("S_ratio"), "m": l.get("m_factor"),
-                "Nkt": l.get("Nkt"), "VC_su": l.get("VC_su", 0.25),
-                "Dijkmateriaal": bool(l.get("is_dijkmateriaal", False)),
-            } for l in lagen_biblio])
-            mat_edit = st.data_editor(
-                mat_df, num_rows="dynamic", hide_index=True, use_container_width=True,
-                key="materialen_editor",
-                column_config={
-                    "Materiaal": st.column_config.TextColumn("Materiaal", width="large"),
-                    "γ_sat": st.column_config.NumberColumn("γ_sat [kN/m³]", format="%.2f", step=0.1),
-                    "γ_unsat": st.column_config.NumberColumn("γ_unsat [kN/m³]", format="%.2f", step=0.1),
-                    "S": st.column_config.NumberColumn("S [-]", format="%.2f", step=0.01),
-                    "m": st.column_config.NumberColumn("m [-]", format="%.2f", step=0.01),
-                    "Nkt": st.column_config.NumberColumn("Nkt [-]", format="%.1f", step=0.1),
-                    "VC_su": st.column_config.NumberColumn("VC_su [-]", format="%.2f", step=0.01),
-                    "Dijkmateriaal": st.column_config.CheckboxColumn("Dijkmateriaal (Su)"),
-                },
-            )
-            if st.button("💾 Materialen opslaan", key="save_materialen", type="primary"):
-                def _f(v):
-                    return float(v) if pd.notna(v) else None
-                nieuwe = []
-                for r in mat_edit.to_dict("records"):
-                    naam = r.get("Materiaal")
-                    if not naam or str(naam).strip() == "":
-                        continue
-                    laag = next((dict(l) for l in lagen_biblio if l["naam"] == naam), {})
-                    laag.update({
-                        "naam": str(naam), "gamma_nat": _f(r.get("γ_sat")),
-                        "gamma_droog": _f(r.get("γ_unsat")), "S_ratio": _f(r.get("S")),
-                        "m_factor": _f(r.get("m")), "Nkt": _f(r.get("Nkt")),
-                        "VC_su": _f(r.get("VC_su")), "is_dijkmateriaal": bool(r.get("Dijkmateriaal")),
-                    })
-                    laag.setdefault("kleur", "#888888")
-                    laag.setdefault("materiaal", str(naam))
-                    nieuwe.append(laag)
-                if nieuwe:
-                    up["lagen_bibliotheek"] = nieuwe
-                    st.session_state.uitgangspunten = up
-                    st.success(f"✅ {len(nieuwe)} materialen opgeslagen.")
-                    st.rerun()
-                else:
-                    st.warning("Geen geldige materialen (vul minstens een naam in).")
-
-        lagen_biblio = get_lagen_bibliotheek(up)
-        type_namen = [l["naam"] for l in lagen_biblio]
-
-        # Seed de tabel: uit eerder opgeslagen grondopbouw, anders uit de huidige lagen
-        # (alleen lagen met een bekende bovenkant).
-        if up.get("grondopbouw"):
-            seed_rows = up["grondopbouw"]
-        else:
-            seed_rows = [
-                {
-                    "bovenkant": l.get("top_nap"),
-                    "laagtype": l["naam"],
-                    "gamma_droog": l.get("gamma_droog"),
-                    "gamma_nat": l.get("gamma_nat"),
-                    "Nkt": l.get("Nkt"),
-                    "is_dijkmateriaal": l.get("is_dijkmateriaal", False),
-                }
-                for l in lagen_biblio if l.get("top_nap") is not None
-            ]
-
-        seed_df = pd.DataFrame(seed_rows, columns=[
-            "bovenkant", "laagtype", "gamma_droog", "gamma_nat", "Nkt", "is_dijkmateriaal"
-        ])
-
-        col_g1, col_g2 = st.columns([1.6, 1])
-        with col_g1:
-            edited = st.data_editor(
-                seed_df,
-                num_rows="dynamic",
-                use_container_width=True,
-                hide_index=True,
-                key="grondopbouw_editor",
-                column_config={
-                    "bovenkant": st.column_config.NumberColumn(
-                        "Bovenkant [m NAP]", format="%.2f", step=0.01,
-                        help="NAP-niveau van de bovenkant van deze laag (cm-nauwkeurig)."),
-                    "laagtype": st.column_config.SelectboxColumn(
-                        "Laagtype", options=type_namen, required=False,
-                        help="Kies een laagtype uit de bibliotheek (Tabel 91)."),
-                    "gamma_droog": st.column_config.NumberColumn(
-                        "γ_droog [kN/m³]", format="%.2f", step=0.1,
-                        help="Leeg laten = waarde uit bibliotheek."),
-                    "gamma_nat": st.column_config.NumberColumn(
-                        "γ_nat [kN/m³]", format="%.2f", step=0.1,
-                        help="Leeg laten = waarde uit bibliotheek."),
-                    "Nkt": st.column_config.NumberColumn(
-                        "Nkt [-]", format="%.1f", step=0.1,
-                        help="Leeg laten = waarde uit bibliotheek."),
-                    "is_dijkmateriaal": st.column_config.CheckboxColumn(
-                        "Dijkmateriaal (Su)", help="Aanvinken als hier Su berekend moet worden."),
-                },
-            )
-
-        with col_g2:
-            onderkant_basis = st.number_input(
-                "Onderkant diepste laag [m NAP]",
-                value=float(up.get("grondopbouw_basis", -25.0)),
-                min_value=-60.0, max_value=0.0, step=0.5,
-                help="Tot dit niveau loopt de onderste (diepste) laag door.",
-            )
-            st.markdown("**Hoe het werkt:**")
-            st.markdown(
-                "- Elke rij = bovenkant van een laag (m NAP)\n"
-                "- Onderkant = bovenkant van de volgende rij\n"
-                "- Zelfde laagtype mag meerdere keren (wordt #2, #3 …)\n"
-                "- γ/Nkt leeg = automatisch uit de bibliotheek\n"
-                "- Toepassen overschrijft de lagen in de hele tool"
-            )
-
-        if st.button("✅ Grondopbouw toepassen", type="primary", key="apply_grondopbouw"):
-            rows = edited.to_dict("records")
-            nieuwe_lagen = bouw_lagen_uit_grondopbouw(rows, lagen_biblio, onderkant_basis)
-            if not nieuwe_lagen:
-                st.warning("⚠️ Geen geldige rijen (vul bovenkant én laagtype in).")
-            else:
-                up["lagen"] = nieuwe_lagen
-                up["grondopbouw"] = rows
-                up["grondopbouw_basis"] = onderkant_basis
-                st.session_state.uitgangspunten = up
-                st.success(f"✅ {len(nieuwe_lagen)} lagen toegepast. De rest van de tool "
-                           "(classificatie, σv0, Su) gebruikt nu deze grondopbouw.")
-                st.rerun()
-
-        # Voorbeeldweergave van de afgeleide laaggrenzen
-        if up.get("grondopbouw"):
-            preview = bouw_lagen_uit_grondopbouw(
-                up["grondopbouw"], lagen_biblio, up.get("grondopbouw_basis", onderkant_basis))
-            if preview:
-                st.markdown("**Afgeleide laaggrenzen (huidige grondopbouw):**")
-                prev_rows = [{
-                    "Laag": l["naam"],
-                    "Top [m NAP]": round(l["top_nap"], 2),
-                    "Onder [m NAP]": round(l["onder_nap"], 2),
-                    "Dikte [m]": round(l["top_nap"] - l["onder_nap"], 2),
-                    "γ_nat": l["gamma_nat"],
-                    "Nkt": l.get("Nkt") if l.get("Nkt") is not None else "—",
-                    "Su": "✅" if l.get("is_dijkmateriaal") else "—",
-                } for l in preview]
-                st.dataframe(pd.DataFrame(prev_rows), use_container_width=True, hide_index=True)
-
-    # ─── TAB 2: STERKTEPARAMETERS (TABEL 91) ───
+    # ─── TAB 2: STERKTEPARAMETERS (Tabel 91) ───
     with tab2:
         st.caption("SHANSEP: Su = S · σ'v0 · OCRᵐ  |  * = aanname  |  ** = gedraineerd")
-        
+
+        # Materiaaleigenschappen (γ, S, m, Nkt, VC) — projectbreed, los van elke sondering.
+        _render_materialen(up)
+        st.markdown("---")
+
         # Maak Tabel 91 dataframe
         lagen = up.get("lagen", DEFAULT_UITGANGSPUNTEN["lagen"])
         
@@ -942,128 +821,6 @@ def render():
             st.plotly_chart(fig_nkt, use_container_width=True)
     
     # ─── TAB WATERDRUK: u₀-verloop (4-zone-model) ───
-    with tab_water:
-        st.caption("u₀ = theoretisch waterdrukverloop met lineaire overgang naar het watervoerend zandpakket "
-                   "(conform 'waterdrukverloop berekening.xlsx')")
-
-        water = up.get("waterdruk", DEFAULT_UITGANGSPUNTEN["waterdruk"])
-
-        col_w1, col_w2 = st.columns([1, 1])
-
-        with col_w1:
-            water["knik_nap"] = st.number_input(
-                "Knikpunt drukverloop [m NAP]",
-                value=float(water.get("knik_nap", -5.0)),
-                min_value=-30.0, max_value=5.0, step=0.01, format="%.2f",
-                help="Einde van het zuiver hydrostatische verloop vanaf GWS; "
-                     "begin van de lineaire overgangszone naar het zandpakket."
-            )
-            water["stijghoogte_nap"] = st.number_input(
-                "Stijghoogte 1e zandpakket [m NAP]",
-                value=float(water.get("stijghoogte_nap", -2.0)),
-                min_value=-30.0, max_value=10.0, step=0.01, format="%.2f",
-                help="Piëzometrisch niveau (P) van het watervoerende zandpakket. "
-                     "Onder het zand geldt u₀ = γ_w·(stijghoogte − z)."
-            )
-            water["top_zand_nap"] = st.number_input(
-                "Top 1e zandpakket [m NAP]",
-                value=float(water.get("top_zand_nap", -12.0)),
-                min_value=-40.0, max_value=5.0, step=0.01, format="%.2f",
-                help="NAP-niveau van de bovenkant van het 1e watervoerende zandpakket."
-            )
-            water["indringing"] = st.number_input(
-                "Indringingslengte [m]",
-                value=float(water.get("indringing", 0.0)),
-                min_value=0.0, max_value=5.0, step=0.1,
-                help="Tot hoever boven het zand de pakketdruk al gevoeld wordt; "
-                     "de zandzone start bij (top zand + indringing). Vaak < 1 m."
-            )
-            water["gamma_w"] = st.number_input(
-                "γ_w (water) [kN/m³]",
-                value=float(water.get("gamma_w", 9.81)),
-                min_value=9.0, max_value=10.5, step=0.01,
-                help="Volumegewicht water. Standaard 9.81 kN/m³."
-            )
-
-        with col_w2:
-            # Visualisatie van het 4-zone u0-verloop (zelfde formule als normalisatie).
-            import numpy as np
-            gwl_nap = up.get("dijkopbouw", {}).get("gwl", 0.0)
-            knik = water["knik_nap"]
-            stijg = water["stijghoogte_nap"]
-            top_zand = water["top_zand_nap"]
-            indring = water["indringing"]
-            gamma_w = water["gamma_w"]
-            kruin = up.get("dijkopbouw", {}).get("kruinniveau", 4.0)
-
-            # Ankerpunten overgangszone
-            z_top_interp = knik
-            u_top_interp = (gwl_nap - knik) * gamma_w
-            z_bot_interp = top_zand + indring
-            u_bot_interp = (stijg - z_bot_interp) * gamma_w
-            denom = z_bot_interp - z_top_interp
-            slope = (u_bot_interp - u_top_interp) / denom if denom != 0 else 0.0
-
-            z = np.linspace(kruin, top_zand - 6.0, 300)
-            u0 = np.where(
-                z > gwl_nap,
-                0.0,
-                np.where(
-                    z > knik,
-                    (gwl_nap - z) * gamma_w,
-                    np.where(
-                        z > z_bot_interp,
-                        slope * (z - z_top_interp) + u_top_interp,
-                        (stijg - z) * gamma_w,
-                    ),
-                ),
-            )
-
-            fig_u = go.Figure()
-            fig_u.add_trace(go.Scatter(
-                x=u0, y=z, mode="lines",
-                line=dict(color="#1e88e5", width=2.5),
-                name="u₀ (theoretisch)"
-            ))
-            fig_u.add_hline(y=gwl_nap, line_dash="dot", line_color="#64b5f6",
-                            annotation_text=f"GWS NAP {gwl_nap:+.1f}m",
-                            annotation_position="top right")
-            fig_u.add_hline(y=knik, line_dash="dash", line_color="#ff9800",
-                            annotation_text=f"Knik NAP {knik:+.1f}m",
-                            annotation_position="bottom right")
-            fig_u.add_hline(y=top_zand + indring, line_dash="dot", line_color="#fbc02d",
-                            annotation_text=f"Top zand{'+i' if indring else ''} NAP {top_zand + indring:+.1f}m",
-                            annotation_position="bottom right")
-            fig_u.update_layout(
-                title="Waterdrukverloop u₀ (4 zones)",
-                xaxis=dict(title="u₀ [kPa]"),
-                yaxis=dict(title="Niveau [m NAP]"),
-                height=400,
-                template="plotly_white",
-                showlegend=False,
-            )
-            st.plotly_chart(fig_u, use_container_width=True)
-
-        up["waterdruk"] = water
-
-        st.markdown("---")
-        st.markdown("""
-        **Belangrijk — u₀ is NIET hetzelfde als u₂:**
-
-        - **u₀** = theoretisch waterdrukverloop op basis van GWS, knikpunt en pakketdruk.
-          Wordt gebruikt voor effectieve spanning σ'ᵥ₀ = σᵥ₀ − u₀.
-        - **u₂** = gemeten poriedruk tijdens sondering. Wijkt af in klei
-          (excess pore pressure dissipeert niet binnen meettijd).
-
-        Voor de Su-berekening gebruiken we **altijd u₀**, niet u₂.
-        u₂ wordt alleen gebruikt voor de qt-correctie: qt = qc + (1−a)·u₂.
-
-        **Lokale override per sondering:** in de Normalisatie-stap kun je per sondering
-        een afwijkend knikpunt, stijghoogte, top zand of indringingslengte instellen als
-        de zandlaag of pakketdruk lokaal verschilt.
-        """)
-
-    # ─── TAB 4: FORMULES & METHODE ───
     with tab5:
         col_f1, col_f2 = st.columns(2)
         with col_f1:

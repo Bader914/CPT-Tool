@@ -432,25 +432,16 @@ def render():
                    "sondering voorgesteld (Robertson). Pas hieronder per sondering aan.")
 
     st.markdown("---")
-    st.caption("De laagindeling wordt automatisch uit elke sondering voorgesteld. "
-               "Opnieuw voorstellen of de projectdefault toepassen kan hieronder.")
-    col_b1, col_b2 = st.columns(2)
-    with col_b1:
-        if st.button("🔄 Laagindeling opnieuw voorstellen (Robertson)", use_container_width=True):
-            for naam, d in gereed.items():
-                st.session_state.sonderingen[naam]["grondopbouw_lokaal"] = None
-                _classificeer_sondering(naam, d, up, bibliotheek, lagen,
-                                        default_rows, min_dikte_auto, gebruik_suggestie=True)
-            st.success("✅ Laagindeling opnieuw voorgesteld uit de sonderingen.")
-            st.rerun()
-    with col_b2:
-        if default_rows and st.button("📋 Projectdefault (SHZ) toepassen", use_container_width=True):
-            for naam, d in gereed.items():
-                st.session_state.sonderingen[naam]["grondopbouw_lokaal"] = [dict(r) for r in default_rows]
-                _classificeer_sondering(naam, d, up, bibliotheek, lagen,
-                                        default_rows, min_dikte_auto, gebruik_suggestie=False)
-            st.success("✅ Projectdefault toegepast.")
-            st.rerun()
+    st.caption("De grondopbouw hoort bij de sondering, niet bij het project: hij wordt hier "
+               "automatisch uit elke sondering voorgesteld (Robertson) en is per sondering "
+               "aan te passen. Er is bewust geen projectbrede standaard-laagopbouw meer.")
+    if st.button("🔄 Laagindeling opnieuw voorstellen (Robertson)", use_container_width=True):
+        for naam, d in gereed.items():
+            st.session_state.sonderingen[naam]["grondopbouw_lokaal"] = None
+            _classificeer_sondering(naam, d, up, bibliotheek, lagen,
+                                    default_rows, min_dikte_auto, gebruik_suggestie=True)
+        st.success("✅ Laagindeling opnieuw voorgesteld uit de sonderingen.")
+        st.rerun()
 
     # Per-sondering editor
     geclassificeerd = {k: v for k, v in sonderingen.items() if v.get("geclassificeerd")}
@@ -503,16 +494,6 @@ def render():
                     st.rerun()
                 else:
                     st.warning("Kon geen voorstel maken (qc/diepte ontbreekt?).")
-            if st.button("↩️ Gebruik SHZ-dieptezones (projectdefault)", key=f"shz_{selected}",
-                         help="Vul de tabel met de SHZ-lagen op NAP-niveau uit de Grondopbouw-tab. "
-                              "Handig als de grondsoort overal 'klei' is en je op niveau wilt verdelen."):
-                rows_shz = [dict(r) for r in default_rows] if default_rows else []
-                if rows_shz:
-                    st.session_state.sonderingen[selected]["grondopbouw_lokaal"] = rows_shz
-                    st.success("SHZ-dieptezones (projectdefault) geplaatst — pas aan en klik 'Laaggrenzen opslaan'.")
-                    st.rerun()
-                else:
-                    st.warning("Geen projectdefault beschikbaar (stel eerst de Grondopbouw-tab in).")
 
         # Seed: lokale grondopbouw → projectdefault → uit huidige grenzen.
         if data.get("grondopbouw_lokaal"):
@@ -619,26 +600,11 @@ def render():
         toon_rf = st.checkbox("Toon Rf [%]", value=True, key=f"toon_rf_{selected}",
                               help="Wrijvingsgetal Rf = fs/qc·100. Hoog Rf (>~3%) wijst op klei/veen, "
                                    "laag Rf (<~1%) op zand. Hoge qc met hoge Rf = stijve klei, geen zand.")
-        vergelijk = st.checkbox("🔬 Vergelijk Robertson ↔ SHZ-dieptezones", value=False,
-                                key=f"vergelijk_{selected}",
-                                help="Toon twee boorstaten naast elkaar: de Robertson-grondsoort "
-                                     "(bij huidige min. laagdikte) en de SHZ-dieptezones (projectdefault).")
-
         x_col = "qt" if "qt" in df.columns else cm["qc"]
         qc_titel = "qt [MPa]" if x_col == "qt" else "qc [MPa]"
         heeft_rf = bool(toon_rf and cm.get("fs") and cm["fs"] in df.columns)
 
-        # Boorstaat-kolommen bepalen: één (huidige tabel) of twee (vergelijken).
-        if vergelijk:
-            robertson_lagen = bouw_lagen_uit_grondopbouw(
-                suggereer_grondopbouw(df, cm, bibliotheek, min_dikte, maaiveld_nap=mv_nap),
-                bibliotheek, basis_nap, maaiveld_nap=mv_nap)
-            shz_lagen = (bouw_lagen_uit_grondopbouw([dict(r) for r in default_rows], bibliotheek,
-                                                    basis_nap, maaiveld_nap=mv_nap)
-                         if default_rows else [])
-            boor_kols = [("Robertson", robertson_lagen), ("SHZ-zones", shz_lagen)]
-        else:
-            boor_kols = [("Boorstaat", preview_lagen)]
+        boor_kols = [("Boorstaat", preview_lagen)]
 
         titels = [t for t, _ in boor_kols] + [qc_titel] + (["Rf [%]"] if heeft_rf else [])
         n_boor = len(boor_kols)

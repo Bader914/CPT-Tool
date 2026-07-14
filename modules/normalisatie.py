@@ -313,7 +313,14 @@ def render():
 
     # Parameters
     st.markdown("---")
-    st.subheader("Parameters (uit Uitgangspunten)")
+    st.subheader("Waterdruk & spanningen")
+    st.caption(
+        "Het waterdrukverloop stel je hier in — niet bij de uitgangspunten. De **top van het "
+        "zandpakket** en het **knikpunt** lees je namelijk af uit de sondering zelf (waar qc "
+        "omhoogschiet), en die ken je pas nu de grondlagen zijn bepaald. "
+        "Controleer je aanname met de grafiek hieronder: de berekende **u₀** hoort in de buurt "
+        "van de **gemeten u₂** te liggen."
+    )
 
     col_p1, col_p2 = st.columns(2)
     with col_p1:
@@ -524,7 +531,7 @@ def render():
     col_toggle1, col_toggle2 = st.columns(2)
     with col_toggle1:
         toon_u2 = st.checkbox("Toon u₂ (gemeten) ter vergelijking met u₀",
-                               value=False, key=f"toon_u2_{selected}",
+                               value=True, key=f"toon_u2_{selected}",
                                help="u₂ is de gemeten poriedruk; u₀ is het theoretische verloop "
                                     "dat wordt gebruikt voor σ'. Helpt visueel checken dat ze "
                                     "verschillen in klei en convergeren in zand.")
