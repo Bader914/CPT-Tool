@@ -12,7 +12,10 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 :root{
-  --bg:#f5f7fb; --surface:#ffffff; --ink:#0f2942; --text:#3f5165; --muted:#7488a0;
+  --bg:#f5f7fb; --surface:#ffffff;
+  --ink:#0b2237;    /* koppen en waarden */
+  --text:#22374d;   /* gewone tekst — bewust donker, licht grijs las slecht */
+  --muted:#4a6076;  /* bijschriften/labels — nog steeds leesbaar, niet lichtgrijs */
   --primary:#1a76bb; --primary-d:#125e97; --primary-soft:#e9f2fb; --border:#e4eaf1;
   --field-border:#c3d2e0;   /* rand van invoervelden/knoppen — bewust zichtbaar */
   --green:#15803d; --green-soft:#eafaf0;
@@ -168,7 +171,43 @@ h3{ font-size:1.05rem !important; margin:.4rem 0 .2rem !important; }
 /* alerts */
 [data-testid="stAlert"]{ border-radius:10px !important; }
 
-hr{ border-color:var(--border) !important; margin:.8rem 0; }
+/* === TEKSTKLEUR — geen lichtgrijs meer === */
+/* Streamlit zet body-tekst, bijschriften en help-teksten standaard licht grijs;
+   op wit is dat slecht leesbaar. Overal de donkere varianten. */
+[data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li,
+[data-testid="stText"], .stMarkdown p, .stMarkdown li{ color:var(--text) !important; }
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p,
+[data-testid="stWidgetLabelHelp"], small{ color:var(--muted) !important; }
+[data-testid="stMarkdownContainer"] strong, [data-testid="stMarkdownContainer"] b{ color:var(--ink) !important; }
+[data-testid="stAlert"] p, [data-testid="stAlert"] li{ color:var(--ink) !important; }
+[data-testid="stTabs"] [aria-selected="false"]{ color:var(--text) !important; }
+
+/* === COMPACTER — minder loze verticale ruimte === */
+/* Streamlit zet standaard 1rem tussen ELK element; dat stapelt hard op in een
+   stap met veel widgets. Halveren scheelt veel scrollen zonder dat het propt. */
+[data-testid="stVerticalBlock"]{ gap:.55rem !important; }
+[data-testid="stHorizontalBlock"]{ gap:.7rem !important; }
+[data-testid="stElementContainer"]{ margin-bottom:0 !important; }
+.block-container{ padding-top:2.2rem !important; padding-bottom:1.2rem !important; }
+
+/* widgets zelf strakker */
+[data-testid="stNumberInput"] label, [data-testid="stSelectbox"] label,
+[data-testid="stTextInput"] label, [data-testid="stRadio"] > label{ margin-bottom:.15rem !important; }
+[data-testid="stCaptionContainer"]{ margin-top:.1rem !important; margin-bottom:.1rem !important; }
+[data-testid="stAlert"]{ padding:.6rem .9rem !important; margin:.2rem 0 !important; }
+[data-testid="stMetric"]{ padding:10px 14px !important; }
+[data-testid="stExpander"]{ margin:.15rem 0 !important; }
+[data-testid="stExpander"] summary{ padding:.55rem .9rem !important; }
+[data-testid="stExpander"] [data-testid="stExpanderDetails"]{ padding-top:.4rem !important; }
+[data-testid="stTabs"] [data-baseweb="tab-panel"]{ padding-top:.5rem !important; }
+[data-testid="stMarkdownContainer"] p{ margin-bottom:.35rem !important; }
+h2{ margin:.4rem 0 .2rem !important; } h3{ margin:.3rem 0 .15rem !important; }
+.why-card{ padding:.7rem 1rem !important; margin:.3rem 0 .6rem !important; }
+.why-card p{ margin:0 0 .2rem !important; }
+.next-step{ padding:.6rem 1rem !important; margin-top:.6rem !important; }
+[data-testid="stFileUploader"]{ padding:.5rem !important; }
+
+hr{ border-color:var(--border) !important; margin:.5rem 0; }
 ::-webkit-scrollbar{ width:8px; } ::-webkit-scrollbar-track{ background:var(--bg); }
 ::-webkit-scrollbar-thumb{ background:#c7d3df; border-radius:4px; }
 </style>
@@ -180,7 +219,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.markdown("<br>" * 3, unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
