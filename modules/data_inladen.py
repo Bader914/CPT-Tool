@@ -430,6 +430,9 @@ def render():
                     "is_qt_corrected": df.attrs.get("is_qt_corrected", False),
                     "maaiveld_nap": maaiveld_nap,
                     "a_factor_gef": a_factor_gef,
+                    # Effectieve a-factor: uit de GEF als die er is, anders (voorlopig) None →
+                    # de gebruiker vult hem in de upload-stap in. Daarna nergens meer wijzigbaar.
+                    "a_factor": a_factor_gef,
                     "voorboring_gef": voorboring_gef,
                     # Voorboring automatisch uit de GEF; niet meer aanpasbaar (uit_gef=True)
                     "voorboring": ({"actief": True, "diepte": float(voorboring_gef), "uit_gef": True}
@@ -564,7 +567,7 @@ def render():
             
             tab1, tab2, tab3, tab4 = st.tabs([
                 "📋 Data Preview", "🔧 Kolom Mapping",
-                "📏 Referentieniveau", "🪨 Voorboring & Fundering"
+                "📏 Referentieniveau & conus", "🪨 Voorboring & Fundering"
             ])
             
             with tab1:
@@ -599,6 +602,38 @@ def render():
                     st.session_state.sonderingen[selected]["maaiveld_nap"] = new_mv
                     st.success(f"✅ Maaiveld voor **{selected}** ingesteld op NAP {new_mv:+.2f}m")
                     st.rerun()
+
+                # ── Nettoquotiënt conus (a-factor) ──
+                # Hoort bij de SONDERING, niet bij de projectuitgangspunten: hij staat in de
+                # GEF-header (MEASUREMENTVAR 3). Staat hij er, dan is hij een gegeven en niet
+                # aanpasbaar. Ontbreekt hij, dan vul je hem hier één keer in. Verderop
+                # (classificatie/normalisatie) is hij niet meer te wijzigen — dat voorkomt dat
+                # je ergens 0,80 instelt terwijl de tool met de GEF-waarde rekent.
+                st.markdown("---")
+                st.markdown("**📐 Nettoquotiënt conus (a-factor)**")
+                st.caption("Voor de qt-correctie: qt = qc + (1 − a)·u₂.")
+
+                a_gef = data.get("a_factor_gef")
+                if a_gef is not None:
+                    st.success(f"✅ **Uit de GEF gelezen** (MEASUREMENTVAR 3): **a = {a_gef:.2f}**. "
+                               "Dit is een gegeven van de conus en daarom niet aanpasbaar.")
+                    st.number_input("a-factor [-]", value=float(a_gef), min_value=0.50,
+                                    max_value=1.00, step=0.01, format="%.2f",
+                                    key=f"afac_{selected}", disabled=True)
+                    st.session_state.sonderingen[selected]["a_factor"] = float(a_gef)
+                else:
+                    st.warning("⚠️ **Geen a-factor in de GEF-header** gevonden. Vul hem hier in — "
+                               "hierna wordt hij overal gebruikt en is hij niet meer te wijzigen.")
+                    a_hand = st.number_input(
+                        "a-factor [-]", min_value=0.50, max_value=1.00,
+                        value=float(data.get("a_factor") or 0.80), step=0.01, format="%.2f",
+                        key=f"afac_{selected}",
+                        help="Typisch 0,58–0,85; staat in het conuscertificaat. Default 0,80.",
+                    )
+                    if st.button("💾 a-factor opslaan", key=f"save_afac_{selected}"):
+                        st.session_state.sonderingen[selected]["a_factor"] = float(a_hand)
+                        st.success(f"✅ a-factor voor **{selected}** ingesteld op {a_hand:.2f}")
+                        st.rerun()
             
             with tab2:
                 st.markdown("""

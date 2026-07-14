@@ -322,15 +322,32 @@ def render():
         "van de **gemeten u₂** te liggen."
     )
 
+    # De a-factor is GEEN invoer meer op deze plek: hij hoort bij de sondering (uit de
+    # GEF-header, of eenmalig ingevuld bij Stap 1). Hem hier nog eens kunnen zetten gaf
+    # verwarring — je kon 0,80 instellen terwijl de tool met de GEF-waarde rekende.
+    # We tonen alleen wat er per sondering wordt gebruikt.
+    _a_rijen = []
+    for _n, _d in geclassificeerd.items():
+        _a = _d.get("a_factor")
+        _a_rijen.append({
+            "Sondering": _n,
+            "a-factor": f"{_a:.2f}" if _a is not None else "⚠️ ontbreekt",
+            "Bron": "GEF-header" if _d.get("a_factor_gef") is not None else
+                    ("handmatig (Stap 1)" if _a is not None else "—"),
+        })
+    _ontbreekt = [r["Sondering"] for r in _a_rijen if r["a-factor"].startswith("⚠️")]
+    with st.expander("📐 Nettoquotiënt conus (a-factor) — per sondering", expanded=bool(_ontbreekt)):
+        st.caption("De a-factor komt uit de GEF-header (MEASUREMENTVAR 3) of is bij "
+                   "**Stap 1 — Upload** ingevuld. Hier niet meer aanpasbaar, om verwarring te "
+                   "voorkomen. Gebruikt voor: qt = qc + (1 − a)·u₂.")
+        st.dataframe(pd.DataFrame(_a_rijen), use_container_width=True, hide_index=True)
+        if _ontbreekt:
+            st.warning("⚠️ Geen a-factor voor: **" + "**, **".join(_ontbreekt) + "**. "
+                       "Vul hem in bij *Stap 1 — Upload → 📏 Referentieniveau & conus*. "
+                       "Zonder a-factor rekent de tool met de standaard **0,80**.")
+
     col_p1, col_p2 = st.columns(2)
     with col_p1:
-        a_factor = st.number_input(
-            "Nettoquotient conus (a)",
-            min_value=0.50, max_value=1.00,
-            value=up.get("conustype", {}).get("a_factor", 0.80),
-            step=0.01,
-            help="Voor qt-correctie: qt = qc + (1−a)·u₂."
-        )
         # GWS wordt HIER gekozen (niet bij de uitgangspunten): hij verschilt per locatie.
         # De projectbandbreedte uit Stap 0 dient als controle.
         _dijk = up.get("dijkopbouw", {})
@@ -445,8 +462,9 @@ def render():
                 qc = df[cm["qc"]]
 
                 # ── qt-correctie EERST (γ_sat en Rf hebben qt nodig) ──
-                # Gebruik de a-factor uit de GEF indien beschikbaar, anders globaal.
-                a_local = data.get("a_factor_gef") or a_factor
+                # De a-factor hoort bij de sondering: uit de GEF-header, of eenmalig
+                # ingevuld bij Stap 1. Valt terug op 0,80 als hij nergens bekend is.
+                a_local = data.get("a_factor") or data.get("a_factor_gef") or 0.80
                 is_qt_corrected = data.get("is_qt_corrected", False)
                 if is_qt_corrected:
                     df["qt"] = qc
@@ -505,7 +523,7 @@ def render():
                 st.session_state.sonderingen[name]["df"] = df
                 st.session_state.sonderingen[name]["genormaliseerd"] = True
                 st.session_state.sonderingen[name]["parameters"] = {
-                    "a": a_factor, "gwl": gwl_local, "maaiveld_nap": mv_nap,
+                    "a": a_local, "gwl": gwl_local, "maaiveld_nap": mv_nap,
                     "knik_nap": knik_local, "stijghoogte_nap": stijghoogte_local,
                     "top_zand_nap": top_zand_local, "indringing": indringing_local,
                     "gamma_bron": gamma_bron,

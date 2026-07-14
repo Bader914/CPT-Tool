@@ -669,36 +669,39 @@ def render():
         - **Klei siltig** (m=1.00) heeft de sterkste OCR-afhankelijkheid
         """)
     
-    # ─── TAB 2: CONUSTYPE ───
+    # ─── TAB 3: CONUSTYPE & CORRECTIE (uitleg — geen invoer) ───
     with tab3:
-        st.caption("qt = qc + (1−a) · u2  —  a hangt af van conustype (0.70–0.85)")
-        
+        st.caption("qt = qc + (1−a) · u₂")
+
         conus = up.get("conustype", DEFAULT_UITGANGSPUNTEN["conustype"])
-        
+
+        # De a-factor is BEWUST geen invoer meer op deze plek. Hij is een eigenschap van
+        # de gebruikte conus en staat in de GEF-header (MEASUREMENTVAR 3). Hem hier
+        # projectbreed vastzetten gaf verwarring: je kon 0,80 instellen terwijl de tool
+        # met de GEF-waarde rekende. Nu: uitlezen (of eenmalig invullen) bij Stap 1.
+        st.info(
+            "📐 **De nettoquotiënt (a-factor) stel je hier niet in.**\n\n"
+            "Hij is een eigenschap van de gebruikte conus en wordt **automatisch uit de "
+            "GEF-header gelezen** (`MEASUREMENTVAR 3`). Staat hij er niet in, dan vul je hem "
+            "één keer in bij **Stap 1 — Upload → 📏 Referentieniveau & conus**. Daarna wordt "
+            "hij overal gebruikt en is hij niet meer te wijzigen.\n\n"
+            "Zo kan er nooit verschil ontstaan tussen wat je instelt en waarmee de tool rekent."
+        )
+
         col1, col2 = st.columns(2)
         with col1:
-            conus["a_factor"] = st.slider(
-                "Nettoquotient conus (a)",
-                min_value=0.50, max_value=1.00, 
-                value=conus.get("a_factor", 0.80), 
-                step=0.01,
-                help="a = 1.0 betekent geen correctie nodig. a < 1.0 betekent dat de poriedruk "
-                     "een deel van de conusweerstand compenseert."
-            )
             conus["type"] = st.text_input(
-                "Conustype", 
+                "Conustype (documentatie)",
                 value=conus.get("type", "Elektrische conus"),
-                help="Noteer het gebruikte conustype voor documentatie."
+                help="Alleen ter documentatie; heeft geen effect op de berekening."
             )
-        
         with col2:
-            st.info(f"""
-            **Huidige instelling:**  
-            - Conustype: {conus['type']}  
-            - a = {conus['a_factor']}  
-            - Correctie: qt = qc + {1 - conus['a_factor']:.2f} × u2
-            """)
-            
+            st.markdown(
+                "**Correctieformule**\n\n"
+                "qt = qc + (1 − a) · u₂\n\n"
+                "*a is per sondering; zie Stap 1.*"
+            )
+
             st.markdown("""
             **Typische waarden:**
             | Conustype | a-factor |
@@ -868,8 +871,10 @@ def render():
             gwl_max_val = up['dijkopbouw'].get('gwl_max', 1.0)
             gwl_min_val = up['dijkopbouw'].get('gwl_min', -0.5)
             st.markdown(f"Kruin NAP {up['dijkopbouw']['kruinniveau']:+.1f}m · "
-                       f"GWS NAP {gwl_val:+.1f}m ({gwl_min_val:+.1f} tot {gwl_max_val:+.1f})")
-            st.markdown(f"Conus: {up['conustype']['type']} · a = {up['conustype']['a_factor']}")
+                       f"GWS-bandbreedte NAP {gwl_min_val:+.2f} tot {gwl_max_val:+.2f}m "
+                       f"*(gebruikte GWS: per sondering, Stap 3)*")
+            st.markdown(f"Conus: {up['conustype']['type']} · "
+                        f"a-factor: *per sondering uit de GEF (Stap 1)*")
         
         with col_s2:
             # Lagen overzicht als compacte tabel
