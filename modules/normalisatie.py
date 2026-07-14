@@ -532,8 +532,8 @@ def render():
                     vb_grens_nap = mv_nap - voorboring["diepte"]
                     df["voorboring_geldig"] = df["diepte_nap"] <= vb_grens_nap
                     n_uit = int((~df["voorboring_geldig"]).sum())
-                    vb_note = (f"{voorboring['diepte']:.2f} m → boven NAP {vb_grens_nap:+.2f} m "
-                               f"({n_uit} punt{'en' if n_uit != 1 else ''} zonder Su)")
+                    # kort houden: de tabel moet zonder horizontaal scrollen passen
+                    vb_note = f"{voorboring['diepte']:.2f} m ({n_uit}×)"
                 else:
                     df["voorboring_geldig"] = True
                     vb_note = "—"
@@ -558,6 +558,8 @@ def render():
 
         st.success("Normalisatie voltooid.")
         st.dataframe(pd.DataFrame(resultaten), use_container_width=True, hide_index=True)
+        st.caption("Voorboring `1,00 m (1×)` = voorgeboorde diepte, en het aantal meetpunten "
+                   "daarbinnen dat géén Su krijgt.")
 
     # Resultaat-plots per sondering
     genormaliseerd = {k: v for k, v in sonderingen.items() if v.get("genormaliseerd")}

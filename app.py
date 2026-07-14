@@ -23,7 +23,13 @@ html, body, [class*="css"], input, button, select, textarea { font-family:'Inter
 [data-testid="stAppViewContainer"]{ background:var(--bg); color:var(--text); }
 [data-testid="stHeader"]{ background:transparent; }
 [data-testid="stSidebar"], [data-testid="collapsedControl"]{ display:none !important; }
-.block-container{ padding-top:3rem !important; padding-bottom:2rem !important; max-width:1080px; }
+/* Breed genoeg voor de tabellen (anders moet je horizontaal scrollen), maar met
+   een bovengrens zodat tekst leesbaar blijft. */
+.block-container{ padding-top:3rem !important; padding-bottom:2rem !important;
+  max-width:1500px !important; padding-left:2rem !important; padding-right:2rem !important; }
+
+/* tabellen mogen de volle breedte pakken en netjes afbreken */
+[data-testid="stDataFrame"], [data-testid="stDataFrameResizable"]{ width:100% !important; }
 
 h1,h2,h3,h4{ color:var(--ink) !important; }
 h2{ font-size:1.25rem !important; margin:.5rem 0 .3rem !important; }
@@ -286,7 +292,8 @@ for i, s in enumerate(STEPS):
     if s.get("locked"):
         radio_labels.append(f"🔒  {s['icon']} {s['label']}")
     else:
-        check = "✅" if step_done[i] else f"{i}"
+        # 1-gebaseerd, gelijk aan "Stap X van 5" in de wizard-kop
+        check = "✅" if step_done[i] else f"{i + 1}"
         radio_labels.append(f"{check}  {s['icon']} {s['label']}")
 
 active = st.session_state.current_step

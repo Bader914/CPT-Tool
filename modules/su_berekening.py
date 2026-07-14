@@ -295,15 +295,15 @@ def render():
 
             ocr_gem = df["OCR"].replace([np.inf, -np.inf], np.nan).mean() if "OCR" in df else np.nan
             svy_gem = df["sigma_vy"].replace([np.inf, -np.inf], np.nan).mean() if "sigma_vy" in df else np.nan
+            # Alleen de kernkolommen: de methode staat al boven de tabel (voor alle
+            # sonderingen gelijk) en de data-VC staat in de tabel per grondlaag.
             resultaten.append({
-                "Sondering": name, "Status": "✅", "Methode": methode_note,
-                "Meetpunten": n_tot,
+                "Sondering": name, "Status": "✅", "n": n_tot,
                 "Su gem [kPa]": f"{su_gem:.1f}" if n_tot else "—",
-                "VC gebruikt [-]": f"{vc_geb:.2f}" if n_tot else "—",
-                "VC data (controle) [-]": f"{vc_dat:.2f}" if n_tot else "—",
+                "VC [-]": f"{vc_geb:.2f}" if n_tot else "—",
                 "Su kar [kPa]": f"{su_kar:.1f}" if n_tot else "—",
-                "OCR gem [-]": f"{ocr_gem:.2f}" if pd.notna(ocr_gem) else "—",
-                "σ'vy gem [kPa]": f"{svy_gem * 1000:.1f}" if pd.notna(svy_gem) else "—",
+                "OCR [-]": f"{ocr_gem:.2f}" if pd.notna(ocr_gem) else "—",
+                "σ'vy [kPa]": f"{svy_gem * 1000:.1f}" if pd.notna(svy_gem) else "—",
             })
             st.session_state.sonderingen[name]["vc_bron"] = vc_bron
 
@@ -371,12 +371,13 @@ def _render_per_sondering(su_berekend: dict):
         for laag, sub in df.dropna(subset=["Su"]).groupby("grondlaag"):
             vc_mat = vc_mat_map.get(laag) if vc_bron == "materiaal" else None
             kwl = karakteristieke_waarde(sub["Su"], t_factor, vc_materiaal=vc_mat)
+            # "bron VC" weggelaten: die is voor alle lagen gelijk en staat al boven
+            # de tabel (VC-bron = materiaal of data).
             rijen.append({
                 "Grondlaag": laag, "n": kwl["n"],
                 "Su gem [kPa]": round(kwl["gem"], 1),
-                "VC gebruikt [-]": round(kwl["VC"], 2),
-                "bron VC": "materiaal" if kwl["VC_bron"] == "materiaal" else "data",
-                "VC data (controle) [-]": round(kwl["VC_data"], 2),
+                "VC [-]": round(kwl["VC"], 2),
+                "VC data [-]": round(kwl["VC_data"], 2),
                 "Su kar [kPa]": round(kwl["kar"], 1),
             })
             kars.append(kwl["kar"] * kwl["n"]); gems.append(kwl["gem"] * kwl["n"]); ns.append(kwl["n"])

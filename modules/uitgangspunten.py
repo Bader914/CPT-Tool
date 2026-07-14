@@ -421,7 +421,7 @@ def _render_materialen(up: dict):
         mat_df, num_rows="dynamic", hide_index=True, use_container_width=True,
         key="materialen_editor",
         column_config={
-            "Materiaal": st.column_config.TextColumn("Materiaal", width="large"),
+            "Materiaal": st.column_config.TextColumn("Materiaal", width="medium"),
             "γ_sat": st.column_config.NumberColumn("γ_sat [kN/m³]", format="%.2f", step=0.1),
             "γ_unsat": st.column_config.NumberColumn("γ_unsat [kN/m³]", format="%.2f", step=0.1),
             "S": st.column_config.NumberColumn("S [-]", format="%.2f", step=0.01),
