@@ -23,11 +23,10 @@ DEFAULT_UITGANGSPUNTEN = {
         "kruinniveau": 4.0,          # NAP +4m
         "funderingslaag_dikte": 1.5,  # 1-2m, gemiddeld 1.5m
         "funderingslaag_materiaal": "Puin en zand",
-        "gwl": 0.0,                  # NAP 0m (gemiddeld t.t.v. sonderen)
-        "gwl_max": 1.0,              # NAP +1m (hoogste GWS t.t.v. sonderen)
-        "gwl_min": -0.5,             # NAP -0.5m (laagste GWS t.t.v. sonderen)
-        "gwl_toelichting": "Grondwaterstand varieert tussen NAP +1m en NAP -0,5m "
-                          "ten tijde van sonderen. Uitgezocht a.h.v. notitie Arnold.",
+        # GWS staat hier BEWUST niet meer. Er is één waarde nodig (geen bandbreedte:
+        # min/max wordt voor sonderingen niet gebruikt), en die stel je pas vast
+        # nadat de sondering is ingelezen → Stap 3 — Normalisatie.
+        "gwl": 0.0,                  # alleen startwaarde voor Stap 3; niet hier instelbaar
         "dijkmateriaal_droog_top": None,  # Wordt berekend: kruin - funderingslaag
         "dijkmateriaal_droog_onder": 0.0,  # NAP 0m (= GWS)
         "dijkmateriaal_nat_top": 0.0,      # NAP 0m
@@ -525,33 +524,14 @@ def render():
             } for l in lagen])
             st.dataframe(overzicht, use_container_width=True, hide_index=True)
 
-            # Grondwaterstand — hier alleen de PROJECTBANDBREEDTE (context).
-            # De GWS die je daadwerkelijk gebruikt, stel je per sondering in bij
-            # Stap 3 — Normalisatie. Daar wordt deze bandbreedte als controle getoond.
+            # Grondwaterstand staat hier BEWUST NIET meer — ook geen bandbreedte.
+            # Voor de sonderingen is één GWS-waarde voldoende (min/max wordt niet
+            # gebruikt), en die stel je pas vast nadat de sondering is ingelezen.
             st.markdown("---")
-            st.markdown("**Grondwaterstand — bandbreedte t.t.v. sonderen (projectgegeven)**")
-            c_gwl1, c_gwl2 = st.columns(2)
-            with c_gwl1:
-                gwl_min = st.number_input(
-                    "GWS min [m NAP]",
-                    value=up.get("dijkopbouw", {}).get("gwl_min", -0.5),
-                    step=0.01, format="%.2f",
-                    help="Laagste grondwaterstand ten tijde van sonderen."
-                )
-                up["dijkopbouw"]["gwl_min"] = gwl_min
-            with c_gwl2:
-                gwl_max = st.number_input(
-                    "GWS max [m NAP]",
-                    value=up.get("dijkopbouw", {}).get("gwl_max", 1.0),
-                    step=0.01, format="%.2f",
-                    help="Hoogste grondwaterstand ten tijde van sonderen."
-                )
-                up["dijkopbouw"]["gwl_max"] = gwl_max
-            st.caption(
-                f"ℹ️ Dit is alleen de **bandbreedte** (NAP {gwl_min:+.2f} … {gwl_max:+.2f} m). "
-                "De GWS die je **gebruikt** in de berekening stel je in bij "
-                "**Stap 3 — Normalisatie**, per sondering — daar hoort hij, want hij verschilt "
-                "per locatie. De tool waarschuwt daar als je buiten deze bandbreedte komt."
+            st.info(
+                "💧 **De grondwaterstand stel je hier niet in.** Er is één waarde nodig, en die "
+                "bepaal je pas nadat de sondering is ingelezen: bij **Stap 3 — Normalisatie** "
+                "(globaal, en per sondering aanpasbaar)."
             )
 
             st.markdown("---")
@@ -867,12 +847,8 @@ def render():
         with col_s1:
             # Project + Dijkopbouw
             st.markdown(f"**{up['project']['naam']}** — {up['project']['beschrijving']}")
-            gwl_val = up['dijkopbouw']['gwl']
-            gwl_max_val = up['dijkopbouw'].get('gwl_max', 1.0)
-            gwl_min_val = up['dijkopbouw'].get('gwl_min', -0.5)
             st.markdown(f"Kruin NAP {up['dijkopbouw']['kruinniveau']:+.1f}m · "
-                       f"GWS-bandbreedte NAP {gwl_min_val:+.2f} tot {gwl_max_val:+.2f}m "
-                       f"*(gebruikte GWS: per sondering, Stap 3)*")
+                        f"GWS: *per sondering, Stap 3 — Normalisatie*")
             st.markdown(f"Conus: {up['conustype']['type']} · "
                         f"a-factor: *per sondering uit de GEF (Stap 1)*")
         
