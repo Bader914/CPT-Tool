@@ -14,6 +14,7 @@ st.markdown("""
 :root{
   --bg:#f5f7fb; --surface:#ffffff; --ink:#0f2942; --text:#3f5165; --muted:#7488a0;
   --primary:#1a76bb; --primary-d:#125e97; --primary-soft:#e9f2fb; --border:#e4eaf1;
+  --field-border:#c3d2e0;   /* rand van invoervelden/knoppen — bewust zichtbaar */
   --green:#15803d; --green-soft:#eafaf0;
 }
 html, body, [class*="css"], input, button, select, textarea { font-family:'Inter',sans-serif; }
@@ -80,21 +81,76 @@ h3{ font-size:1.05rem !important; margin:.4rem 0 .2rem !important; }
 [data-testid="stExpander"] summary{ font-weight:600; color:var(--ink) !important; }
 [data-testid="stExpander"] summary span{ color:var(--ink) !important; }
 
-/* knoppen */
-.stButton > button{ border-radius:10px !important; font-weight:600; padding:.55rem 1.4rem;
-  border:1px solid var(--border) !important; background:var(--surface); color:var(--ink); transition:all .15s ease; }
-.stButton > button:hover{ border-color:var(--primary) !important; color:var(--primary-d) !important; }
-.stButton > button[kind="primary"]{ background:var(--primary) !important; color:#fff !important; border:none !important;
-  box-shadow:0 2px 8px rgba(26,118,187,.28); }
-.stButton > button[kind="primary"]:hover{ background:var(--primary-d) !important; color:#fff !important; }
+/* === INVOERVELDEN — duidelijk omlijnd, overal dezelfde vorm === */
+/* Zonder rand vielen de velden weg tegen de witte achtergrond. */
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stDateInput"] input,
+[data-baseweb="select"] > div{
+  background:#fff !important;
+  border:1.5px solid var(--field-border) !important;
+  border-radius:8px !important;
+  color:var(--ink) !important;
+  box-shadow:none !important;
+}
+/* het omhulsel van number/text input zelf ook, anders zie je een dubbele rand */
+[data-testid="stNumberInput"] > div, [data-testid="stTextInput"] > div{
+  border:none !important; background:transparent !important; box-shadow:none !important; }
+
+/* focus: duidelijke blauwe ring */
+[data-testid="stTextInput"] input:focus,
+[data-testid="stNumberInput"] input:focus,
+[data-testid="stTextArea"] textarea:focus,
+[data-baseweb="select"] > div:focus-within{
+  border-color:var(--primary) !important;
+  box-shadow:0 0 0 3px rgba(26,118,187,.15) !important;
+}
+/* hover */
+[data-testid="stTextInput"] input:hover,
+[data-testid="stNumberInput"] input:hover,
+[data-baseweb="select"] > div:hover{ border-color:#9db6cd !important; }
+
+/* uitgeschakelde velden: grijs, duidelijk 'niet aanpasbaar' */
+[data-testid="stTextInput"] input:disabled,
+[data-testid="stNumberInput"] input:disabled{
+  background:#f1f5f9 !important; color:var(--muted) !important;
+  border-color:var(--border) !important; cursor:not-allowed; }
+
+/* +/- stappers van number input */
+[data-testid="stNumberInputStepUp"], [data-testid="stNumberInputStepDown"]{
+  border:1.5px solid var(--field-border) !important; border-radius:6px !important;
+  background:#fff !important; color:var(--muted) !important; }
+[data-testid="stNumberInputStepUp"]:hover, [data-testid="stNumberInputStepDown"]:hover{
+  border-color:var(--primary) !important; color:var(--primary) !important; }
+
+/* labels boven de velden */
+[data-testid="stNumberInput"] label, [data-testid="stSelectbox"] label, [data-testid="stTextInput"] label,
+[data-testid="stTextArea"] label, [data-testid="stFileUploader"] label, [data-testid="stRadio"] > label,
+[data-testid="stCheckbox"] label{ color:var(--ink) !important; font-weight:600; font-size:.85rem; }
+
+/* checkbox duidelijker */
+[data-testid="stCheckbox"] [data-baseweb="checkbox"] div:first-child{
+  border:1.5px solid var(--field-border) !important; border-radius:5px !important; }
+
+/* === KNOPPEN === */
+/* secundair: witte knop met duidelijke rand · primair: gevuld blauw */
+.stButton > button, .stDownloadButton > button{
+  border-radius:8px !important; font-weight:600; padding:.5rem 1.2rem;
+  border:1.5px solid var(--field-border) !important; background:#fff !important;
+  color:var(--ink) !important; transition:all .15s ease; box-shadow:none !important; }
+.stButton > button:hover, .stDownloadButton > button:hover{
+  border-color:var(--primary) !important; color:var(--primary-d) !important;
+  background:var(--primary-soft) !important; }
+.stButton > button[kind="primary"], .stDownloadButton > button[kind="primary"]{
+  background:var(--primary) !important; color:#fff !important;
+  border:1.5px solid var(--primary) !important; }
+.stButton > button[kind="primary"]:hover, .stDownloadButton > button[kind="primary"]:hover{
+  background:var(--primary-d) !important; border-color:var(--primary-d) !important; color:#fff !important; }
 
 /* bestand-uploader */
-[data-testid="stFileUploader"]{ background:var(--surface); border:2px dashed #c7d9ea !important; border-radius:12px; padding:.8rem; }
-[data-testid="stFileUploader"]:hover{ border-color:var(--primary) !important; }
-
-/* labels */
-[data-testid="stNumberInput"] label, [data-testid="stSelectbox"] label, [data-testid="stTextInput"] label,
-[data-testid="stFileUploader"] label, [data-testid="stRadio"] > label{ color:var(--ink) !important; font-weight:600; font-size:.85rem; }
+[data-testid="stFileUploader"]{ background:#fff; border:2px dashed #b8cfe3 !important; border-radius:12px; padding:.8rem; }
+[data-testid="stFileUploader"]:hover{ border-color:var(--primary) !important; background:var(--primary-soft); }
 
 /* tabellen */
 [data-testid="stAppViewContainer"] table{ background:var(--surface); border:1px solid var(--border);
