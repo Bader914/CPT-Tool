@@ -595,12 +595,13 @@ def render():
         if not_ready > 0:
             st.warning(
                 f"⚠️ **{not_ready} sondering(en)** missen essentiële kolommen (diepte/qc). "
-                f"Selecteer hieronder de juiste kolommen bij 'Kolom Mapping' voordat je doorgaat naar Stap 2."
+                "Open hieronder **Details per sondering → Kolom Mapping** en kies de juiste "
+                "kolommen voordat je verdergaat."
             )
         elif ready == total:
             st.success(
-                f"✅ **Alle {total} sonderingen gereed** voor de volgende stap! "
-                f"Ga naar **Stap 4 — Waterdruk** in het zijmenu."
+                f"✅ **Alle {total} sonderingen zijn gereed.** "
+                "Klik onderaan op **Volgende: Grondlagen per sondering**."
             )
         
         # Overzichtstabel
@@ -621,258 +622,260 @@ def render():
             mv_nap = data.get("maaiveld_nap")
             mv_str = f"NAP {mv_nap:+.2f}m" if mv_nap is not None else "⚠️ Onbekend"
             
+            # Compact: alleen wat je in één oogopslag wilt zien. De kolomdetectie
+            # (qc/fs/u2) staat in het opvouwbare detailblok hieronder.
+            _a = data.get("a_factor")
             overview_data.append({
                 "Sondering": name,
                 "Status": status,
                 "Maaiveld": mv_str,
+                "a-factor": f"{_a:.2f}" if _a is not None else "⚠️ ontbreekt",
                 "Metingen": len(df),
                 "Dieptebereik": depth_range,
-                "qc": f"✅ {cm['qc']}" if cm["qc"] else "❌ Niet gevonden",
-                "fs": f"✅ {cm['fs']}" if cm["fs"] else "⚠️ Niet gevonden",
-                "u2": f"✅ {cm['u2']}" if cm["u2"] else "⚠️ Niet gevonden",
             })
-        
+
         st.dataframe(pd.DataFrame(overview_data), use_container_width=True, hide_index=True)
         
-        # --- Detail per sondering ---
+        # --- Details per sondering (opvouwbaar: meestal hoef je hier niets te doen) ---
         st.markdown("---")
-        st.subheader("Detail per sondering")
-        selected = st.selectbox("Selecteer sondering", list(st.session_state.sonderingen.keys()))
+        with st.expander("🔍 Details per sondering — controleren & aanpassen", expanded=False):
+            st.caption("De tool heeft alles al uit de GEF gelezen. Open dit alleen als je de kolommen, het maaiveld, de a-factor of de voorboring wilt controleren.")
+            selected = st.selectbox("Selecteer sondering", list(st.session_state.sonderingen.keys()))
         
-        if selected:
-            data = st.session_state.sonderingen[selected]
-            df = data["df"]
-            cm = data["col_mapping"]
+            if selected:
+                data = st.session_state.sonderingen[selected]
+                df = data["df"]
+                cm = data["col_mapping"]
             
-            # Status indicator
-            if cm["diepte"] and cm["qc"]:
-                st.success(f"✅ **{selected}** — Gereed voor analyse")
-            else:
-                missing = [k for k in ["diepte", "qc"] if not cm.get(k)]
-                st.error(
-                    f"❌ **{selected}** — Kolom(men) **{', '.join(missing)}** niet gevonden. "
-                    f"Selecteer de juiste kolommen hieronder bij 'Kolom Mapping'."
-                )
-            
-            tab1, tab2, tab3, tab4 = st.tabs([
-                "📋 Data Preview", "🔧 Kolom Mapping",
-                "📏 Referentieniveau & conus", "🪨 Voorboring & Fundering"
-            ])
-            
-            with tab1:
-                st.caption(f"Eerste 30 rijen van {len(df)} totaal — Kolommen: {list(df.columns)}")
-                st.dataframe(df.head(30), use_container_width=True)
-            
-            with tab3:
-                st.markdown("""
-                **Maaiveldniveau (m NAP)** — het niveau waarop de sondering is gestart.  
-                Dit wordt uit de GEF-header (`#ZID`) gelezen. Controleer en pas aan indien nodig.  
-                Het maaiveldniveau is cruciaal voor de juiste σv0-berekening en laagkoppeling.
-                """)
-                
-                current_mv = data.get("maaiveld_nap")
-                gef_mv = df.attrs.get("maaiveld_nap", None) if hasattr(df, 'attrs') else None
-                
-                if gef_mv is not None:
-                    st.info(f"ℹ️ Uit GEF-header: maaiveld = NAP {gef_mv:+.2f}m")
+                # Status indicator
+                if cm["diepte"] and cm["qc"]:
+                    st.success(f"✅ **{selected}** — Gereed voor analyse")
                 else:
-                    st.warning("⚠️ Geen maaiveldniveau gevonden in GEF-header (#ZID). Vul handmatig in.")
-                
-                new_mv = st.number_input(
-                    "Maaiveld [m NAP]",
-                    min_value=-10.0, max_value=20.0,
-                    value=float(current_mv) if current_mv is not None else 0.0,
-                    step=0.01, format="%.2f",
-                    key=f"mv_{selected}",
-                    help="Het hoogte-niveau (m NAP) waar de sondering start. Sondeerlengte 0m = dit niveau."
-                )
-                
-                if st.button("💾 Maaiveld opslaan", key=f"save_mv_{selected}", type="primary"):
-                    st.session_state.sonderingen[selected]["maaiveld_nap"] = new_mv
-                    st.success(f"✅ Maaiveld voor **{selected}** ingesteld op NAP {new_mv:+.2f}m")
-                    st.rerun()
-
-                # ── Nettoquotiënt conus (a-factor) ──
-                # Hoort bij de SONDERING, niet bij de projectuitgangspunten: hij staat in de
-                # GEF-header (MEASUREMENTVAR 3). Staat hij er, dan is hij een gegeven en niet
-                # aanpasbaar. Ontbreekt hij, dan vul je hem hier één keer in. Verderop
-                # (classificatie/normalisatie) is hij niet meer te wijzigen — dat voorkomt dat
-                # je ergens 0,80 instelt terwijl de tool met de GEF-waarde rekent.
-                st.markdown("---")
-                st.markdown("**📐 Nettoquotiënt conus (a-factor)**")
-                st.caption("Voor de qt-correctie: qt = qc + (1 − a)·u₂.")
-
-                a_gef = data.get("a_factor_gef")
-                if a_gef is not None:
-                    st.success(f"✅ **Uit de GEF gelezen** (MEASUREMENTVAR 3): **a = {a_gef:.2f}**. "
-                               "Dit is een gegeven van de conus en daarom niet aanpasbaar.")
-                    st.number_input("a-factor [-]", value=float(a_gef), min_value=0.50,
-                                    max_value=1.00, step=0.01, format="%.2f",
-                                    key=f"afac_{selected}", disabled=True)
-                    st.session_state.sonderingen[selected]["a_factor"] = float(a_gef)
-                else:
-                    st.warning("⚠️ **Geen a-factor in de GEF-header** gevonden. Vul hem hier in — "
-                               "hierna wordt hij overal gebruikt en is hij niet meer te wijzigen.")
-                    a_hand = st.number_input(
-                        "a-factor [-]", min_value=0.50, max_value=1.00,
-                        value=float(data.get("a_factor") or 0.80), step=0.01, format="%.2f",
-                        key=f"afac_{selected}",
-                        help="Typisch 0,58–0,85; staat in het conuscertificaat. Default 0,80.",
+                    missing = [k for k in ["diepte", "qc"] if not cm.get(k)]
+                    st.error(
+                        f"❌ **{selected}** — Kolom(men) **{', '.join(missing)}** niet gevonden. "
+                        f"Selecteer de juiste kolommen hieronder bij 'Kolom Mapping'."
                     )
-                    if st.button("💾 a-factor opslaan", key=f"save_afac_{selected}"):
-                        st.session_state.sonderingen[selected]["a_factor"] = float(a_hand)
-                        st.success(f"✅ a-factor voor **{selected}** ingesteld op {a_hand:.2f}")
-                        st.rerun()
             
-            with tab2:
-                st.markdown("""
-                **Automatische kolomherkenning** — controleer en pas aan indien nodig.
+                tab1, tab2, tab3, tab4 = st.tabs([
+                    "📋 Data Preview", "🔧 Kolom Mapping",
+                    "📏 Referentieniveau & conus", "🪨 Voorboring & Fundering"
+                ])
+            
+                with tab1:
+                    st.caption(f"Eerste 30 rijen van {len(df)} totaal — Kolommen: {list(df.columns)}")
+                    st.dataframe(df.head(30), use_container_width=True)
+            
+                with tab3:
+                    st.markdown("""
+                    **Maaiveldniveau (m NAP)** — het niveau waarop de sondering is gestart.  
+                    Dit wordt uit de GEF-header (`#ZID`) gelezen. Controleer en pas aan indien nodig.  
+                    Het maaiveldniveau is cruciaal voor de juiste σv0-berekening en laagkoppeling.
+                    """)
                 
-                De kolommen **diepte** en **qc** zijn **verplicht** voor verdere analyse. 
-                Als deze niet automatisch zijn herkend, selecteer ze hier handmatig.
-                """)
+                    current_mv = data.get("maaiveld_nap")
+                    gef_mv = df.attrs.get("maaiveld_nap", None) if hasattr(df, 'attrs') else None
                 
-                cols = df.columns.tolist()
-                
-                new_mapping = {}
-                col1, col2 = st.columns(2)
-                with col1:
-                    idx_diepte = cols.index(cm["diepte"]) + 1 if cm.get("diepte") and cm["diepte"] in cols else 0
-                    new_mapping["diepte"] = st.selectbox(
-                        "🔴 Diepte kolom (verplicht)", 
-                        options=["(niet gevonden)"] + cols,
-                        index=idx_diepte,
-                        key=f"diepte_{selected}"
-                    )
-                    idx_qc = cols.index(cm["qc"]) + 1 if cm.get("qc") and cm["qc"] in cols else 0
-                    new_mapping["qc"] = st.selectbox(
-                        "🔴 qc (conusweerstand) kolom (verplicht)",
-                        options=["(niet gevonden)"] + cols,
-                        index=idx_qc,
-                        key=f"qc_{selected}"
-                    )
-                with col2:
-                    idx_fs = cols.index(cm["fs"]) + 1 if cm.get("fs") and cm["fs"] in cols else 0
-                    new_mapping["fs"] = st.selectbox(
-                        "🟡 fs (wrijving) kolom (optioneel)",
-                        options=["(niet gevonden)"] + cols,
-                        index=idx_fs,
-                        key=f"fs_{selected}"
-                    )
-                    idx_u2 = cols.index(cm["u2"]) + 1 if cm.get("u2") and cm["u2"] in cols else 0
-                    new_mapping["u2"] = st.selectbox(
-                        "🟡 u2 (poriedruk) kolom (optioneel)",
-                        options=["(niet gevonden)"] + cols,
-                        index=idx_u2,
-                        key=f"u2_{selected}"
-                    )
-                
-                if st.button("💾 Mapping opslaan", key=f"save_{selected}", type="primary"):
-                    for k, v in new_mapping.items():
-                        st.session_state.sonderingen[selected]["col_mapping"][k] = v if v != "(niet gevonden)" else None
-                    # Herbereken poriedruk check
-                    st.session_state.sonderingen[selected]["poriedruk_check"] = check_poriedruk_correctie(
-                        df, st.session_state.sonderingen[selected]["col_mapping"]
-                    )
-                    st.success("✅ Kolom mapping opgeslagen! Herlaad de pagina om het overzicht bij te werken.")
-                    st.rerun()
-
-            with tab4:
-                st.markdown("""
-                **Voorboring & funderingslaag** — de bovenste meters van een sondering zijn vaak
-                niet representatief (wegfundering, of er is voorgeboord). De metingen daar worden
-                **niet gebruikt voor Su**. Het **gewicht** van die grond telt wél mee in σv0.
-                """)
-
-                voorb = st.session_state.sonderingen[selected].get("voorboring", {}) or {}
-                fund = st.session_state.sonderingen[selected].get("funderingslaag", {}) or {}
-                vb_uit_gef = bool(voorb.get("uit_gef"))
-                vb_mv = st.session_state.sonderingen[selected].get("maaiveld_nap")
-
-                col_vb, col_fd = st.columns(2)
-
-                with col_vb:
-                    st.markdown("**🕳️ Voorboring**")
-                    if vb_uit_gef:
-                        voorboring_actief = True
-                        voorboring_diepte = float(voorb.get("diepte", 0.0))
-                        _grens = (vb_mv - voorboring_diepte) if vb_mv is not None else None
-                        _grens_txt = (f"Alles **boven NAP {_grens:+.2f} m** valt in de voorboorzone."
-                                      if _grens is not None else "")
-                        st.success(
-                            f"✅ **Uit de GEF gelezen** (MEASUREMENTVAR 13): voorgeboord tot "
-                            f"**{voorboring_diepte:.2f} m onder maaiveld**. {_grens_txt}"
-                        )
-                        st.caption("Daar wordt geen Su berekend (het gewicht telt wél mee in σv0). "
-                                   "Dit wordt verwerkt bij Stap 4 — Waterdruk. "
-                                   "Overgenomen uit de GEF, daarom niet aanpasbaar.")
-                        st.number_input(
-                            "Voorboring tot [m onder maaiveld]",
-                            value=voorboring_diepte, min_value=0.0, max_value=10.0,
-                            step=0.01, format="%.2f", key=f"vb_diepte_{selected}", disabled=True,
-                        )
+                    if gef_mv is not None:
+                        st.info(f"ℹ️ Uit GEF-header: maaiveld = NAP {gef_mv:+.2f}m")
                     else:
-                        voorboring_actief = st.checkbox(
-                            "Voorboring toepassen",
-                            value=voorb.get("actief", False),
-                            key=f"vb_actief_{selected}",
-                            help="Als ingeschakeld wordt de sondeerdata in het opgegeven dieptebereik genegeerd."
+                        st.warning("⚠️ Geen maaiveldniveau gevonden in GEF-header (#ZID). Vul handmatig in.")
+                
+                    new_mv = st.number_input(
+                        "Maaiveld [m NAP]",
+                        min_value=-10.0, max_value=20.0,
+                        value=float(current_mv) if current_mv is not None else 0.0,
+                        step=0.01, format="%.2f",
+                        key=f"mv_{selected}",
+                        help="Het hoogte-niveau (m NAP) waar de sondering start. Sondeerlengte 0m = dit niveau."
+                    )
+                
+                    if st.button("💾 Maaiveld opslaan", key=f"save_mv_{selected}", type="primary"):
+                        st.session_state.sonderingen[selected]["maaiveld_nap"] = new_mv
+                        st.success(f"✅ Maaiveld voor **{selected}** ingesteld op NAP {new_mv:+.2f}m")
+                        st.rerun()
+
+                    # ── Nettoquotiënt conus (a-factor) ──
+                    # Hoort bij de SONDERING, niet bij de projectuitgangspunten: hij staat in de
+                    # GEF-header (MEASUREMENTVAR 3). Staat hij er, dan is hij een gegeven en niet
+                    # aanpasbaar. Ontbreekt hij, dan vul je hem hier één keer in. Verderop
+                    # (classificatie/normalisatie) is hij niet meer te wijzigen — dat voorkomt dat
+                    # je ergens 0,80 instelt terwijl de tool met de GEF-waarde rekent.
+                    st.markdown("---")
+                    st.markdown("**📐 Nettoquotiënt conus (a-factor)**")
+                    st.caption("Voor de qt-correctie: qt = qc + (1 − a)·u₂.")
+
+                    a_gef = data.get("a_factor_gef")
+                    if a_gef is not None:
+                        st.success(f"✅ **Uit de GEF gelezen** (MEASUREMENTVAR 3): **a = {a_gef:.2f}**. "
+                                   "Dit is een gegeven van de conus en daarom niet aanpasbaar.")
+                        st.number_input("a-factor [-]", value=float(a_gef), min_value=0.50,
+                                        max_value=1.00, step=0.01, format="%.2f",
+                                        key=f"afac_{selected}", disabled=True)
+                        st.session_state.sonderingen[selected]["a_factor"] = float(a_gef)
+                    else:
+                        st.warning("⚠️ **Geen a-factor in de GEF-header** gevonden. Vul hem hier in — "
+                                   "hierna wordt hij overal gebruikt en is hij niet meer te wijzigen.")
+                        a_hand = st.number_input(
+                            "a-factor [-]", min_value=0.50, max_value=1.00,
+                            value=float(data.get("a_factor") or 0.80), step=0.01, format="%.2f",
+                            key=f"afac_{selected}",
+                            help="Typisch 0,58–0,85; staat in het conuscertificaat. Default 0,80.",
                         )
-                        voorboring_diepte = st.number_input(
-                            "Voorboring tot [m onder maaiveld]",
-                            value=float(voorb.get("diepte", 0.5)),
-                            min_value=0.0, max_value=10.0, step=0.01, format="%.2f",
-                            key=f"vb_diepte_{selected}",
-                            disabled=not voorboring_actief,
-                            help="Sondeerdata van 0 tot deze diepte wordt niet gebruikt voor Su."
+                        if st.button("💾 a-factor opslaan", key=f"save_afac_{selected}"):
+                            st.session_state.sonderingen[selected]["a_factor"] = float(a_hand)
+                            st.success(f"✅ a-factor voor **{selected}** ingesteld op {a_hand:.2f}")
+                            st.rerun()
+            
+                with tab2:
+                    st.markdown("""
+                    **Automatische kolomherkenning** — controleer en pas aan indien nodig.
+                
+                    De kolommen **diepte** en **qc** zijn **verplicht** voor verdere analyse. 
+                    Als deze niet automatisch zijn herkend, selecteer ze hier handmatig.
+                    """)
+                
+                    cols = df.columns.tolist()
+                
+                    new_mapping = {}
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        idx_diepte = cols.index(cm["diepte"]) + 1 if cm.get("diepte") and cm["diepte"] in cols else 0
+                        new_mapping["diepte"] = st.selectbox(
+                            "🔴 Diepte kolom (verplicht)", 
+                            options=["(niet gevonden)"] + cols,
+                            index=idx_diepte,
+                            key=f"diepte_{selected}"
+                        )
+                        idx_qc = cols.index(cm["qc"]) + 1 if cm.get("qc") and cm["qc"] in cols else 0
+                        new_mapping["qc"] = st.selectbox(
+                            "🔴 qc (conusweerstand) kolom (verplicht)",
+                            options=["(niet gevonden)"] + cols,
+                            index=idx_qc,
+                            key=f"qc_{selected}"
+                        )
+                    with col2:
+                        idx_fs = cols.index(cm["fs"]) + 1 if cm.get("fs") and cm["fs"] in cols else 0
+                        new_mapping["fs"] = st.selectbox(
+                            "🟡 fs (wrijving) kolom (optioneel)",
+                            options=["(niet gevonden)"] + cols,
+                            index=idx_fs,
+                            key=f"fs_{selected}"
+                        )
+                        idx_u2 = cols.index(cm["u2"]) + 1 if cm.get("u2") and cm["u2"] in cols else 0
+                        new_mapping["u2"] = st.selectbox(
+                            "🟡 u2 (poriedruk) kolom (optioneel)",
+                            options=["(niet gevonden)"] + cols,
+                            index=idx_u2,
+                            key=f"u2_{selected}"
+                        )
+                
+                    if st.button("💾 Mapping opslaan", key=f"save_{selected}", type="primary"):
+                        for k, v in new_mapping.items():
+                            st.session_state.sonderingen[selected]["col_mapping"][k] = v if v != "(niet gevonden)" else None
+                        # Herbereken poriedruk check
+                        st.session_state.sonderingen[selected]["poriedruk_check"] = check_poriedruk_correctie(
+                            df, st.session_state.sonderingen[selected]["col_mapping"]
+                        )
+                        st.success("✅ Kolom mapping opgeslagen! Herlaad de pagina om het overzicht bij te werken.")
+                        st.rerun()
+
+                with tab4:
+                    st.markdown("""
+                    **Voorboring & funderingslaag** — de bovenste meters van een sondering zijn vaak
+                    niet representatief (wegfundering, of er is voorgeboord). De metingen daar worden
+                    **niet gebruikt voor Su**. Het **gewicht** van die grond telt wél mee in σv0.
+                    """)
+
+                    voorb = st.session_state.sonderingen[selected].get("voorboring", {}) or {}
+                    fund = st.session_state.sonderingen[selected].get("funderingslaag", {}) or {}
+                    vb_uit_gef = bool(voorb.get("uit_gef"))
+                    vb_mv = st.session_state.sonderingen[selected].get("maaiveld_nap")
+
+                    col_vb, col_fd = st.columns(2)
+
+                    with col_vb:
+                        st.markdown("**🕳️ Voorboring**")
+                        if vb_uit_gef:
+                            voorboring_actief = True
+                            voorboring_diepte = float(voorb.get("diepte", 0.0))
+                            _grens = (vb_mv - voorboring_diepte) if vb_mv is not None else None
+                            _grens_txt = (f"Alles **boven NAP {_grens:+.2f} m** valt in de voorboorzone."
+                                          if _grens is not None else "")
+                            st.success(
+                                f"✅ **Uit de GEF gelezen** (MEASUREMENTVAR 13): voorgeboord tot "
+                                f"**{voorboring_diepte:.2f} m onder maaiveld**. {_grens_txt}"
+                            )
+                            st.caption("Daar wordt geen Su berekend (het gewicht telt wél mee in σv0). "
+                                       "Dit wordt verwerkt bij Stap 4 — Waterdruk. "
+                                       "Overgenomen uit de GEF, daarom niet aanpasbaar.")
+                            st.number_input(
+                                "Voorboring tot [m onder maaiveld]",
+                                value=voorboring_diepte, min_value=0.0, max_value=10.0,
+                                step=0.01, format="%.2f", key=f"vb_diepte_{selected}", disabled=True,
+                            )
+                        else:
+                            voorboring_actief = st.checkbox(
+                                "Voorboring toepassen",
+                                value=voorb.get("actief", False),
+                                key=f"vb_actief_{selected}",
+                                help="Als ingeschakeld wordt de sondeerdata in het opgegeven dieptebereik genegeerd."
+                            )
+                            voorboring_diepte = st.number_input(
+                                "Voorboring tot [m onder maaiveld]",
+                                value=float(voorb.get("diepte", 0.5)),
+                                min_value=0.0, max_value=10.0, step=0.01, format="%.2f",
+                                key=f"vb_diepte_{selected}",
+                                disabled=not voorboring_actief,
+                                help="Sondeerdata van 0 tot deze diepte wordt niet gebruikt voor Su."
+                            )
+
+                    with col_fd:
+                        st.markdown("**🧱 Funderingslaag**")
+                        fund_actief = st.checkbox(
+                            "Funderingslaag toepassen",
+                            value=fund.get("actief", False),
+                            key=f"fd_actief_{selected}",
+                            help="Als ingeschakeld wordt deze laag toegevoegd als bovenste laag voor de σᵥ₀-berekening."
+                        )
+                        if fund_actief:
+                            st.caption("⚠️ Gebruik dit niet samen met een aparte funderingslaag in de "
+                                       "Grondopbouw — anders telt de bovenlaag dubbel mee in σᵥ₀.")
+                        fund_dikte = st.number_input(
+                            "Dikte [m]",
+                            value=float(fund.get("dikte", 1.5)),
+                            min_value=0.0, max_value=5.0, step=0.1,
+                            key=f"fd_dikte_{selected}",
+                            disabled=not fund_actief,
+                        )
+                        fund_gamma = st.number_input(
+                            "γ [kN/m³]",
+                            value=float(fund.get("gamma", 21.0)),
+                            min_value=10.0, max_value=25.0, step=0.5,
+                            key=f"fd_gamma_{selected}",
+                            disabled=not fund_actief,
+                        )
+                        fund_materiaal = st.text_input(
+                            "Materiaal",
+                            value=fund.get("materiaal", "Puin en zand"),
+                            key=f"fd_mat_{selected}",
+                            disabled=not fund_actief,
                         )
 
-                with col_fd:
-                    st.markdown("**🧱 Funderingslaag**")
-                    fund_actief = st.checkbox(
-                        "Funderingslaag toepassen",
-                        value=fund.get("actief", False),
-                        key=f"fd_actief_{selected}",
-                        help="Als ingeschakeld wordt deze laag toegevoegd als bovenste laag voor de σᵥ₀-berekening."
-                    )
-                    if fund_actief:
-                        st.caption("⚠️ Gebruik dit niet samen met een aparte funderingslaag in de "
-                                   "Grondopbouw — anders telt de bovenlaag dubbel mee in σᵥ₀.")
-                    fund_dikte = st.number_input(
-                        "Dikte [m]",
-                        value=float(fund.get("dikte", 1.5)),
-                        min_value=0.0, max_value=5.0, step=0.1,
-                        key=f"fd_dikte_{selected}",
-                        disabled=not fund_actief,
-                    )
-                    fund_gamma = st.number_input(
-                        "γ [kN/m³]",
-                        value=float(fund.get("gamma", 21.0)),
-                        min_value=10.0, max_value=25.0, step=0.5,
-                        key=f"fd_gamma_{selected}",
-                        disabled=not fund_actief,
-                    )
-                    fund_materiaal = st.text_input(
-                        "Materiaal",
-                        value=fund.get("materiaal", "Puin en zand"),
-                        key=f"fd_mat_{selected}",
-                        disabled=not fund_actief,
-                    )
-
-                if st.button("💾 Voorboring & fundering opslaan", key=f"save_vb_{selected}", type="primary"):
-                    st.session_state.sonderingen[selected]["voorboring"] = {
-                        "actief": voorboring_actief,
-                        "diepte": voorboring_diepte,
-                        "uit_gef": vb_uit_gef,
-                    }
-                    st.session_state.sonderingen[selected]["funderingslaag"] = {
-                        "actief": fund_actief,
-                        "dikte": fund_dikte,
-                        "gamma": fund_gamma,
-                        "materiaal": fund_materiaal,
-                    }
-                    st.success(f"✅ Voorboring/fundering voor **{selected}** opgeslagen.")
-                    st.rerun()
+                    if st.button("💾 Voorboring & fundering opslaan", key=f"save_vb_{selected}", type="primary"):
+                        st.session_state.sonderingen[selected]["voorboring"] = {
+                            "actief": voorboring_actief,
+                            "diepte": voorboring_diepte,
+                            "uit_gef": vb_uit_gef,
+                        }
+                        st.session_state.sonderingen[selected]["funderingslaag"] = {
+                            "actief": fund_actief,
+                            "dikte": fund_dikte,
+                            "gamma": fund_gamma,
+                            "materiaal": fund_materiaal,
+                        }
+                        st.success(f"✅ Voorboring/fundering voor **{selected}** opgeslagen.")
+                        st.rerun()
 
         # --- Verwijder sonderingen ---
         st.markdown("---")

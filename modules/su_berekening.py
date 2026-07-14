@@ -140,15 +140,19 @@ def render():
     # Nkt per SHZ-grondlaag (direct uit uitgangspunten)
     nkt_per_grondlaag = {l["naam"]: l["Nkt"] for l in lagen if l.get("Nkt") is not None}
 
-    st.subheader("Nkt per grondlaag (Tabel 71)")
-    nkt_rows = [{"Grondlaag": n, "Nkt": v} for n, v in nkt_per_grondlaag.items()]
-    st.dataframe(pd.DataFrame(nkt_rows), use_container_width=True, hide_index=True)
+    # Naslag: de Nkt-waardes komen uit de materialentabel (Stap 1). Meestal hoef je
+    # ze hier niet te zien → opvouwbaar. Een ontbrekende Nkt blijft wél zichtbaar,
+    # want dan wordt er voor die laag geen Su berekend.
+    with st.expander("🔢 Nkt per grondlaag (naslag — uit Stap 1)", expanded=False):
+        nkt_rows = [{"Grondlaag": n, "Nkt": v} for n, v in nkt_per_grondlaag.items()]
+        st.dataframe(pd.DataFrame(nkt_rows), use_container_width=True, hide_index=True)
 
     missing_dijkmat_nkt = [l["naam"] for l in lagen
                            if l.get("is_dijkmateriaal") and l.get("Nkt") is None]
     if missing_dijkmat_nkt:
-        st.warning(f"⚠️ Nkt ontbreekt voor dijkmateriaal-lagen: {', '.join(missing_dijkmat_nkt)}. "
-                    "Vul aan in Stap 1 — Parameters.")
+        st.warning(f"⚠️ **Nkt ontbreekt** voor: {', '.join(missing_dijkmat_nkt)}. "
+                   "Zonder Nkt wordt voor die laag géén Su berekend. "
+                   "Vul aan bij **Stap 1 — Parameters → Materiaaleigenschappen**.")
 
     # Su-methode + parameters
     st.markdown("**Methode & karakteristieke waarde**")
