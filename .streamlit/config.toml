@@ -6,5 +6,13 @@ enableCORS = false
 enableXsrfProtection = false
 maxUploadSize = 50
 
+[theme]
+base = "light"
+primaryColor = "#1a76bb"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f7fb"
+textColor = "#1e293b"
+font = "sans serif"
+
 [browser]
 gatherUsageStats = false

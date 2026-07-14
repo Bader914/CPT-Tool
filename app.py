@@ -7,168 +7,108 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ── Modern CSS Styling v5.1 ──
+# ── Licht, rustig ontwerp (HHSK) ──
 st.markdown("""
 <style>
-/* === FONTS === */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-body, p, label, h1, h2, h3, h4, h5, h6, div, input, button, select, textarea, td, th, li, a {
-    font-family: 'Inter', sans-serif !important;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+:root{
+  --bg:#f5f7fb; --surface:#ffffff; --ink:#0f2942; --text:#3f5165; --muted:#7488a0;
+  --primary:#1a76bb; --primary-d:#125e97; --primary-soft:#e9f2fb; --border:#e4eaf1;
+  --green:#15803d; --green-soft:#eafaf0;
 }
+html, body, [class*="css"], input, button, select, textarea { font-family:'Inter',sans-serif; }
 
-/* === FIX EXPANDER ICON — replace broken Material Icon with CSS arrow === */
-[data-testid="stExpanderToggleIcon"] {
-    font-size: 0 !important;
-    width: 1rem !important;
-    height: 1rem !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-}
-[data-testid="stExpanderToggleIcon"]::before {
-    content: "\\203A" !important;
-    font-size: 1.4rem !important;
-    font-family: 'Inter', sans-serif !important;
-    color: #78909c !important;
-    line-height: 1 !important;
-}
+/* lichte app */
+[data-testid="stAppViewContainer"]{ background:var(--bg); color:var(--text); }
+[data-testid="stHeader"]{ background:transparent; }
+[data-testid="stSidebar"], [data-testid="collapsedControl"]{ display:none !important; }
+.block-container{ padding-top:3rem !important; padding-bottom:2rem !important; max-width:1080px; }
 
-/* === DARK BLUE/BLACK THEME === */
-[data-testid="stAppViewContainer"] { background: #04080f; color: #e3f2fd; }
-[data-testid="stAppViewContainer"] p, [data-testid="stAppViewContainer"] li,
-[data-testid="stAppViewContainer"] span:not([data-testid="stExpanderToggleIcon"]),
-[data-testid="stAppViewContainer"] label { color: #bbdefb !important; }
-[data-testid="stAppViewContainer"] h1, [data-testid="stAppViewContainer"] h2,
-[data-testid="stAppViewContainer"] h3, [data-testid="stAppViewContainer"] h4 { color: #e3f2fd !important; }
-[data-testid="stHeader"] { background: rgba(4, 8, 15, 0.92) !important; backdrop-filter: blur(10px); }
+h1,h2,h3,h4{ color:var(--ink) !important; }
+h2{ font-size:1.25rem !important; margin:.5rem 0 .3rem !important; }
+h3{ font-size:1.05rem !important; margin:.4rem 0 .2rem !important; }
 
-/* Hide sidebar */
-[data-testid="stSidebar"] { display: none !important; }
-[data-testid="collapsedControl"] { display: none !important; }
+/* expander-pijl herstellen */
+[data-testid="stExpanderToggleIcon"]{ font-size:0 !important; width:1rem; height:1rem;
+  display:inline-flex; align-items:center; justify-content:center; }
+[data-testid="stExpanderToggleIcon"]::before{ content:"\203A"; font-size:1.3rem; color:var(--muted); line-height:1; }
 
-/* === REDUCE ALL PADDING === */
-.block-container { padding-top: 3.5rem !important; padding-bottom: 0 !important; }
+/* navigatie als lichte pillen */
+[data-testid="stRadio"] > div{ gap:0 !important; }
+[data-testid="stRadio"] [role="radiogroup"]{
+  gap:4px !important; background:var(--surface); border:1px solid var(--border);
+  border-radius:14px; padding:5px; box-shadow:0 1px 3px rgba(16,41,66,.05); }
+[data-testid="stRadio"] [role="radiogroup"] label{
+  border-radius:10px !important; padding:7px 14px !important; margin:0 !important;
+  font-size:.8rem !important; font-weight:600; color:var(--muted) !important; white-space:nowrap; transition:all .15s ease; }
+[data-testid="stRadio"] [role="radiogroup"] label:hover{ background:var(--primary-soft) !important; color:var(--primary-d) !important; }
+[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked){
+  background:var(--primary) !important; color:#fff !important; box-shadow:0 2px 8px rgba(26,118,187,.28); }
+[data-testid="stRadio"] [role="radiogroup"] label > div:first-child{ display:none !important; }
+[data-testid="stRadio"] [role="radiogroup"] label p{ font-size:.8rem !important; margin:0; }
 
-/* === HORIZONTAL RADIO as pill nav === */
-[data-testid="stRadio"] > div { gap: 0 !important; }
-[data-testid="stRadio"] [role="radiogroup"] {
-    gap: 3px !important; background: rgba(6, 17, 38, 0.85);
-    border-radius: 12px; padding: 3px; border: 1px solid rgba(30, 136, 229, 0.15);
-    backdrop-filter: blur(12px);
-}
-[data-testid="stRadio"] [role="radiogroup"] label {
-    border-radius: 9px !important; padding: 6px 12px !important;
-    margin: 0 !important; font-size: 0.78rem !important; font-weight: 500;
-    color: #546e7a !important; transition: all 0.2s ease;
-    white-space: nowrap;
-}
-[data-testid="stRadio"] [role="radiogroup"] label:hover {
-    background: rgba(30, 136, 229, 0.12) !important; color: #90caf9 !important;
-}
-[data-testid="stRadio"] [role="radiogroup"] label[data-checked="true"],
-[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) {
-    background: linear-gradient(135deg, #0d47a1, #1e88e5) !important;
-    color: white !important; box-shadow: 0 2px 10px rgba(30, 136, 229, 0.35);
-}
-/* Hide radio circles */
-[data-testid="stRadio"] [role="radiogroup"] label > div:first-child { display: none !important; }
-[data-testid="stRadio"] [role="radiogroup"] label p { font-size: 0.78rem !important; margin: 0; }
+/* uitleg-kaart */
+.why-card{ background:var(--primary-soft); border:1px solid #d3e6f7; border-left:4px solid var(--primary);
+  border-radius:12px; padding:1rem 1.2rem; margin:.4rem 0 1rem; }
+.why-card h4{ color:var(--primary-d) !important; font-size:.8rem; font-weight:700; text-transform:uppercase;
+  letter-spacing:.05em; margin:0 0 .35rem; }
+.why-card p{ color:#33526d !important; font-size:.9rem; line-height:1.55; margin:0 0 .3rem; }
 
-/* === WHY CARD === */
-.why-card {
-    background: rgba(8, 22, 48, 0.6); border: 1px solid rgba(30, 136, 229, 0.18);
-    border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 1rem;
-    border-left: 3px solid #1e88e5;
-}
-.why-card h4 { color: #64b5f6 !important; font-size: 0.82rem; font-weight: 700;
-    margin: 0 0 0.4rem 0; text-transform: uppercase; letter-spacing: 0.05em; }
-.why-card p { color: #bbdefb !important; font-size: 0.85rem; line-height: 1.5; margin: 0 0 0.3rem 0; }
+/* volgende-stap */
+.next-step{ background:var(--green-soft); border:1px solid #bfe8cf; border-radius:12px;
+  padding:.8rem 1.2rem; margin-top:1rem; display:flex; align-items:center; gap:10px; }
+.next-step .arrow{ font-size:1.2rem; color:var(--green); }
+.next-step p{ color:#166534 !important; margin:0; font-weight:600; font-size:.9rem; }
+.next-step b{ color:#14532d !important; }
 
-/* === NEXT-STEP === */
-.next-step {
-    background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.25);
-    border-radius: 12px; padding: 0.8rem 1.2rem; margin-top: 1rem;
-    display: flex; align-items: center; gap: 10px;
-}
-.next-step .arrow { font-size: 1.2rem; color: #22c55e; }
-.next-step p { color: #86efac !important; margin: 0; font-weight: 500; font-size: 0.88rem; }
-.next-step b { color: #4ade80 !important; }
+/* metrics als kaarten */
+[data-testid="stMetric"]{ background:var(--surface); border:1px solid var(--border); border-radius:12px;
+  padding:14px 18px; box-shadow:0 1px 3px rgba(16,41,66,.05); }
+[data-testid="stMetric"] label{ color:var(--muted) !important; font-size:.7rem !important; font-weight:600;
+  text-transform:uppercase; letter-spacing:.07em; }
+[data-testid="stMetric"] [data-testid="stMetricValue"]{ color:var(--ink) !important; font-weight:800 !important; font-size:1.4rem !important; }
 
-/* === METRIC CARDS === */
-[data-testid="stMetric"] {
-    background: rgba(8, 22, 48, 0.55) !important;
-    border: 1px solid rgba(30, 136, 229, 0.18); border-radius: 12px;
-    padding: 14px 18px; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
-}
-[data-testid="stMetric"] label { color: #64b5f6 !important; font-size: 0.7rem !important;
-    font-weight: 600 !important; text-transform: uppercase; letter-spacing: 0.08em; }
-[data-testid="stMetric"] [data-testid="stMetricValue"] { color: #e3f2fd !important;
-    font-weight: 800 !important; font-size: 1.4rem !important; }
+/* tabs */
+[data-testid="stTabs"] [data-baseweb="tab-list"]{ gap:3px; background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:4px; }
+[data-testid="stTabs"] [data-baseweb="tab"]{ border-radius:9px !important; font-weight:600; padding:8px 16px;
+  color:var(--muted) !important; font-size:.85rem; }
+[data-testid="stTabs"] [aria-selected="true"]{ background:var(--primary-soft) !important; color:var(--primary-d) !important; }
 
-/* === TABS === */
-[data-testid="stTabs"] [data-baseweb="tab-list"] {
-    gap: 2px; background: rgba(8, 22, 48, 0.45); border-radius: 12px;
-    padding: 3px; border: 1px solid rgba(30, 136, 229, 0.15);
-}
-[data-testid="stTabs"] [data-baseweb="tab"] { border-radius: 9px !important;
-    font-weight: 500; padding: 8px 16px; color: #78909c !important; font-size: 0.85rem; }
-[data-testid="stTabs"] [aria-selected="true"] {
-    background: rgba(30, 136, 229, 0.2) !important; color: #90caf9 !important; }
+/* expanders */
+[data-testid="stExpander"]{ background:var(--surface) !important; border:1px solid var(--border) !important; border-radius:12px !important; }
+[data-testid="stExpander"] summary{ font-weight:600; color:var(--ink) !important; }
+[data-testid="stExpander"] summary span{ color:var(--ink) !important; }
 
-/* === EXPANDERS === */
-[data-testid="stExpander"] { background: rgba(8, 22, 48, 0.4) !important;
-    border: 1px solid rgba(30, 136, 229, 0.15) !important; border-radius: 12px !important; }
-[data-testid="stExpander"] summary { font-weight: 600; color: #90caf9 !important; }
-[data-testid="stExpander"] summary > span:not([data-testid="stExpanderToggleIcon"]) { color: #90caf9 !important; }
+/* knoppen */
+.stButton > button{ border-radius:10px !important; font-weight:600; padding:.55rem 1.4rem;
+  border:1px solid var(--border) !important; background:var(--surface); color:var(--ink); transition:all .15s ease; }
+.stButton > button:hover{ border-color:var(--primary) !important; color:var(--primary-d) !important; }
+.stButton > button[kind="primary"]{ background:var(--primary) !important; color:#fff !important; border:none !important;
+  box-shadow:0 2px 8px rgba(26,118,187,.28); }
+.stButton > button[kind="primary"]:hover{ background:var(--primary-d) !important; color:#fff !important; }
 
-/* === BUTTONS === */
-.stButton > button { border-radius: 10px !important; font-weight: 600;
-    padding: 0.55rem 1.5rem; transition: all 0.2s ease; border: none !important; }
-.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #0d47a1 0%, #1e88e5 100%) !important;
-    color: white !important; box-shadow: 0 4px 15px rgba(30, 136, 229, 0.35); }
-.stButton > button:hover { transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(30, 136, 229, 0.4) !important; }
+/* bestand-uploader */
+[data-testid="stFileUploader"]{ background:var(--surface); border:2px dashed #c7d9ea !important; border-radius:12px; padding:.8rem; }
+[data-testid="stFileUploader"]:hover{ border-color:var(--primary) !important; }
 
-/* === DATAFRAMES === */
-[data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden;
-    border: 1px solid rgba(30, 136, 229, 0.15); }
+/* labels */
+[data-testid="stNumberInput"] label, [data-testid="stSelectbox"] label, [data-testid="stTextInput"] label,
+[data-testid="stFileUploader"] label, [data-testid="stRadio"] > label{ color:var(--ink) !important; font-weight:600; font-size:.85rem; }
 
-/* === FILE UPLOADER === */
-[data-testid="stFileUploader"] { background: rgba(8, 22, 48, 0.3);
-    border: 2px dashed rgba(30, 136, 229, 0.28) !important; border-radius: 12px; padding: 0.8rem; }
-[data-testid="stFileUploader"]:hover { border-color: rgba(30, 136, 229, 0.55) !important; }
+/* tabellen */
+[data-testid="stAppViewContainer"] table{ background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; border-collapse:separate; border-spacing:0; width:100%; overflow:hidden; }
+[data-testid="stAppViewContainer"] th{ background:var(--primary-soft) !important; color:var(--primary-d) !important;
+  padding:8px 12px; font-weight:700; font-size:.82rem; }
+[data-testid="stAppViewContainer"] td{ color:var(--text) !important; padding:7px 12px; border-top:1px solid var(--border); font-size:.85rem; }
 
-/* === INPUTS === */
-[data-testid="stSelectbox"] > div > div, [data-testid="stNumberInput"] > div > div > input,
-[data-testid="stTextInput"] > div > div > input {
-    background: rgba(8, 22, 48, 0.55) !important; border: 1px solid rgba(30, 136, 229, 0.18) !important;
-    border-radius: 8px !important; color: #e3f2fd !important; }
-[data-testid="stNumberInput"] label, [data-testid="stSelectbox"] label,
-[data-testid="stTextInput"] label, [data-testid="stFileUploader"] label {
-    color: #90caf9 !important; font-weight: 500; font-size: 0.85rem; }
+/* alerts */
+[data-testid="stAlert"]{ border-radius:10px !important; }
 
-/* === ALERTS === */
-[data-testid="stAlert"] { border-radius: 10px !important; border: none !important; }
-
-/* === TABLES === */
-[data-testid="stAppViewContainer"] table { background: rgba(8, 22, 48, 0.4);
-    border-radius: 10px; overflow: hidden; border-collapse: collapse; width: 100%; }
-[data-testid="stAppViewContainer"] th { background: rgba(30, 136, 229, 0.14) !important;
-    color: #90caf9 !important; padding: 8px 12px; font-weight: 600; font-size: 0.82rem;
-    border-bottom: 1px solid rgba(30, 136, 229, 0.18); }
-[data-testid="stAppViewContainer"] td { color: #bbdefb !important; padding: 7px 12px;
-    border-bottom: 1px solid rgba(30, 136, 229, 0.08); font-size: 0.85rem; }
-
-/* === DIVIDERS & SCROLLBAR === */
-[data-testid="stAppViewContainer"] hr { border-color: rgba(30, 136, 229, 0.12) !important; margin: 0.8rem 0; }
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: #04080f; }
-::-webkit-scrollbar-thumb { background: #1a3a5c; border-radius: 3px; }
-
-/* Reduce subheader margins */
-[data-testid="stAppViewContainer"] h2 { margin-top: 0.5rem !important; margin-bottom: 0.3rem !important; font-size: 1.1rem !important; }
-[data-testid="stAppViewContainer"] h3 { margin-top: 0.3rem !important; margin-bottom: 0.2rem !important; font-size: 1rem !important; }
+hr{ border-color:var(--border) !important; margin:.8rem 0; }
+::-webkit-scrollbar{ width:8px; } ::-webkit-scrollbar-track{ background:var(--bg); }
+::-webkit-scrollbar-thumb{ background:#c7d3df; border-radius:4px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -184,15 +124,11 @@ if not st.session_state.authenticated:
     with col2:
         st.markdown("""
         <div style="text-align: center; margin-bottom: 2rem;">
-            <div style="font-size: 4rem; margin-bottom: 0.5rem; 
-                 filter: drop-shadow(0 0 20px rgba(30, 136, 229, 0.5));">🔬</div>
-            <h1 style="font-size: 2rem; font-weight: 800; 
-                 background: linear-gradient(135deg, #90caf9, #1e88e5);
-                 -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-                 margin-bottom: 0.3rem;">
+            <div style="font-size: 3.4rem; margin-bottom: 0.5rem;">🌊</div>
+            <h1 style="font-size: 1.9rem; font-weight: 800; color:#125e97; margin-bottom: 0.3rem;">
                 CPT Su Tool
             </h1>
-            <p style="color: #546e7a; font-size: 0.95rem;">
+            <p style="color: #7488a0; font-size: 0.95rem;">
                 HHSK Dijkversterking — Traject 14-1
             </p>
         </div>
@@ -275,10 +211,8 @@ nav_left, nav_mid, nav_right = st.columns([1.5, 8, 1.5])
 with nav_left:
     st.markdown(f"""
     <div style="display:flex; align-items:center; gap:8px; padding:4px 0;">
-        <span style="font-size:1.3rem; filter:drop-shadow(0 0 8px rgba(30,136,229,0.5));">🔬</span>
-        <span style="font-weight:800; font-size:0.9rem;
-            background:linear-gradient(135deg,#90caf9,#1e88e5);
-            -webkit-background-clip:text; -webkit-text-fill-color:transparent;">CPT Su Tool</span>
+        <span style="font-size:1.3rem;">🌊</span>
+        <span style="font-weight:800; font-size:0.95rem; color:#125e97;">CPT Su Tool</span>
     </div>
     """, unsafe_allow_html=True)
 with nav_mid:
@@ -296,12 +230,12 @@ with nav_right:
     st.markdown(f"""
     <div style="display:flex; gap:16px; justify-content:flex-end; padding:6px 0;">
         <div style="text-align:center;">
-            <div style="font-size:1.1rem; font-weight:800; color:#90caf9;">{n_sond}</div>
-            <div style="font-size:0.55rem; color:#546e7a; text-transform:uppercase; letter-spacing:0.08em;">CPT's</div>
+            <div style="font-size:1.1rem; font-weight:800; color:#1a76bb;">{n_sond}</div>
+            <div style="font-size:0.55rem; color:#7488a0; text-transform:uppercase; letter-spacing:0.08em;">CPT's</div>
         </div>
         <div style="text-align:center;">
-            <div style="font-size:1.1rem; font-weight:800; color:#90caf9;">{su_count}</div>
-            <div style="font-size:0.55rem; color:#546e7a; text-transform:uppercase; letter-spacing:0.08em;">Su</div>
+            <div style="font-size:1.1rem; font-weight:800; color:#1a76bb;">{su_count}</div>
+            <div style="font-size:0.55rem; color:#7488a0; text-transform:uppercase; letter-spacing:0.08em;">Su</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
