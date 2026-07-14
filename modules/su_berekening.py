@@ -153,7 +153,7 @@ def render():
 
     # Su-methode + parameters
     st.markdown("**Methode & karakteristieke waarde**")
-    col_m1, col_m2, col_m3 = st.columns(3)
+    col_m1, col_m2 = st.columns([1.3, 1])
     with col_m1:
         su_methode = st.radio(
             "Su-methode",
@@ -163,23 +163,48 @@ def render():
                  "dáárna de grensspanning door SHANSEP om te keren: σ'vy = σ'v0·(Su/(S·σ'v0))^(1/m). "
                  "De controleroute doet het omgekeerd: σ'vy = k·q_net (Mayne) en dan Su via SHANSEP.",
         )
+    is_shansep = su_methode.startswith("SHANSEP")
+
     with col_m2:
-        k_grens = st.number_input(
-            "Grensspanning-factor k [-]", min_value=0.1, max_value=0.6, value=0.33, step=0.01,
-            help="σ'vy = k·q_net (Mayne; k ≈ 0,3–0,35 voor klei). Alleen voor de controleroute "
-                 "'SHANSEP-voorwaarts'; in de hoofdroute volgt σ'vy uit Su.",
-        )
-    with col_m3:
-        # Karakteristieke waarde is een UITGANGSPUNT (Stap 0 → tab 'Nkt-factoren'),
-        # geen rekenknop hier. We tonen alleen wat daar is ingesteld.
+        # Karakteristieke waarde is een UITGANGSPUNT (Stap 0), geen rekenknop hier.
         kar_cfg = st.session_state.get("uitgangspunten", {}).get("karakteristiek", {})
         t_factor = float(kar_cfg.get("t_factor", 1.645))
         vc_bron = kar_cfg.get("vc_bron", "materiaal")
         _bron_txt = "VC per materiaal" if vc_bron == "materiaal" else "VC uit de data"
         st.markdown("**Karakteristieke waarde**")
-        st.caption(f"t = {t_factor:.3f} · {_bron_txt}\n\nIn te stellen bij "
-                   f"**Stap 0 — Uitgangspunten → 🔢 Nkt-factoren**.")
-    is_shansep = su_methode.startswith("SHANSEP")
+        st.caption(f"t = {t_factor:.3f} · {_bron_txt} — in te stellen bij "
+                   f"**Stap 0 → 🔢 Nkt-factoren**.")
+
+    # ── Openstaand punt: de aanpak van k en t is nog niet afgestemd. ──
+    # Een vaste t = 1,645 is de 95%-fractiel van de NORMALE verdeling (σ bekend).
+    # De formele aanpak voor waterkeringen (NEN 9997-1 / schematiseringshandleiding)
+    # gebruikt Student-t met n-1 vrijheidsgraden én ruimtelijke middeling langs het
+    # glijvlak. Ook de omgang met uitschieters is een projectafspraak, geen code-keuze.
+    st.info(
+        "📋 **Nog af te stemmen — de karakteristieke waarde is voorlopig.**\n\n"
+        f"De tool rekent nu met **Su_kar = Su_gem · (1 − {t_factor:.3f} · VC)**. Een vaste "
+        "t = 1,645 is de 95%-ondergrens van de *normale* verdeling. De aanpak voor "
+        "waterkeringen gebruikt **Student-t** (afhankelijk van het aantal waarnemingen n) "
+        "en houdt rekening met **ruimtelijke middeling** langs het glijvlak. Ook of je "
+        "**uitschieters** meeneemt bepaalt het resultaat direct.\n\n"
+        "→ Methode afstemmen met **Herman-Jaap**, uitschieters met **Jan**. "
+        "Zie `OVERLEG_KARAKTERISTIEKE_WAARDE.md` in de repo."
+    )
+
+    # Grensspanning-factor k: ALLEEN relevant voor de controleroute. In de hoofdroute
+    # volgt σ'vy uit de gemeten Su (SHANSEP omgekeerd) en wordt k niet gebruikt.
+    k_grens = 0.33
+    if is_shansep:
+        st.warning(
+            "⚠️ **Controleroute — niet de waterkeringen-aanpak.** Hier komt de grensspanning "
+            "uit een CPT-correlatie (σ′vy = k·q_net, Mayne). In de Nederlandse aanpak volgt de "
+            "grensspanning uit **samendrukkingsproeven** (POP per grondlaag), niet uit een "
+            "instelbare k. Gebruik deze route alleen als **vergelijking**, niet als resultaat."
+        )
+        k_grens = st.number_input(
+            "Grensspanning-factor k [-]", min_value=0.1, max_value=0.6, value=0.33, step=0.01,
+            help="σ'vy = k·q_net (Mayne; k ≈ 0,3–0,35 voor klei). Alleen voor deze controleroute.",
+        )
 
     st.markdown("---")
 

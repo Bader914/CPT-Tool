@@ -856,8 +856,19 @@ def render():
             kar["t_factor"] = st.number_input(
                 "t-factor [-]", min_value=0.0, max_value=3.0,
                 value=float(kar.get("t_factor", 1.645)), step=0.005, format="%.3f",
-                help="1,645 = 5%-ondergrens (eenzijdig 95%). Projectkeuze, geen rekenknop.",
+                help="1,645 = 95%-ondergrens van de NORMALE verdeling (σ bekend, n → ∞). "
+                     "De formele aanpak voor waterkeringen gebruikt Student-t met n−1 "
+                     "vrijheidsgraden (dus afhankelijk van n) plus ruimtelijke middeling. "
+                     "Voorlopige waarde — af te stemmen.",
             )
+        st.info(
+            "📋 **Voorlopig — de aanpak is nog niet afgestemd.** Een vaste t = 1,645 hoort bij de "
+            "normale verdeling. De aanpak voor waterkeringen (NEN 9997-1 / schematiseringshandleiding) "
+            "gebruikt **Student-t** (afhankelijk van n) en **ruimtelijke middeling** langs het glijvlak. "
+            "Ook of je **uitschieters** meeneemt is een projectafspraak.\n\n"
+            "→ Methode afstemmen met **Herman-Jaap**, uitschieters met **Jan**. "
+            "Vragenlijst: `OVERLEG_KARAKTERISTIEKE_WAARDE.md`."
+        )
         if kar["vc_bron"] == "materiaal":
             st.caption("✅ VC komt uit de kolom **VC_su** in de materialentabel "
                        "(tab 'Grondopbouw (invoer)' → Materiaaleigenschappen). "
