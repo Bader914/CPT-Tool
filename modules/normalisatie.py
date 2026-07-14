@@ -331,11 +331,23 @@ def render():
             step=0.01,
             help="Voor qt-correctie: qt = qc + (1−a)·u₂."
         )
+        # GWS wordt HIER gekozen (niet bij de uitgangspunten): hij verschilt per locatie.
+        # De projectbandbreedte uit Stap 0 dient als controle.
+        _dijk = up.get("dijkopbouw", {})
+        _gwl_min = _dijk.get("gwl_min", -0.5)
+        _gwl_max = _dijk.get("gwl_max", 1.0)
         gwl_nap = st.number_input(
             "Grondwaterstand [m NAP]",
             min_value=-10.0, max_value=10.0,
-            value=up.get("dijkopbouw", {}).get("gwl", 0.0), step=0.01, format="%.2f",
+            value=_dijk.get("gwl", 0.0), step=0.01, format="%.2f",
+            help=f"Projectbandbreedte t.t.v. sonderen: NAP {_gwl_min:+.2f} … {_gwl_max:+.2f} m "
+                 "(Stap 0 — Dijkopbouw).",
         )
+        if gwl_nap < _gwl_min or gwl_nap > _gwl_max:
+            st.warning(f"⚠️ GWS NAP {gwl_nap:+.2f} m valt **buiten** de projectbandbreedte "
+                       f"(NAP {_gwl_min:+.2f} … {_gwl_max:+.2f} m). Bewust?")
+        else:
+            st.caption(f"✅ Binnen de projectbandbreedte (NAP {_gwl_min:+.2f} … {_gwl_max:+.2f} m).")
         knik_nap = st.number_input(
             "Knikpunt drukverloop [m NAP]",
             min_value=-30.0, max_value=5.0,
@@ -607,17 +619,24 @@ def render():
 
     # Per-sondering waterdruk override
     with st.expander("💧 Lokale waterstand- & waterdruk-override (deze sondering)", expanded=False):
-        st.caption("Default = waarden uit Uitgangspunten. Laat staan als het overal gelijk is; "
-                   "pas alleen aan als de grondwaterstand, zandlaag of pakketdruk lokaal afwijkt.")
+        st.caption("Default = de waarden die je hierboven hebt ingesteld. Laat staan als het "
+                   "overal gelijk is; pas alleen aan als de grondwaterstand, zandlaag of "
+                   "pakketdruk op déze locatie afwijkt.")
+        _dijk_l = st.session_state.get("uitgangspunten", {}).get("dijkopbouw", {})
+        _min_l, _max_l = _dijk_l.get("gwl_min", -0.5), _dijk_l.get("gwl_max", 1.0)
         lokaal = data.get("waterdruk_lokaal") or {}
         new_gwl = st.number_input(
             "Grondwaterstand (GWS) [m NAP]",
             value=float(lokaal.get("gwl", gwl_nap)),
             min_value=-10.0, max_value=10.0, step=0.01, format="%.2f",
             key=f"gwl_local_{selected}",
-            help="Lokale freatische waterstand voor deze sondering. "
-                 "Beïnvloedt σv0 (γ_droog/γ_nat-splitsing) en u₀.",
+            help=f"Lokale freatische waterstand voor deze sondering. Beïnvloedt σv0 "
+                 f"(γ_droog/γ_nat-splitsing) en u₀. Projectbandbreedte: "
+                 f"NAP {_min_l:+.2f} … {_max_l:+.2f} m.",
         )
+        if new_gwl < _min_l or new_gwl > _max_l:
+            st.warning(f"⚠️ GWS NAP {new_gwl:+.2f} m valt **buiten** de projectbandbreedte "
+                       f"(NAP {_min_l:+.2f} … {_max_l:+.2f} m). Bewust?")
         col_o1, col_o2 = st.columns(2)
         with col_o1:
             new_knik = st.number_input(

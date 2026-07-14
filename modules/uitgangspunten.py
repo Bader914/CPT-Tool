@@ -525,18 +525,20 @@ def render():
             } for l in lagen])
             st.dataframe(overzicht, use_container_width=True, hide_index=True)
 
-            # Grondwaterstand
+            # Grondwaterstand — hier alleen de PROJECTBANDBREEDTE (context).
+            # De GWS die je daadwerkelijk gebruikt, stel je per sondering in bij
+            # Stap 3 — Normalisatie. Daar wordt deze bandbreedte als controle getoond.
             st.markdown("---")
-            c_gwl1, c_gwl2, c_gwl3 = st.columns(3)
+            st.markdown("**Grondwaterstand — bandbreedte t.t.v. sonderen (projectgegeven)**")
+            c_gwl1, c_gwl2 = st.columns(2)
             with c_gwl1:
-                gwl = st.number_input(
-                    "GWS [m NAP] (gebruikt)",
-                    value=up.get("dijkopbouw", {}).get("gwl", 0.0),
+                gwl_min = st.number_input(
+                    "GWS min [m NAP]",
+                    value=up.get("dijkopbouw", {}).get("gwl_min", -0.5),
                     step=0.01, format="%.2f",
-                    help="Grondwaterstand die wordt gebruikt voor de berekening. "
-                         "Kies een waarde binnen de bandbreedte."
+                    help="Laagste grondwaterstand ten tijde van sonderen."
                 )
-                up["dijkopbouw"]["gwl"] = gwl
+                up["dijkopbouw"]["gwl_min"] = gwl_min
             with c_gwl2:
                 gwl_max = st.number_input(
                     "GWS max [m NAP]",
@@ -545,15 +547,13 @@ def render():
                     help="Hoogste grondwaterstand ten tijde van sonderen."
                 )
                 up["dijkopbouw"]["gwl_max"] = gwl_max
-            with c_gwl3:
-                gwl_min = st.number_input(
-                    "GWS min [m NAP]",
-                    value=up.get("dijkopbouw", {}).get("gwl_min", -0.5),
-                    step=0.01, format="%.2f",
-                    help="Laagste grondwaterstand ten tijde van sonderen."
-                )
-                up["dijkopbouw"]["gwl_min"] = gwl_min
-            
+            st.caption(
+                f"ℹ️ Dit is alleen de **bandbreedte** (NAP {gwl_min:+.2f} … {gwl_max:+.2f} m). "
+                "De GWS die je **gebruikt** in de berekening stel je in bij "
+                "**Stap 3 — Normalisatie**, per sondering — daar hoort hij, want hij verschilt "
+                "per locatie. De tool waarschuwt daar als je buiten deze bandbreedte komt."
+            )
+
             st.markdown("---")
             kruinniveau = st.number_input(
                 "Kruinniveau [m NAP]",
