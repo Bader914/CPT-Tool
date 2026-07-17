@@ -335,22 +335,28 @@ for i, s in enumerate(STEPS):
         check = "✅" if step_done[i] else f"{i + 1}"
         radio_labels.append(f"{check}  {s['icon']} {s['label']}")
 
-active = st.session_state.current_step
-
-
 # Navigatie loopt via ÉÉN bron van waarheid: current_step. De radio gebruikt
 # integer-opties (stabiel, los van de labeltekst) en een callback; knoppen elders
 # (Volgende / terug) zetten current_step via _ga_naar(). Zo overschrijft de radio
 # de knoppen niet meer.
 def _ga_naar(step_index):
-    # Zet zowel de bron van waarheid als de radio-waarde (moet in een callback,
-    # anders klaagt Streamlit dat de widget al is aangemaakt).
     st.session_state.current_step = step_index
-    st.session_state.step_radio = step_index
 
 
 def _on_nav_change():
-    st.session_state.current_step = st.session_state.step_radio
+    # Streamlit bewaart de radio-status als labeltekst en zoekt die elke rerun
+    # terug op. Onze labels wisselen ("1" ↔ "✅"), dus na zo'n wisseling vindt
+    # Streamlit de tekst niet terug en geeft het de ruwe string i.p.v. de index.
+    # Alleen een geldige index mag de bron van waarheid bijwerken.
+    keuze = st.session_state.step_radio
+    if isinstance(keuze, int) and 0 <= keuze < len(STEPS):
+        st.session_state.current_step = keuze
+
+
+active = st.session_state.current_step
+if not isinstance(active, int) or not 0 <= active < len(STEPS):
+    active = 0
+    st.session_state.current_step = active
 
 
 # === SINGLE NAV ROW: brand + radio + stats ===
@@ -363,9 +369,13 @@ with nav_left:
     </div>
     """, unsafe_allow_html=True)
 with nav_mid:
+    # De radio volgt current_step: waarde elke rerun expliciet zetten (i.p.v.
+    # index=), zodat een verouderde labeltekst in de widgetstatus nooit blijft
+    # hangen en de knoppen (Volgende / terug) de navigatie blijven aansturen.
+    st.session_state.step_radio = active
     st.radio(
-        "nav", options=list(range(len(STEPS))), index=active,
-        format_func=lambda i: radio_labels[i],
+        "nav", options=list(range(len(STEPS))),
+        format_func=lambda i: radio_labels[i] if isinstance(i, int) else str(i),
         horizontal=True, label_visibility="collapsed",
         key="step_radio", on_change=_on_nav_change,
     )
