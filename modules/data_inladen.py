@@ -361,94 +361,11 @@ def check_poriedruk_correctie(df: pd.DataFrame, col_mapping: dict) -> dict:
     return result
 
 
-def _render_project_io():
-    """Analyse opslaan / openen — alle invoer per sondering in één bestand."""
-    from modules import project_io
-
-    n = len(st.session_state.get("sonderingen", {}))
-
-    with st.expander("💾 Analyse opslaan / openen", expanded=(n == 0)):
-        st.caption(
-            "Sla je **geanalyseerde sonderingen** op in één bestand: de GEF's zelf plus alles "
-            "wat je hebt ingevuld (maaiveld, a-factor, voorboring, grondopbouw, waterdruk) en "
-            "de uitgangspunten. Later weer openen — of naast een andere set leggen."
-        )
-
-        col_a, col_b = st.columns(2)
-
-        # ── Opslaan ──
-        with col_a:
-            st.markdown("**Opslaan**")
-            if n == 0:
-                st.caption("Nog geen sonderingen geladen.")
-            else:
-                project = project_io.maak_project(
-                    st.session_state.sonderingen,
-                    st.session_state.get("uitgangspunten", {}),
-                    instellingen={
-                        "gamma_bron": st.session_state.get("gamma_bron"),
-                        "su_methode": st.session_state.get("su_methode"),
-                    },
-                )
-                n_op = len(project["sonderingen"])
-                if n_op < n:
-                    st.warning(f"⚠️ {n - n_op} sondering(en) kunnen niet worden opgeslagen "
-                               "(geen ruwe GEF-tekst — opnieuw uploaden).")
-                naam = st.text_input("Bestandsnaam", value="cpt_analyse",
-                                     key="proj_naam", label_visibility="collapsed")
-                st.download_button(
-                    f"⬇️ Opslaan ({n_op} sondering(en))",
-                    data=project_io.project_naar_json(project),
-                    file_name=f"{naam or 'cpt_analyse'}.json",
-                    mime="application/json",
-                    use_container_width=True,
-                )
-
-        # ── Openen ──
-        with col_b:
-            st.markdown("**Openen**")
-            up = st.file_uploader("Projectbestand (.json)", type=["json"],
-                                  key="proj_upload", label_visibility="collapsed")
-            if up is not None:
-                try:
-                    project = project_io.lees_project(up.read().decode("utf-8"))
-                    hersteld = project_io.herstel_sonderingen(project)
-                except ValueError as e:
-                    st.error(f"❌ {e}")
-                    hersteld = None
-
-                if hersteld is not None:
-                    st.info(f"📂 **{len(hersteld)} sondering(en)** · opgeslagen op "
-                            f"{project.get('opgeslagen', '?')}")
-                    vervang = st.checkbox("Huidige sonderingen vervangen", value=True,
-                                          key="proj_vervang",
-                                          help="Uit: de sonderingen uit het bestand worden "
-                                               "toegevoegd aan wat je al hebt (handig om twee "
-                                               "sets te vergelijken).")
-                    if st.button("📂 Openen", type="primary", use_container_width=True):
-                        if vervang:
-                            st.session_state.sonderingen = hersteld
-                        else:
-                            st.session_state.sonderingen.update(hersteld)
-
-                        if project.get("uitgangspunten"):
-                            st.session_state.uitgangspunten = project["uitgangspunten"]
-                        for sleutel, waarde in (project.get("instellingen") or {}).items():
-                            if waarde is not None:
-                                st.session_state[sleutel] = waarde
-
-                        st.success(f"✅ {len(hersteld)} sondering(en) geopend. Doorloop Stap 2 "
-                                   "t/m 4 om opnieuw door te rekenen.")
-                        st.rerun()
-
-
 def render():
     
     # --- Initialiseer session state ---
     if "sonderingen" not in st.session_state:
         st.session_state.sonderingen = {}
-
-    _render_project_io()
 
     # --- Bestand uploaden ---
     uploaded_files = st.file_uploader(

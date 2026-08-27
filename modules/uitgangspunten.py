@@ -485,6 +485,12 @@ def render():
         if "gamma_w" not in _w:
             _w["gamma_w"] = 9.81
 
+    # Eerst: een eerdere analyse openen. Dat herstelt óók de uitgangspunten, dus
+    # hij hoort vóór de invoer hieronder — anders overschrijft openen wat je net
+    # hebt ingevuld. Opslaan kan hier ook, zodra er sonderingen geladen zijn.
+    from modules import project_io
+    project_io.render_project_io()
+
     # ── Rustig scherm: geen zes tabbladen tegelijk, maar één duidelijke boodschap
     # en opvouwbare secties. Standaard staat alles dicht — je opent alleen wat je wilt
     # aanpassen. De rekenwaardes worden nog steeds gezet: Streamlit voert de inhoud van

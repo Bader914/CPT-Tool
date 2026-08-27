@@ -263,13 +263,14 @@ STEPS = [
      "wat": "We leggen eenmalig de vaste projectgegevens vast: de grondsoorten met hun "
             "sterkte-eigenschappen (Tabel 91), het conustype en de rekenmethode.",
      "waarom": "Dit zijn de gegevens die voor het hele project gelden. Alles wat pér sondering "
-               "verschilt (grondlagen, waterstand) doe je later, bij de sondering zelf."},
+               "verschilt (grondlagen, waterstand) doe je later, bij de sondering zelf. "
+               "Hier open of bewaar je ook een eerdere analyse."},
     {"module": data_inladen, "icon": "📁", "label": "Upload", "full": "Data Inladen",
      "titel": "Sonderingen inladen",
      "wat": "Upload je GEF-bestanden. De tool leest automatisch de meetwaarden, het maaiveld, "
             "de a-factor en de voorboordiepte uit de bestanden.",
      "waarom": "Zo begint elke sondering met de juiste gegevens uit het bestand zelf — je hoeft "
-               "niets over te typen. Hier open of bewaar je ook een eerdere analyse."},
+               "niets over te typen."},
     {"module": classificatie, "icon": "🧱", "label": "Grondlagen", "full": "Classificatie",
      "titel": "Grondlagen per sondering",
      "wat": "Per sondering bepalen we de grondopbouw. De tool stelt de lagen automatisch voor "
