@@ -190,7 +190,7 @@ def render():
         "waterkeringen gebruikt **Student-t** (afhankelijk van het aantal waarnemingen n) "
         "en houdt rekening met **ruimtelijke middeling** langs het glijvlak. Ook of je "
         "**uitschieters** meeneemt bepaalt het resultaat direct.\n\n"
-        "→ Methode afstemmen met **Herman-Jaap**, uitschieters met **Jan**. "
+        "→ Methode en omgang met uitschieters nog **af te stemmen** binnen het project. "
         "Zie `OVERLEG_KARAKTERISTIEKE_WAARDE.md` in de repo."
     )
 

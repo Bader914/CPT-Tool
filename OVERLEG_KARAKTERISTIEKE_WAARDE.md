@@ -23,7 +23,7 @@ afstemmen, dan bouwen.
 
 ---
 
-## Vragen voor **Herman-Jaap** — methode
+## Vragen over de methode — af te stemmen
 
 ### 1. Grensspanning / POP
 - In de Nederlandse aanpak komt de grensspanning uit **samendrukkingsproeven**: je voert
@@ -51,7 +51,7 @@ afstemmen, dan bouwen.
 
 ---
 
-## Vragen voor **Jan** — uitschieters en subjectiviteit
+## Vragen over uitschieters en subjectiviteit — af te stemmen
 
 ### 5. Uitschieters
 - Verwijderen we uitschieters vóórdat we gemiddelde en spreiding bepalen? Zo ja, met welk

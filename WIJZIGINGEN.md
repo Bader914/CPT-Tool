@@ -17,8 +17,8 @@
 ## Wat we in onze tool hebben veranderd/toegevoegd
 
 ### Waterdruk (u₀)
-- Oud 3-zone-knikmodel vervangen door het **4-zone-model uit de Excel van
-  Herman-Jaap** (knikpunt → lineaire overgang → stijghoogte zandpakket),
+- Oud 3-zone-knikmodel vervangen door het **4-zone-model uit de aangeleverde
+  Excel** (knikpunt → lineaire overgang → stijghoogte zandpakket),
   **exact gevalideerd op 0,00 kPa**. Invoer: GWS, knikpunt, stijghoogte,
   top zandpakket, indringingslengte — globaal én per sondering.
 

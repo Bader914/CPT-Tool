@@ -744,7 +744,7 @@ def render():
             "normale verdeling. De aanpak voor waterkeringen (NEN 9997-1 / schematiseringshandleiding) "
             "gebruikt **Student-t** (afhankelijk van n) en **ruimtelijke middeling** langs het glijvlak. "
             "Ook of je **uitschieters** meeneemt is een projectafspraak.\n\n"
-            "→ Methode afstemmen met **Herman-Jaap**, uitschieters met **Jan**. "
+            "→ Methode en omgang met uitschieters nog **af te stemmen** binnen het project. "
             "Vragenlijst: `OVERLEG_KARAKTERISTIEKE_WAARDE.md`."
         )
         if kar["vc_bron"] == "materiaal":
