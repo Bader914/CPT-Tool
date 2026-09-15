@@ -112,7 +112,7 @@ def _representatief_laagtype(groep: str, bibliotheek: list) -> str:
 
 
 def suggereer_grondopbouw(df: pd.DataFrame, cm: dict, bibliotheek: list,
-                          min_dikte: float = 0.5, maaiveld_nap: float | None = None) -> list:
+                          min_dikte: float = 0.1, maaiveld_nap: float | None = None) -> list:
     """Stel grondopbouw-rijen voor op basis van Robertson (qc/Rf) als startpunt.
 
     De ruwe per-punt Robertson-zones worden vertaald naar grove groepen
@@ -318,6 +318,21 @@ def default_laaggrenzen(lagen: list) -> dict:
     return grenzen
 
 
+def seed_met_vaste_bovenkant(rows: list, maaiveld_nap: float) -> list:
+    """Sorteer de grondopbouw-rijen aflopend en zet de bovenste vast op maaiveld.
+
+    De bovenste laag begint per definitie op maaiveld: `bouw_lagen_uit_grondopbouw`
+    trekt hem toch omhoog naar mv_nap. Een afwijkende waarde in dat veld werd dus
+    stil overschreven — daarom ligt hij hier vast.
+    """
+    rijen = [dict(r) for r in rows]
+    rijen.sort(key=lambda r: -(float(r["bovenkant"])
+                               if r.get("bovenkant") not in (None, "") else -1e9))
+    if rijen:
+        rijen[0]["bovenkant"] = round(float(maaiveld_nap), 2)
+    return rijen
+
+
 def _classificeer_sondering(name, data, up, bibliotheek, lagen, default_rows,
                             min_dikte, gebruik_suggestie):
     """Classificeer één sondering: diepte_nap, Robertson-hint en de laagindeling.
@@ -417,7 +432,7 @@ def render():
     # Materialenbibliotheek (grondsoorten + eigenschappen) uit Uitgangspunten.
     bibliotheek = get_lagen_bibliotheek(up)
     default_rows = up.get("grondopbouw") or rows_uit_lagen(lagen)
-    min_dikte_auto = float(up.get("suggestie_min_dikte", 0.5))
+    min_dikte_auto = float(up.get("suggestie_min_dikte", 0.1))
 
     # Punt 1: automatisch een laagindeling voorstellen UIT ELKE SONDERING (Robertson),
     # zodra hij binnenkomt — geen vaste SHZ-standaard meer. Daarna per sondering aanpasbaar.
@@ -478,9 +493,10 @@ def render():
         col_sug1, col_sug2 = st.columns([1, 1])
         with col_sug1:
             min_dikte = st.number_input(
-                "Min. laagdikte [m]", min_value=0.1, max_value=5.0, value=0.5, step=0.1,
+                "Min. laagdikte [m]", min_value=0.1, max_value=5.0, value=0.1, step=0.1,
                 key=f"min_dikte_{selected}",
-                help="Dunner dan dit wordt samengevoegd bij de suggestie.",
+                help="Dunner dan dit wordt samengevoegd bij de suggestie. Standaard 0,10 m, "
+                     "zodat dunne lensjes als eigen laag zichtbaar blijven.",
             )
         with col_sug2:
             st.caption("")
@@ -510,6 +526,9 @@ def render():
                 _r["is_dijkmateriaal"] = bool(
                     _biblio.get(_r.get("laagtype"), {}).get("is_dijkmateriaal", False))
 
+        _mv = round(float(mv_nap), 2)
+        seed_rows = seed_met_vaste_bovenkant(seed_rows, mv_nap)
+
         seed_df = pd.DataFrame(seed_rows, columns=["bovenkant", "laagtype", "is_dijkmateriaal"])
 
         edited = st.data_editor(
@@ -521,7 +540,9 @@ def render():
             column_config={
                 "bovenkant": st.column_config.NumberColumn(
                     "Bovenkant [m NAP]", format="%.2f", step=0.01,
-                    help="Diepte (m NAP) van de bovenkant van de laag (cm-nauwkeurig). Onderkant = volgende rij."),
+                    help="Diepte (m NAP) van de bovenkant van de laag (cm-nauwkeurig). "
+                         "Onderkant = volgende rij. De bovenste rij ligt vast op het "
+                         "maaiveld en wordt automatisch teruggezet."),
                 "laagtype": st.column_config.SelectboxColumn(
                     "Laagtype", options=type_namen, required=False,
                     help="Kies een laagtype uit de bibliotheek (γ/Nkt komen automatisch mee)."),
@@ -532,7 +553,13 @@ def render():
             },
         )
 
-        st.caption(f"Bovenste laag loopt vanaf **maaiveld** (NAP {mv_nap:+.2f}m) — de grond boven het "
+        # Bovenste rij terugzetten op maaiveld: het veld is bewerkbaar (Streamlit kan
+        # geen losse cel blokkeren), maar de waarde ligt vast.
+        if len(edited) and "bovenkant" in edited.columns:
+            edited = edited.copy()
+            edited.iloc[0, edited.columns.get_loc("bovenkant")] = _mv
+
+        st.caption(f"Bovenste laag ligt **vast op maaiveld** (NAP {mv_nap:+.2f}m) — de grond boven het "
                    f"eerste meetpunt (voorboorzone) telt zo mee in σv0. "
                    f"Onderste laag loopt door tot de sondeerbasis (NAP {basis_nap:+.2f}m).")
 

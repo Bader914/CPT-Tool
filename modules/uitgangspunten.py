@@ -524,13 +524,15 @@ def render():
             # up["lagen"], terwijl de berekening de materialenbibliotheek gebruikt — ze
             # hadden dus geen effect. Nu read-only, zodat er één bron van waarheid is.
             st.markdown("**Algemene dijkopbouw (SHZ) — ter oriëntatie**")
-            st.caption("Dit is een typerend profiel, géén invoer. De **laagdieptes** bepaal je "
-                       "per sondering bij **Stap 2 — Classificatie**; de **materiaalparameters** "
-                       "(γ, Nkt, S, m) bewerk je bij **💪 Sterkteparameters**.")
+            st.caption("Dit is een typerend profiel, géén invoer. De **laagdieptes** zijn per "
+                       "laag variabel en bepaal je per sondering bij **Stap 3 — Grondlagen**; "
+                       "de **materiaalparameters** (γ, Nkt, S, m) bewerk je bij "
+                       "**💪 Sterkteparameters**.")
+            # Top/Onder staan hier niet meer: die zijn in de praktijk voor elke laag
+            # variabel en worden per sondering bepaald (Stap 3 — Grondlagen). Een
+            # kolom met overal "variabel" voegt niets toe.
             overzicht = pd.DataFrame([{
                 "Grondlaag": l["naam"],
-                "Top [m NAP]": l["top_nap"] if l.get("top_nap") is not None else "variabel",
-                "Onder [m NAP]": l["onder_nap"] if l.get("onder_nap") is not None else "variabel",
                 "γ droog": l.get("gamma_droog"),
                 "γ nat": l.get("gamma_nat"),
                 "Su?": "✅" if l.get("is_dijkmateriaal") else "—",
