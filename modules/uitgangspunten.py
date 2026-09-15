@@ -63,7 +63,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 37.6,
             "S_ratio": 0.44,
             "m_factor": 0.80,
-            "Nkt": 17.1, "VC_su": 0.25,
+            "Nkt": 17.1,
             "aantal_proeven": 46,
             "beschrijving": "Veenlaag. S-ratio en m-factor bepaald uit 46 proeven.",
         },
@@ -79,7 +79,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 35.7,
             "S_ratio": 0.41,
             "m_factor": 0.66,
-            "Nkt": 16.7, "VC_su": 0.25,
+            "Nkt": 16.7,
             "aantal_proeven": 22,
             "beschrijving": "Kleiig veen. S-ratio en m-factor bepaald uit 22 proeven.",
         },
@@ -95,7 +95,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": None,
             "S_ratio": None,
             "m_factor": None,
-            "Nkt": 20.0, "VC_su": 0.25,
+            "Nkt": 20.0,
             "beschrijving": "Basisveen. Nkt is default waarde uit schematiseringshandleiding.",
         },
         {
@@ -110,7 +110,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 45.4,
             "S_ratio": 0.33,
             "m_factor": 0.84,
-            "Nkt": 16.8, "VC_su": 0.25,
+            "Nkt": 16.8,
             "aantal_proeven": 23,
             "beschrijving": "Humeuze klei. S-ratio en m-factor bepaald uit 23 proeven.",
         },
@@ -126,7 +126,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 37.8,
             "S_ratio": 0.32,
             "m_factor": 1.00,
-            "Nkt": 18.2, "VC_su": 0.25,
+            "Nkt": 18.2,
             "aantal_proeven": 35,
             "beschrijving": "Siltige klei. S-ratio en m-factor bepaald uit 35 proeven.",
         },
@@ -142,7 +142,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 30.0,
             "S_ratio": 0.28,
             "m_factor": 0.80,
-            "Nkt": 20.0, "VC_su": 0.25,
+            "Nkt": 20.0,
             "beschrijving": "Zandige klei. Nkt is default waarde uit schematiseringshandleiding.",
         },
         {
@@ -157,7 +157,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 32.9,
             "S_ratio": 0.41,
             "m_factor": 0.88,
-            "Nkt": 14.5, "VC_su": 0.25,
+            "Nkt": 14.5,
             "aantal_proeven": 28,
             "beschrijving": "Kleiig dijksmateriaal boven de dagelijkse grondwaterstand. "
                            "S-ratio en m-factor bepaald uit 28 proeven.",
@@ -174,7 +174,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 33.4,
             "S_ratio": 0.35,
             "m_factor": 0.79,
-            "Nkt": 14.1, "VC_su": 0.25,
+            "Nkt": 14.1,
             "aantal_proeven": 40,
             "beschrijving": "Kleiig dijksmateriaal onder de dagelijkse grondwaterstand tot NAP -3m. "
                            "Dit is de primaire zone voor Su-bepaling. "
@@ -207,7 +207,7 @@ DEFAULT_UITGANGSPUNTEN = {
             "phi": 30.0,
             "S_ratio": 0.38,
             "m_factor": 0.80,
-            "Nkt": 20.0, "VC_su": 0.25,
+            "Nkt": 20.0,
             "beschrijving": "Diepe kleilaag. Nkt is default waarde uit schematiseringshandleiding.",
         },
         {
@@ -247,19 +247,6 @@ DEFAULT_UITGANGSPUNTEN = {
         "bron": "Tabel 71 — NKT factoren traject 14-1",
         "toelichting": "Nkt-waarden zijn per grondlaag bepaald. Lagen met * zijn default waarden "
                       "uit de schematiseringshandleiding (onvoldoende proeven beschikbaar).",
-    },
-    # Karakteristieke waarde: Su_kar = Su_gem·(1 − t·VC). Dit zijn UITGANGSPUNTEN,
-    # geen rekenknoppen — daarom hier en niet pas bij de Su-berekening.
-    "karakteristiek": {
-        # 'materiaal' = VC per grondsoort uit de materialentabel (VC_su). Aanbevolen:
-        # de VC hoort een bewuste keuze te zijn over de onzekerheid in de grondsterkte.
-        # 'data' = VC uit de spreiding van de Su-punten. Dat meet vooral de punt-op-punt-
-        # ruis van de conus (meting per 2 cm) en geeft onrealistisch hoge VC (→ Su_kar = 0).
-        "vc_bron": "materiaal",
-        "t_factor": 1.645,   # 5%-ondergrens (eenzijdig 95%)
-        "toelichting": "Su_kar = Su_gem·(1 − t·VC). VC per materiaal is leidend; de VC uit de "
-                       "data wordt als controlegetal getoond (wijkt die sterk af, dan is de "
-                       "laagindeling waarschijnlijk te grof).",
     },
     "su_berekening": {
         "formule": "Su = q_net / Nkt",
@@ -408,13 +395,13 @@ def _render_materialen(up: dict):
     """
     lagen_biblio = get_lagen_bibliotheek(up)
     st.caption("Bewerk de materialen of voeg er toe. Deze lijst voedt de laagtype-keuze per "
-               "sondering én de berekening: γ voor de spanningen, S/m voor SHANSEP, Nkt voor Su "
-               "en VC voor de karakteristieke waarde.")
+               "sondering én de berekening: γ voor de spanningen, S/m voor SHANSEP en Nkt voor "
+               "het Su-laaggemiddelde.")
     mat_df = pd.DataFrame([{
         "Materiaal": l["naam"],
         "γ_sat": l.get("gamma_nat"), "γ_unsat": l.get("gamma_droog"),
         "S": l.get("S_ratio"), "m": l.get("m_factor"),
-        "Nkt": l.get("Nkt"), "VC_su": l.get("VC_su", 0.25),
+        "Nkt": l.get("Nkt"),
         "Dijkmateriaal": bool(l.get("is_dijkmateriaal", False)),
     } for l in lagen_biblio])
     mat_edit = st.data_editor(
@@ -427,7 +414,6 @@ def _render_materialen(up: dict):
             "S": st.column_config.NumberColumn("S [-]", format="%.2f", step=0.01),
             "m": st.column_config.NumberColumn("m [-]", format="%.2f", step=0.01),
             "Nkt": st.column_config.NumberColumn("Nkt [-]", format="%.1f", step=0.1),
-            "VC_su": st.column_config.NumberColumn("VC_su [-]", format="%.2f", step=0.01),
             "Dijkmateriaal": st.column_config.CheckboxColumn("Dijkmateriaal (Su)"),
         },
     )
@@ -444,8 +430,11 @@ def _render_materialen(up: dict):
                 "naam": str(naam), "gamma_nat": _f(r.get("γ_sat")),
                 "gamma_droog": _f(r.get("γ_unsat")), "S_ratio": _f(r.get("S")),
                 "m_factor": _f(r.get("m")), "Nkt": _f(r.get("Nkt")),
-                "VC_su": _f(r.get("VC_su")), "is_dijkmateriaal": bool(r.get("Dijkmateriaal")),
+                "is_dijkmateriaal": bool(r.get("Dijkmateriaal")),
             })
+            # Oude projectbestanden dragen VC_su nog mee; de sondeertool gebruikt
+            # die niet meer, dus hem hier definitief laten vallen.
+            laag.pop("VC_su", None)
             laag.setdefault("kleur", "#888888")
             laag.setdefault("materiaal", str(naam))
             nieuwe.append(laag)
@@ -495,8 +484,10 @@ def render():
     # en opvouwbare secties. Standaard staat alles dicht — je opent alleen wat je wilt
     # aanpassen. De rekenwaardes worden nog steeds gezet: Streamlit voert de inhoud van
     # een expander ook uit als hij dichtgeklapt is.
-    _kar = up.get("karakteristiek", DEFAULT_UITGANGSPUNTEN["karakteristiek"])
-    _vc_txt = "VC per materiaal" if _kar.get("vc_bron", "materiaal") == "materiaal" else "VC uit de data"
+    # Su volgt uit de gemiddelde Nkt per grondlaag; dat getal hoort dus in de
+    # samenvatting te staan (en niet een karakteristieke-waarde-instelling).
+    _nkts = [l["Nkt"] for l in get_lagen_bibliotheek(up) if l.get("Nkt") is not None]
+    _nkt_txt = f"{sum(_nkts) / len(_nkts):.1f}" if _nkts else "—"
 
     st.success(
         "✅ **De standaardwaarden voor traject 14-1 staan al ingevuld.** "
@@ -505,13 +496,13 @@ def render():
     )
     _c1, _c2, _c3 = st.columns(3)
     _c1.metric("Grondsoorten", len(get_lagen_bibliotheek(up)))
-    _c2.metric("Karakteristieke waarde", f"t = {_kar.get('t_factor', 1.645):.3f}", _vc_txt)
+    _c2.metric("Nkt gemiddeld", _nkt_txt, f"{len(_nkts)} grondsoorten")
     _c3.metric("Conustype", up.get("conustype", {}).get("type", "—"))
 
     st.markdown("---")
     st.markdown("**Aanpassen — alleen als het nodig is**")
-    tab2 = st.expander("🧪 Materiaaleigenschappen — γ, Nkt, S, m, VC (Tabel 91)", expanded=False)
-    tab4 = st.expander("📉 Karakteristieke waarde — VC-bron en t-factor", expanded=False)
+    tab2 = st.expander("🧪 Materiaaleigenschappen — γ, Nkt, S, m (Tabel 91)", expanded=False)
+    tab4 = st.expander("📉 Nkt per grondlaag (Tabel 71)", expanded=False)
 
     st.markdown("**Naslag**")
     tab1 = st.expander("🏗️ Dijkopbouw (overzicht)", expanded=False)
@@ -528,14 +519,14 @@ def render():
 
             # Alleen ter oriëntatie: de algemene SHZ-dijkopbouw. Dit is GEEN invoer.
             # - de laagdieptes bepaal je per sondering (Stap 2 — Classificatie)
-            # - γ/Nkt/S/m/VC bewerk je in de materialentabel (tab 'Sterkteparameters')
+            # - γ/Nkt/S/m bewerk je in de materialentabel (tab 'Sterkteparameters')
             # Eerder stonden hier invoervelden voor top/onder NAP en γ. Die schreven naar
             # up["lagen"], terwijl de berekening de materialenbibliotheek gebruikt — ze
             # hadden dus geen effect. Nu read-only, zodat er één bron van waarheid is.
             st.markdown("**Algemene dijkopbouw (SHZ) — ter oriëntatie**")
             st.caption("Dit is een typerend profiel, géén invoer. De **laagdieptes** bepaal je "
                        "per sondering bij **Stap 2 — Classificatie**; de **materiaalparameters** "
-                       "(γ, Nkt, S, m, VC) bewerk je bij **💪 Sterkteparameters**.")
+                       "(γ, Nkt, S, m) bewerk je bij **💪 Sterkteparameters**.")
             overzicht = pd.DataFrame([{
                 "Grondlaag": l["naam"],
                 "Top [m NAP]": l["top_nap"] if l.get("top_nap") is not None else "variabel",
@@ -574,7 +565,7 @@ def render():
     with tab2:
         st.caption("SHANSEP: Su = S · σ'v0 · OCRᵐ  |  * = aanname  |  ** = gedraineerd")
 
-        # Materiaaleigenschappen (γ, S, m, Nkt, VC) — projectbreed, los van elke sondering.
+        # Materiaaleigenschappen (γ, S, m, Nkt) — projectbreed, los van elke sondering.
         _render_materialen(up)
         st.markdown("---")
 
@@ -718,50 +709,6 @@ def render():
     # ─── TAB 3: NKT-FACTOREN PER GRONDLAAG (TABEL 71) ───
     with tab4:
         st.caption("Su = q_net / Nkt  —  * = default waarde uit schematiseringshandleiding")
-
-        # ── Karakteristieke waarde (uitgangspunt, niet pas bij de Su-berekening) ──
-        st.markdown("**Karakteristieke waarde — Su_kar = Su_gem · (1 − t · VC)**")
-        kar = up.setdefault("karakteristiek", dict(DEFAULT_UITGANGSPUNTEN["karakteristiek"]))
-        c_k1, c_k2 = st.columns([1.6, 1])
-        with c_k1:
-            _opties = ["VC per materiaal (aanbevolen)", "VC uit de data (spreiding Su-punten)"]
-            _idx = 0 if kar.get("vc_bron", "materiaal") == "materiaal" else 1
-            _keuze = st.radio(
-                "VC-bron", _opties, index=_idx, key="vc_bron_radio",
-                help="VC per materiaal: je voert de variatiecoëfficiënt per grondsoort in "
-                     "(kolom VC_su in de materialentabel). Dit is een bewuste keuze over de "
-                     "onzekerheid in de grondsterkte — de aanbevolen route.\n\n"
-                     "VC uit de data: berekend uit de spreiding van de Su-punten in een laag. "
-                     "Die spreiding is grotendeels punt-op-punt-ruis van de conus (meting per "
-                     "2 cm) en geeft vaak VC > 0,6, waardoor Su_kar op 0 uitkomt.",
-            )
-            kar["vc_bron"] = "materiaal" if _keuze.startswith("VC per materiaal") else "data"
-        with c_k2:
-            kar["t_factor"] = st.number_input(
-                "t-factor [-]", min_value=0.0, max_value=3.0,
-                value=float(kar.get("t_factor", 1.645)), step=0.005, format="%.3f",
-                help="1,645 = 95%-ondergrens van de NORMALE verdeling (σ bekend, n → ∞). "
-                     "De formele aanpak voor waterkeringen gebruikt Student-t met n−1 "
-                     "vrijheidsgraden (dus afhankelijk van n) plus ruimtelijke middeling. "
-                     "Voorlopige waarde — af te stemmen.",
-            )
-        st.info(
-            "📋 **Voorlopig — de aanpak is nog niet afgestemd.** Een vaste t = 1,645 hoort bij de "
-            "normale verdeling. De aanpak voor waterkeringen (NEN 9997-1 / schematiseringshandleiding) "
-            "gebruikt **Student-t** (afhankelijk van n) en **ruimtelijke middeling** langs het glijvlak. "
-            "Ook of je **uitschieters** meeneemt is een projectafspraak.\n\n"
-            "→ Methode en omgang met uitschieters nog **af te stemmen** binnen het project. "
-            "Vragenlijst: `OVERLEG_KARAKTERISTIEKE_WAARDE.md`."
-        )
-        if kar["vc_bron"] == "materiaal":
-            st.caption("✅ VC komt uit de kolom **VC_su** in de materialentabel "
-                       "(tab 'Grondopbouw (invoer)' → Materiaaleigenschappen). "
-                       "De VC uit de data wordt bij de Su-berekening als **controlegetal** getoond.")
-        else:
-            st.warning("⚠️ VC uit de data geeft bij CPT-metingen vaak een onrealistisch hoge VC "
-                       "(punt-op-punt-ruis), waardoor Su_kar naar 0 kan zakken. Alleen gebruiken "
-                       "als je bewust de spreiding van de meting wilt meenemen.")
-        st.markdown("---")
 
         lagen = up.get("lagen", DEFAULT_UITGANGSPUNTEN["lagen"])
         

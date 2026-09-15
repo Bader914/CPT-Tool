@@ -4,9 +4,23 @@
 en de **t-factor**. Die suggereren een vrije keuze, terwijl het projectafspraken horen te zijn
 die aansluiten op de aanpak voor waterkeringen.
 
-**Status in de tool.** De velden zijn nu gemarkeerd als *voorlopig*; `k` is uit het hoofdscherm
-gehaald (hij wordt alleen in de controleroute gebruikt). Er is **niets nieuws gebouwd** — eerst
-afstemmen, dan bouwen.
+**Status in de tool.** `k` is uit het hoofdscherm gehaald (hij wordt alleen in de
+controleroute gebruikt).
+
+> ## ✅ Besloten: geen karakteristieke waarde in de sondeertool
+>
+> De vaste t = 1,645 hoort bij de **normale verdeling** en die aanpak gebruiken we niet.
+> De sondeertool levert het **laaggemiddelde van Su**, berekend met de **gemiddelde Nkt**
+> per grondlaag. Het vertalen van laaggemiddelden naar een rekenwaarde hoort bij de
+> stabiliteitsberekening, niet hier.
+>
+> Daarmee is uit de tool verwijderd: de formule `Su_kar = Su_gem·(1 − t·VC)`, de t-factor,
+> de VC-bron-keuze en de kolom **VC_su** in de materialentabel. De VC uit de data blijft
+> staan als **controlegetal** op de laagindeling.
+>
+> **Hieronder blijft open:** de grensspanning / POP (vraag 1–4). De vragen over de
+> karakteristieke waarde en uitschieters (vraag 5 e.v.) zijn hiermee vervallen voor deze
+> tool.
 
 ---
 
@@ -17,9 +31,10 @@ afstemmen, dan bouwen.
 | **Su** | `Su = q_net / Nkt`, met Nkt per grondlaag | Onomstreden; gevalideerd tegen de Deltares CPT-tool (~3 % bij gelijke Nkt) |
 | **Grensspanning σ′vy** | *Hoofdroute:* SHANSEP omgekeerd — `σ′vy = σ′v0·(Su/(S·σ′v0))^(1/m)` | Resultaat van de gemeten Su. **Vraag:** is dit de bedoelde route? |
 | | *Controleroute:* `σ′vy = k·q_net` (Mayne, k ≈ 0,33) | Generieke CPT-correlatie — **niet** de Nederlandse aanpak |
-| **Karakteristieke waarde** | `Su_kar = Su_gem · (1 − t · VC)`, met **vaste t = 1,645** | 1,645 = 95 %-fractiel van de **normale** verdeling (σ bekend, n → ∞) |
-| **VC** | Per materiaal (`VC_su`, nu default **0,25**) | **Vraag:** kloppen deze waarden per grondsoort? |
-| **Uitschieters** | Worden **niet** verwijderd — alle Su-punten tellen mee | Beïnvloedt gemiddelde én spreiding, dus direct Su_kar |
+| **Su per laag** | **Laaggemiddelde** van de Su-punten in de laag | Dit is het eindresultaat van de tool |
+| ~~Karakteristieke waarde~~ | *Vervallen* — zie het besluit hierboven | Hoort bij de stabiliteitsberekening, niet bij de sondeertool |
+| ~~VC_su per materiaal~~ | *Vervallen* — kolom uit de materialentabel gehaald | Was alleen invoer voor `Su_kar` |
+| **Uitschieters** | Worden **niet** verwijderd — alle Su-punten tellen mee | Beïnvloedt het laaggemiddelde; een hoge VC uit de data wijst op een te dikke laag |
 
 ---
 

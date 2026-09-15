@@ -285,8 +285,8 @@ STEPS = [
                "berekende u₀ hoort in de buurt van de gemeten u₂ te liggen."},
     {"module": su_berekening, "icon": "📊", "label": "Sterkte Su", "full": "Su Berekening",
      "titel": "Ongedraineerde sterkte Su",
-     "wat": "We berekenen de sterkte Su uit de sondering (Su = qnet / Nkt) en daaruit de "
-            "grensspanning, plus een voorzichtige (karakteristieke) waarde.",
+     "wat": "We berekenen de sterkte Su uit de sondering (Su = qnet / Nkt) met de "
+            "gemiddelde Nkt per grondlaag, en daaruit de grensspanning.",
      "waarom": "Su is het eindresultaat: hoe sterk de grond is, wat je nodig hebt voor de "
                "dijkbeoordeling."},
     # Voorlopig geblokkeerd: de tool stopt na de Su-berekening.

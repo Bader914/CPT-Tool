@@ -418,22 +418,6 @@ def bereken_grensspanning(q_net: pd.Series, k: float = 0.33) -> pd.Series:
     return (k * q_net).clip(lower=0)
 
 
-def karakteristieke_waarde(su_punten: pd.Series, t_factor: float = 1.645) -> dict:
-    """Karakteristieke (voorzichtige lage) waarde van Su:
-
-        Su_kar = Su_gem · (1 − t · VC) ,  VC = std / gem
-
-    t = 1,645 → 5%-ondergrens. Voor een dijktoets reken je met deze
-    karakteristieke waarde, niet met het gemiddelde.
-    """
-    s = su_punten.dropna()
-    if s.empty:
-        return {"n": 0, "gem": np.nan, "VC": np.nan, "kar": np.nan}
-    gem = float(s.mean())
-    vc = float(s.std(ddof=1) / gem) if len(s) > 1 and gem else 0.0
-    return {"n": int(s.size), "gem": gem, "VC": vc, "kar": max(gem * (1 - t_factor * vc), 0.0)}
-
-
 # =============================================================================
 # KALIBRATIE — Nkt afstemmen op labproeven
 # =============================================================================

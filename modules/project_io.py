@@ -11,7 +11,7 @@ Wat we WEL opslaan
   originele GEF's later niet meer nodig)
 - alle handmatige interpretatie: kolom-mapping, maaiveld, a-factor, voorboring,
   funderingslaag, grondopbouw (laagindeling), waterdruk
-- de projectuitgangspunten (materialen/Tabel 91, karakteristieke waarde)
+- de projectuitgangspunten (materialen/Tabel 91, Nkt per grondlaag)
 - de gekozen methodes (γ-bron, Su-methode)
 
 Wat we NIET opslaan

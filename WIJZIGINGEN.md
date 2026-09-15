@@ -3,13 +3,10 @@
 ## Overgenomen uit de Deltares CPT-tool (POVM / schematiseringshandleiding)
 - **SHANSEP-methode**: Su = S·σ′v0·OCRᵐ, met grensspanning σ′vy = k·q_net (Mayne,
   k≈0,33). Naast de Nkt-methode, kies je nu per analyse de methode.
-- **Karakteristieke waarde**: Su_kar = Su_gem·(1 − t·VC), met t instelbaar
-  (1,645 = 5%-ondergrens). Per sondering én per grondlaag.
-- **VC_su per materiaal** (variatiecoëfficiënt) — net als de Deltares-tabel.
-- **Bewerkbare materialentabel** (γ_sat, γ_unsat, S, m, Nkt, VC) — Deltares
+- **Bewerkbare materialentabel** (γ_sat, γ_unsat, S, m, Nkt) — Deltares
   "Materiaaleigenschappen".
-- **Meerdere Su-profielen over elkaar** (Su per punt + gelineariseerd su- en
-  su_kar-profiel per laag) — zoals het Deltares Su-paneel.
+- **Meerdere Su-profielen over elkaar** (Su per punt + gelineariseerd
+  su-profiel per laag) — zoals het Deltares Su-paneel.
 - **Vergelijk-tab**: laad een Deltares-export (Su per NAP) en zie de afwijking
   (Δ, RMSE). Hiermee is onze tool **gevalideerd tegen de Deltares-tool**
   (sondering 009: ~1–3 % verschil per laag).
@@ -43,7 +40,14 @@
 - Tussengrootheden qt, q_net, **Bq**, **Qt** berekend en getoond.
 
 ### Su
-- **Nkt- én SHANSEP-methode**, karakteristieke waarde per laag.
+- **Nkt- én SHANSEP-methode**; de tool levert het **laaggemiddelde van Su**,
+  berekend met de gemiddelde Nkt per grondlaag.
+- **Geen karakteristieke waarde meer.** Su_kar = Su_gem·(1 − t·VC) met een vaste
+  t = 1,645 hoort bij de normale verdeling; die aanpak gebruiken we niet. Het
+  vertalen van laaggemiddelden naar een rekenwaarde hoort bij de stabiliteits-
+  berekening, niet bij de sondeertool. Daarmee verviel ook de kolom **VC_su**
+  in de materialentabel. De VC uit de data blijft staan als **controlegetal**
+  op de laagindeling.
 
 ### Overig
 - Audit-fixes: u₂-eenheidcontrole, dode code verwijderd, funderingslaag-waarschuwing.
