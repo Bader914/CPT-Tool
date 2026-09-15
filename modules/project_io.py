@@ -154,6 +154,10 @@ def render_project_io():
                     instellingen={
                         "gamma_bron": st.session_state.get("gamma_bron"),
                         "su_methode": st.session_state.get("su_methode"),
+                        # Randzone die bij het middelen is overgeslagen: zonder deze
+                        # sleutel zou een heropend project stil op 0,00 terugvallen
+                        # en dus andere Su-waarden geven.
+                        "su_rand_m": st.session_state.get("su_rand_m"),
                     },
                 )
                 n_op = len(project["sonderingen"])

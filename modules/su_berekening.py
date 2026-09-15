@@ -218,6 +218,7 @@ def render():
         total = len(genormaliseerd)
         resultaten = []
         spreiding_waarschuwing = []
+        trim_overgeslagen = []
 
         for i, (name, data) in enumerate(genormaliseerd.items()):
             df = data["df"].copy()
@@ -282,14 +283,22 @@ def render():
             # Elke laag heeft zijn eigen Nkt, dus middelen over alle punten
             # tegelijk zou de lagen door elkaar husselen.
             _grenzen = data.get("laaggrenzen") or {}
-            per_laag, n_ongetrimd, n_te_dun = [], 0, 0
+            per_laag, nkt_gewogen, n_ongetrimd = [], [], 0
+            te_dun = []
             for _laag, _sub in df.dropna(subset=["Su"]).groupby("grondlaag"):
                 n_ongetrimd += len(_sub)
                 _g = _grenzen.get(_laag, {})
                 _kern = trim_laagranden(_sub, _g.get("top_nap"), _g.get("onder_nap"), rand_m)
                 if rand_m > 0 and len(_kern) == len(_sub) and _g.get("top_nap") is not None:
-                    n_te_dun += 1          # trim overgeslagen: laag te dun
-                per_laag.append(laag_statistiek(_kern["Su"]))
+                    te_dun.append(str(_laag))   # trim overgeslagen: laag te dun
+                _stat = laag_statistiek(_kern["Su"])
+                per_laag.append(_stat)
+                # Nkt over DEZELFDE punten als Su, anders horen de twee
+                # gemiddelden in de tabel niet bij elkaar.
+                if "Nkt_gebruikt" in _kern.columns:
+                    _nkt_l = _kern["Nkt_gebruikt"].mean()
+                    if pd.notna(_nkt_l):
+                        nkt_gewogen.append(_nkt_l * _stat["n"])
             n_tot = sum(k["n"] for k in per_laag)
             if n_tot:
                 su_gem = sum(k["gem"] * k["n"] for k in per_laag) / n_tot
@@ -297,7 +306,9 @@ def render():
             else:
                 su_gem = vc_dat = np.nan
 
-            nkt_gem = df.loc[df["Su"].notna(), "Nkt_gebruikt"].mean() if n_tot else np.nan
+            nkt_gem = sum(nkt_gewogen) / n_tot if (n_tot and nkt_gewogen) else np.nan
+            if te_dun:
+                trim_overgeslagen.append(f"**{name}** — {', '.join(te_dun)}")
             ocr_gem = df["OCR"].replace([np.inf, -np.inf], np.nan).mean() if "OCR" in df else np.nan
             svy_gem = df["sigma_vy"].replace([np.inf, -np.inf], np.nan).mean() if "sigma_vy" in df else np.nan
             # Alleen de kernkolommen: de methode staat al boven de tabel (voor alle
@@ -325,6 +336,14 @@ def render():
         if rand_m > 0:
             st.caption(f"Laagranden van {rand_m:.2f} m zijn buiten de middeling gelaten. "
                        "Kolom *n zonder trim* laat zien hoeveel punten er zonder die zone waren.")
+        if trim_overgeslagen:
+            st.info(
+                f"ℹ️ **Trim overgeslagen voor te dunne lagen.** Deze lagen zijn dunner dan "
+                f"2 × {rand_m:.2f} m (of houden te weinig punten over) en zijn daarom "
+                f"**volledig** meegenomen:\n\n"
+                + "\n".join(f"- {t}" for t in trim_overgeslagen)
+                + "\n\nZonder deze uitzondering zouden die lagen géén Su-waarde opleveren."
+            )
         st.dataframe(pd.DataFrame(resultaten), use_container_width=True, hide_index=True)
 
         if spreiding_waarschuwing:
@@ -443,7 +462,9 @@ def _render_per_sondering(su_berekend: dict):
         if top is None or onder is None:
             continue
         sub = df[(df["diepte_nap"] <= top) & (df["diepte_nap"] > onder) & df["Su"].notna()]
-        sub = trim_laagranden(sub, top, onder, float(data.get("rand_m", 0.0)), min_punten=3)
+        # Zelfde drempel als de laagtabel, anders kan de lijn getrimd zijn
+        # terwijl de tabel ongetrimde cijfers toont (of andersom).
+        sub = trim_laagranden(sub, top, onder, float(data.get("rand_m", 0.0)))
         if len(sub) < 3:
             continue
         b, a = np.polyfit(sub["diepte_nap"], sub["Su"], 1)   # Su = b·NAP + a
