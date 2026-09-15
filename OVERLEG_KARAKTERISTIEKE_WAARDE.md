@@ -94,6 +94,41 @@ controleroute gebruikt).
 
 ---
 
+## Middelingszone: waar bepalen we het gemiddelde Su? — deels open
+
+**Uitgangspunt.** Op elk meetpunt van de sondering kan Su bepaald worden; dat is de zuiverste
+basis. De tool middelt die punten per grondlaag tot het **laaggemiddelde** — de dikke lijn in
+het Su-profiel, dat is waar we naar op zoek zijn.
+
+**Voorstel (nog af te stemmen).** Filter op de laaggrenzen en laat boven- en onderin **25 cm**
+buiten de middeling. Vlak bij een grens meet de conus deels de buurlaag al mee, dus die punten
+zijn niet representatief. Aanbevolen vervolgstap: de aanpak in de Deltares CPT-tool nakijken en
+die overnemen.
+
+**Status in de tool.** Gebouwd als instelbaar veld bij Stap 5 — *Laagranden negeren bij het
+middelen [m]*, standaard **0,00** (uit). Zet het op 0,25 om het effect direct te zien; de tabel
+toont dan ook het aantal punten zonder trim.
+
+**Let op — meetbaar neveneffect.** Een laag dunner dan 2× de randzone houdt niets over. Op
+sondering 009 met min. laagdikte 0,10 m verdween bij 25 cm één van de drie Su-lagen volledig
+en viel 11 % van de punten weg. De tool slaat de trim daarom over voor lagen die anders
+(bijna) leeg zouden raken. **Af te stemmen:** is dat de gewenste regel, en wordt 0,25 m de
+standaard?
+
+---
+
+## Besloten — geen actie meer nodig
+
+- **Uitschieters.** Worden niet automatisch verwijderd. Ze kunnen later desgewenst als
+  **aparte grondlaag** gemodelleerd worden, zodat ze het laaggemiddelde niet vervuilen. Dit
+  hoeft **niet** in de tool verwerkt te worden.
+- **Randvoorwaarden waterdruk.** Die liggen buiten de sondering — er is niet gesondeerd tot
+  het zandpakket. De tool beschrijft dit zo voldoende; geen wijziging nodig.
+- **Minimale laagdikte.** Standaard nu **0,10 m**, zodat dunne lensjes als eigen laag
+  zichtbaar blijven (vraag 6 hierboven).
+
+---
+
 ## Ter info — wat wél al vaststaat
 
 - **Su-berekening zelf is gevalideerd**: bij gelijke Nkt komt onze Su binnen ~3 % overeen met

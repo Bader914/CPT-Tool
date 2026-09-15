@@ -78,6 +78,27 @@ def bereken_su_shansep(sigma_v0_eff: pd.Series, sigma_vy: pd.Series,
     return S * sigma_v0_eff * (ocr ** m) * 1000.0
 
 
+def trim_laagranden(sub: pd.DataFrame, top_nap: float, onder_nap: float,
+                    rand: float, min_punten: int = 5) -> pd.DataFrame:
+    """Laat de bovenste en onderste `rand` meter van een laag buiten de middeling.
+
+    Vlak bij een laaggrens meet de conus deels de buurlaag al mee (hij 'voelt'
+    vooruit en na), dus die punten zijn niet representatief voor de laag zelf.
+    Door een zone van `rand` meter aan weerszijden over te slaan middel je
+    alleen over de kern van de laag.
+
+    VEILIGHEID: een laag dunner dan 2·rand houdt na trimmen niets over. Blijven
+    er minder dan `min_punten` punten over, dan wordt de laag ONGETRIMD
+    teruggegeven — liever een iets vervuild laaggemiddelde dan géén.
+
+    `rand = 0` laat alles staan (de standaard).
+    """
+    if rand <= 0 or sub.empty or top_nap is None or onder_nap is None:
+        return sub
+    kern = sub[(sub["diepte_nap"] <= top_nap - rand) & (sub["diepte_nap"] > onder_nap + rand)]
+    return kern if len(kern) >= min_punten else sub
+
+
 def laag_statistiek(su_punten: pd.Series) -> dict:
     """Su-statistiek per grondlaag — het LAAGGEMIDDELDE is waar we mee rekenen.
 
@@ -162,6 +183,19 @@ def render():
         "wordt hier bewust niet afgeleid — die stap hoort bij de stabiliteitsberekening."
     )
 
+    rand_m = st.number_input(
+        "Laagranden negeren bij het middelen [m]", min_value=0.0, max_value=1.0,
+        value=0.0, step=0.05, format="%.2f", key="su_rand_m",
+        help="Vlak bij een laaggrens meet de conus deels de buurlaag al mee. Met bijv. 0,25 "
+             "middel je alleen over de kern van de laag: de bovenste en onderste 25 cm tellen "
+             "niet mee.\n\n0,00 = alle punten meenemen (standaard).\n\nEen laag dunner dan "
+             "2× deze waarde houdt niets over; zulke lagen blijven daarom ongetrimd.",
+    )
+    if rand_m > 0:
+        st.caption(f"↳ Per laag blijven alleen de punten tussen **top − {rand_m:.2f} m** en "
+                   f"**onder + {rand_m:.2f} m** over. Lagen die daardoor (bijna) leeg zouden "
+                   f"raken, worden ongetrimd meegenomen.")
+
     # Grensspanning-factor k: ALLEEN relevant voor de controleroute. In de hoofdroute
     # volgt σ'vy uit de gemeten Su (SHANSEP omgekeerd) en wordt k niet gebruikt.
     k_grens = 0.33
@@ -242,13 +276,20 @@ def render():
             st.session_state.sonderingen[name]["df"] = df
             st.session_state.sonderingen[name]["su_berekend"] = True
             st.session_state.sonderingen[name]["su_methode"] = methode_note
+            st.session_state.sonderingen[name]["rand_m"] = rand_m
 
             # Su-LAAGGEMIDDELDE per grondlaag, daarna gewogen naar de sondering.
             # Elke laag heeft zijn eigen Nkt, dus middelen over alle punten
             # tegelijk zou de lagen door elkaar husselen.
-            per_laag = []
+            _grenzen = data.get("laaggrenzen") or {}
+            per_laag, n_ongetrimd, n_te_dun = [], 0, 0
             for _laag, _sub in df.dropna(subset=["Su"]).groupby("grondlaag"):
-                per_laag.append(laag_statistiek(_sub["Su"]))
+                n_ongetrimd += len(_sub)
+                _g = _grenzen.get(_laag, {})
+                _kern = trim_laagranden(_sub, _g.get("top_nap"), _g.get("onder_nap"), rand_m)
+                if rand_m > 0 and len(_kern) == len(_sub) and _g.get("top_nap") is not None:
+                    n_te_dun += 1          # trim overgeslagen: laag te dun
+                per_laag.append(laag_statistiek(_kern["Su"]))
             n_tot = sum(k["n"] for k in per_laag)
             if n_tot:
                 su_gem = sum(k["gem"] * k["n"] for k in per_laag) / n_tot
@@ -261,14 +302,17 @@ def render():
             svy_gem = df["sigma_vy"].replace([np.inf, -np.inf], np.nan).mean() if "sigma_vy" in df else np.nan
             # Alleen de kernkolommen: de methode staat al boven de tabel (voor alle
             # sonderingen gelijk). VC is een controlegetal op de laagindeling.
-            resultaten.append({
+            _rij = {
                 "Sondering": name, "Status": "✅", "n": n_tot,
                 "Nkt gem [-]": f"{nkt_gem:.1f}" if pd.notna(nkt_gem) else "—",
                 "Su gem [kPa]": f"{su_gem:.1f}" if n_tot else "—",
                 "VC data [-]": f"{vc_dat:.2f}" if n_tot else "—",
                 "OCR [-]": f"{ocr_gem:.2f}" if pd.notna(ocr_gem) else "—",
                 "σ'vy [kPa]": f"{svy_gem * 1000:.1f}" if pd.notna(svy_gem) else "—",
-            })
+            }
+            if rand_m > 0:
+                _rij["n zonder trim"] = n_ongetrimd
+            resultaten.append(_rij)
 
             # Controle op de LAAGINDELING: een grote spreiding binnen een laag
             # betekent meestal dat die laag te dik is genomen, waardoor het
@@ -278,6 +322,9 @@ def render():
             progress.progress((i + 1) / total)
 
         st.success(f"Su berekend voor {total} sondering(en)")
+        if rand_m > 0:
+            st.caption(f"Laagranden van {rand_m:.2f} m zijn buiten de middeling gelaten. "
+                       "Kolom *n zonder trim* laat zien hoeveel punten er zonder die zone waren.")
         st.dataframe(pd.DataFrame(resultaten), use_container_width=True, hide_index=True)
 
         if spreiding_waarschuwing:
@@ -321,17 +368,25 @@ def _render_per_sondering(su_berekend: dict):
     su_data = df["Su"].dropna()
     if not su_data.empty:
         # Laaggemiddelde per grondlaag — elke laag met zijn eigen Nkt.
+        rand_m = float(data.get("rand_m", 0.0))
+        _grenzen = data.get("laaggrenzen") or {}
         rijen, gems, nkts, ns = [], [], [], []
         for laag, sub in df.dropna(subset=["Su"]).groupby("grondlaag"):
+            _g = _grenzen.get(laag, {})
+            _n_ruw = len(sub)
+            sub = trim_laagranden(sub, _g.get("top_nap"), _g.get("onder_nap"), rand_m)
             kwl = laag_statistiek(sub["Su"])
             _nkt = sub["Nkt_gebruikt"].mean() if "Nkt_gebruikt" in sub else np.nan
-            rijen.append({
-                "Grondlaag": laag, "n": kwl["n"],
+            _r = {"Grondlaag": laag, "n": kwl["n"]}
+            if rand_m > 0:
+                _r["n zonder trim"] = _n_ruw
+            _r.update({
                 "Nkt [-]": round(_nkt, 1) if pd.notna(_nkt) else None,
                 "Su gem [kPa]": round(kwl["gem"], 1),
                 "Su std [kPa]": round(kwl["std"], 1),
                 "VC data [-]": round(kwl["VC"], 2),
             })
+            rijen.append(_r)
             gems.append(kwl["gem"] * kwl["n"]); ns.append(kwl["n"])
             if pd.notna(_nkt):
                 nkts.append(_nkt * kwl["n"])
@@ -343,8 +398,12 @@ def _render_per_sondering(su_berekend: dict):
         c3.metric("Methode", data.get("su_methode", "Nkt"))
 
         if rijen:
+            _rand_txt = (f" De bovenste en onderste **{rand_m:.2f} m** van elke laag tellen "
+                         f"niet mee (lagen die daardoor leeg zouden raken wél)."
+                         if rand_m > 0 else "")
             st.markdown("**Su-laaggemiddelde per grondlaag** — Su = q_net / Nkt, gemiddeld "
-                        "over de punten in de laag. *VC data* is een **controlegetal** op de "
+                        "over de punten in de laag." + _rand_txt +
+                        " *VC data* is een **controlegetal** op de "
                         "laagindeling: is die hoog, dan is de laag waarschijnlijk te dik.")
             st.dataframe(pd.DataFrame(rijen), use_container_width=True, hide_index=True)
 
@@ -384,6 +443,7 @@ def _render_per_sondering(su_berekend: dict):
         if top is None or onder is None:
             continue
         sub = df[(df["diepte_nap"] <= top) & (df["diepte_nap"] > onder) & df["Su"].notna()]
+        sub = trim_laagranden(sub, top, onder, float(data.get("rand_m", 0.0)), min_punten=3)
         if len(sub) < 3:
             continue
         b, a = np.polyfit(sub["diepte_nap"], sub["Su"], 1)   # Su = b·NAP + a
